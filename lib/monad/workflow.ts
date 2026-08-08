@@ -1,4 +1,4 @@
-import type { Hex } from "viem";
+import { zeroHash, type Hex } from "viem";
 
 import { HERO_DEMO } from "../market/index.ts";
 import { buildHeroCoalitionCommitment, hashRainSettlement } from "./commitment.ts";
@@ -7,7 +7,9 @@ import {
   commitCoalitionOnMonad,
   MonadRegistryError,
   registerMerchantOfferOnMonad,
+  verifyFinalizedCoalitionPreparationOnMonad,
   type MonadWriteResult,
+  type VerifiedMonadPreparation,
 } from "./server.ts";
 import {
   getRuntimeMonadPreparation,
@@ -19,12 +21,14 @@ export interface MonadWorkflowAdapter {
   readonly commitCoalition: typeof commitCoalitionOnMonad;
   readonly registerOffer: typeof registerMerchantOfferOnMonad;
   readonly attestSettlement: typeof attestRainSettlementOnMonad;
+  readonly verifyPreparation: typeof verifyFinalizedCoalitionPreparationOnMonad;
 }
 
 const defaultAdapter: MonadWorkflowAdapter = {
   commitCoalition: commitCoalitionOnMonad,
   registerOffer: registerMerchantOfferOnMonad,
   attestSettlement: attestRainSettlementOnMonad,
+  verifyPreparation: verifyFinalizedCoalitionPreparationOnMonad,
 };
 
 const settlementTotalInCents = HERO_DEMO.outcome.pooledTotalCents;
@@ -87,13 +91,21 @@ async function executePreparation(input: {
     );
   }
 
+  const verified = await input.adapter.verifyPreparation(commitment);
+  if (!sameHex(verified.commitmentId, committed.commitmentId)) {
+    throw new MonadRegistryError(
+      "MONAD_PREPARATION_CONFLICT",
+      "The finalized commitment identifier did not match the prepared write.",
+    );
+  }
+
   const preparation: RuntimeMonadPreparation = {
     runKey: input.runKey,
     commitment,
     commitmentId: committed.commitmentId,
     commitmentTransaction: committed.transaction,
     offerTransactions: offerResults.map((result) => result.transaction),
-    preparedAt: input.now.toISOString(),
+    preparedAt: new Date(Number(verified.committedAt) * 1_000).toISOString(),
   };
   rememberRuntimeMonadPreparation(preparation);
   return {
@@ -101,6 +113,66 @@ async function executePreparation(input: {
     replayed:
       committed.replayed && offerResults.every((result) => result.replayed),
   };
+}
+
+const sameHex = (left: Hex, right: Hex) =>
+  left.toLowerCase() === right.toLowerCase();
+
+function assertCoherentSettlement(
+  commitment: RuntimeMonadPreparation["commitment"],
+  verified: VerifiedMonadPreparation,
+) {
+  if (verified.settledAt === BigInt(0)) {
+    if (
+      verified.acceptedOfferHash !== zeroHash ||
+      verified.rainSettlementHash !== zeroHash ||
+      verified.capturedCents !== BigInt(0)
+    ) {
+      throw new MonadRegistryError(
+        "MONAD_SETTLEMENT_STATE_INVALID",
+        "The finalized commitment contains an incomplete settlement state.",
+      );
+    }
+    return;
+  }
+
+  if (
+    !sameHex(verified.acceptedOfferHash, commitment.winningOfferHash) ||
+    verified.rainSettlementHash === zeroHash ||
+    verified.capturedCents !== BigInt(settlementTotalInCents)
+  ) {
+    throw new MonadRegistryError(
+      "SETTLEMENT_CONFLICT",
+      "The finalized Monad settlement does not match the accepted offer and capture total.",
+    );
+  }
+}
+
+/**
+ * Rebuilds today's deterministic commitment and verifies every field and offer
+ * from finalized Monad state. Module memory is refreshed only after that proof
+ * succeeds; it is never the source of authority for Rain settlement.
+ */
+export async function requireFinalizedHeroMarketOnMonad(options: {
+  readonly now?: Date;
+  readonly adapter?: MonadWorkflowAdapter;
+} = {}): Promise<RuntimeMonadPreparation> {
+  const now = options.now ?? new Date();
+  const { runKey, bidClosesAt } = getStableHeroBidWindow(now);
+  const commitment = buildHeroCoalitionCommitment({ bidClosesAt });
+  const verified = await (options.adapter ?? defaultAdapter).verifyPreparation(
+    commitment,
+  );
+  assertCoherentSettlement(commitment, verified);
+
+  return rememberRuntimeMonadPreparation({
+    runKey,
+    commitment,
+    commitmentId: verified.commitmentId,
+    commitmentTransaction: null,
+    offerTransactions: commitment.offerHashes.map(() => null),
+    preparedAt: new Date(Number(verified.committedAt) * 1_000).toISOString(),
+  });
 }
 
 export function prepareHeroMarketOnMonad(options: {
@@ -139,16 +211,14 @@ export async function attestSettledRainTransactionsOnMonad(
   input: {
     readonly rainTransactionIds: readonly string[];
     readonly capturedCents?: number;
+    readonly now?: Date;
   },
   adapter: MonadWorkflowAdapter = defaultAdapter,
 ) {
-  const preparation = getRuntimeMonadPreparation();
-  if (!preparation) {
-    throw new MonadRegistryError(
-      "MONAD_PREPARATION_REQUIRED",
-      "The finalized pre-bid Monad preparation must run before Rain settlement.",
-    );
-  }
+  const preparation = await requireFinalizedHeroMarketOnMonad({
+    now: input.now,
+    adapter,
+  });
   const capturedCents = input.capturedCents ?? settlementTotalInCents;
   if (capturedCents !== settlementTotalInCents) {
     throw new MonadRegistryError(

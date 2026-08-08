@@ -32,6 +32,11 @@ export const MONAD_TESTNET_RESET_AT = "2025-12-16";
 
 export const POOL_COMMITMENT_REGISTRY_ABI = [
   {
+    type: "error",
+    name: "CommitmentNotFound",
+    inputs: [{ name: "commitmentId", type: "bytes32" }],
+  },
+  {
     type: "function",
     name: "computeCommitmentId",
     stateMutability: "view",

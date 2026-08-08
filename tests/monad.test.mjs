@@ -16,7 +16,7 @@ import {
   getStableHeroBidWindow,
   prepareHeroMarketOnMonad,
 } from "../lib/monad/workflow.ts";
-import { keccak256, toBytes } from "viem";
+import { keccak256, toBytes, zeroHash } from "viem";
 
 const fakeTransaction = (label) => ({
   hash: keccak256(toBytes(label)),
@@ -27,17 +27,28 @@ const fakeTransaction = (label) => ({
 });
 
 function fakeAdapter(calls) {
+  const durableState = {
+    commitment: undefined,
+    commitmentId: undefined,
+    offers: new Set(),
+    settlement: undefined,
+  };
   return {
     async commitCoalition(commitment) {
       calls.push(["commit", commitment.termsHash]);
+      durableState.commitment = commitment;
+      durableState.commitmentId = keccak256(
+        toBytes(`commitment:${commitment.termsHash}`),
+      );
       return {
-        commitmentId: keccak256(toBytes(`commitment:${commitment.termsHash}`)),
+        commitmentId: durableState.commitmentId,
         replayed: false,
         transaction: fakeTransaction("commit"),
       };
     },
     async registerOffer(input) {
       calls.push(["offer", input.offerHash]);
+      durableState.offers.add(input.offerHash);
       return {
         commitmentId: input.commitmentId,
         replayed: false,
@@ -46,10 +57,32 @@ function fakeAdapter(calls) {
     },
     async attestSettlement(input) {
       calls.push(["attest", input.rainSettlementHash]);
+      durableState.settlement = input;
       return {
         commitmentId: input.commitmentId,
         replayed: false,
         transaction: fakeTransaction("attest"),
+      };
+    },
+    async verifyPreparation(commitment) {
+      calls.push(["verify", commitment.termsHash]);
+      assert.equal(commitment.termsHash, durableState.commitment?.termsHash);
+      assert.equal(commitment.fundingRoot, durableState.commitment?.fundingRoot);
+      assert.ok(
+        commitment.offerHashes.every((offerHash) =>
+          durableState.offers.has(offerHash),
+        ),
+      );
+      return {
+        commitmentId: durableState.commitmentId,
+        committedAt: BigInt(1_786_213_800),
+        settledAt: durableState.settlement ? BigInt(1_786_214_400) : BigInt(0),
+        acceptedOfferHash:
+          durableState.settlement?.acceptedOfferHash ?? zeroHash,
+        rainSettlementHash:
+          durableState.settlement?.rainSettlementHash ?? zeroHash,
+        capturedCents:
+          durableState.settlement?.capturedCents ?? BigInt(0),
       };
     },
   };
@@ -144,11 +177,14 @@ test("live preparation finalizes the commitment before registering any offer and
   const replay = await prepareHeroMarketOnMonad({ now, adapter });
 
   assert.equal(calls[0][0], "commit");
-  assert.deepEqual(calls.slice(1).map(([kind]) => kind), Array(6).fill("offer"));
+  assert.deepEqual(
+    calls.slice(1).map(([kind]) => kind),
+    [...Array(6).fill("offer"), "verify"],
+  );
   assert.equal(first.preparation.commitment.offerHashes.length, 6);
   assert.equal(first.preparation.commitmentId, replay.preparation.commitmentId);
   assert.equal(replay.replayed, true);
-  assert.equal(calls.length, 7, "runtime replay must not create another chain write");
+  assert.equal(calls.length, 8, "runtime replay must not create another chain write");
 
   const early = getStableHeroBidWindow(new Date("2026-08-08T00:01:00.000Z"));
   const late = getStableHeroBidWindow(new Date("2026-08-08T23:59:00.000Z"));
@@ -164,20 +200,42 @@ test("post-Rain attestation binds the exact unique provider transaction set", as
     now: new Date("2026-08-08T18:30:00.000Z"),
     adapter,
   });
+  const callsBeforeColdStart = calls.length;
+  clearRuntimeMonadPreparation();
   const result = await attestSettledRainTransactionsOnMonad(
     {
       rainTransactionIds: ["rain-settlement-b", "rain-settlement-a", "rain-settlement-c"],
       capturedCents: HERO_DEMO.outcome.pooledTotalCents,
+      now: new Date("2026-08-08T19:00:00.000Z"),
     },
     adapter,
   );
   assert.equal(result.rainTransactionCount, 3);
   assert.equal(calls.at(-1)[0], "attest");
+  assert.deepEqual(
+    calls.slice(callsBeforeColdStart).map(([kind]) => kind),
+    ["verify", "attest"],
+    "a cold start must verify durable state before attesting",
+  );
+  assert.equal(
+    calls.at(-1)[1],
+    hashRainSettlement({
+      commitmentId: result.commitmentId,
+      acceptedOfferHash: result.acceptedOfferHash,
+      rainTransactionIds: [
+        "rain-settlement-a",
+        "rain-settlement-b",
+        "rain-settlement-c",
+      ],
+    }),
+    "the attestation must bind the exact provider transaction set",
+  );
 
   await assert.rejects(
     attestSettledRainTransactionsOnMonad(
       {
         rainTransactionIds: ["rain-settlement-a", "rain-settlement-a"],
+        now: new Date("2026-08-08T19:00:00.000Z"),
       },
       adapter,
     ),

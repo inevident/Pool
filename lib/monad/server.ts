@@ -1,4 +1,6 @@
 import {
+  BaseError,
+  ContractFunctionRevertedError,
   createPublicClient,
   createWalletClient,
   getAddress,
@@ -19,7 +21,6 @@ import {
   monadExplorerTransactionUrl,
   type MonadFinalizedTransaction,
 } from "./registry.ts";
-import { getRuntimeMonadPreparation } from "./runtime.ts";
 
 const DEFAULT_FINALITY_TIMEOUT_MS = 30_000;
 const FINALITY_POLL_MS = 400;
@@ -211,6 +212,147 @@ export interface MonadWriteResult {
   readonly transaction: MonadFinalizedTransaction | null;
 }
 
+export interface VerifiedMonadPreparation {
+  readonly commitmentId: Hex;
+  readonly committedAt: bigint;
+  readonly settledAt: bigint;
+  readonly acceptedOfferHash: Hex;
+  readonly rainSettlementHash: Hex;
+  readonly capturedCents: bigint;
+}
+
+const sameHex = (left: Hex, right: Hex) =>
+  left.toLowerCase() === right.toLowerCase();
+
+const isMissingCommitment = (error: unknown) => {
+  if (!(error instanceof BaseError)) return false;
+  const reverted = error.walk(
+    (cause) => cause instanceof ContractFunctionRevertedError,
+  );
+  return (
+    reverted instanceof ContractFunctionRevertedError &&
+    reverted.data?.errorName === "CommitmentNotFound"
+  );
+};
+
+/**
+ * Reconstructs the expected preparation and proves it from finalized chain
+ * state. This is intentionally independent of process memory so a Rain request
+ * remains safe after a serverless cold start or isolate change.
+ */
+export async function verifyFinalizedCoalitionPreparationOnMonad(
+  commitment: PreparedCoalitionCommitment,
+): Promise<VerifiedMonadPreparation> {
+  const address = requireRegistryAddress();
+  const publicClient = createMonadPublicClient();
+  const chainId = await publicClient.getChainId();
+  if (chainId !== MONAD_TESTNET.id) {
+    throw new MonadRegistryError(
+      "WRONG_CHAIN",
+      `RPC reported chain ${chainId}; only Monad Testnet ${MONAD_TESTNET.id} is allowed.`,
+    );
+  }
+
+  const bytecode = await publicClient.getCode({
+    address,
+    blockTag: "finalized",
+  });
+  if (!bytecode || bytecode === "0x") {
+    throw new MonadRegistryError(
+      "REGISTRY_CODE_MISSING",
+      "No finalized contract bytecode exists at MONAD_REGISTRY_ADDRESS.",
+    );
+  }
+
+  const commitmentArgs = [
+    commitment.poolIdHash,
+    commitment.termsHash,
+    commitment.fundingRoot,
+    commitment.unitCount,
+    commitment.reservedCents,
+    commitment.bidClosesAt,
+  ] as const;
+  const commitmentId = await publicClient.readContract({
+    address,
+    abi: POOL_COMMITMENT_REGISTRY_ABI,
+    functionName: "computeCommitmentId",
+    args: commitmentArgs,
+    blockTag: "finalized",
+  });
+  const configuredCommitmentId = getConfiguredCommitmentId();
+  if (
+    configuredCommitmentId &&
+    !sameHex(configuredCommitmentId, commitmentId)
+  ) {
+    throw new MonadRegistryError(
+      "CONFIGURED_COMMITMENT_MISMATCH",
+      "MONAD_COMMITMENT_ID does not match today's server-derived funded coalition.",
+    );
+  }
+
+  let finalized;
+  try {
+    finalized = await publicClient.readContract({
+      address,
+      abi: POOL_COMMITMENT_REGISTRY_ABI,
+      functionName: "getCommitment",
+      args: [commitmentId],
+      blockTag: "finalized",
+    });
+  } catch (error) {
+    if (isMissingCommitment(error)) {
+      throw new MonadRegistryError(
+        "MONAD_PREPARATION_REQUIRED",
+        "Today's funded coalition has not been finalized on Monad.",
+      );
+    }
+    throw error;
+  }
+
+  const exactCommitment =
+    sameHex(finalized.poolIdHash, commitment.poolIdHash) &&
+    sameHex(finalized.termsHash, commitment.termsHash) &&
+    sameHex(finalized.fundingRoot, commitment.fundingRoot) &&
+    finalized.unitCount === commitment.unitCount &&
+    finalized.reservedCents === commitment.reservedCents &&
+    finalized.bidClosesAt === commitment.bidClosesAt &&
+    finalized.committedAt > BigInt(0) &&
+    finalized.committedAt < finalized.bidClosesAt;
+  if (!exactCommitment) {
+    throw new MonadRegistryError(
+      "MONAD_PREPARATION_CONFLICT",
+      "Finalized Monad state does not exactly match today's funded coalition.",
+    );
+  }
+
+  const offerRegistrations = await Promise.all(
+    commitment.offerHashes.map((offerHash) =>
+      publicClient.readContract({
+        address,
+        abi: POOL_COMMITMENT_REGISTRY_ABI,
+        functionName: "isOfferRegistered",
+        args: [commitmentId, offerHash],
+        blockTag: "finalized",
+      }),
+    ),
+  );
+  if (offerRegistrations.some((registered) => !registered)) {
+    throw new MonadRegistryError(
+      "MONAD_OFFERS_NOT_FINALIZED",
+      "Every sealed offer must be finalized against today's coalition before Rain can settle.",
+    );
+  }
+
+  return {
+    commitmentId,
+    committedAt: finalized.committedAt,
+    settledAt: finalized.settledAt,
+    acceptedOfferHash: finalized.acceptedOfferHash,
+    rainSettlementHash: finalized.rainSettlementHash,
+    capturedCents: finalized.capturedCents,
+  };
+}
+
 export async function commitCoalitionOnMonad(
   commitment: PreparedCoalitionCommitment,
 ): Promise<MonadWriteResult> {
@@ -230,6 +372,16 @@ export async function commitCoalitionOnMonad(
     functionName: "computeCommitmentId",
     args,
   });
+  const configuredCommitmentId = getConfiguredCommitmentId();
+  if (
+    configuredCommitmentId &&
+    !sameHex(configuredCommitmentId, commitmentId)
+  ) {
+    throw new MonadRegistryError(
+      "CONFIGURED_COMMITMENT_MISMATCH",
+      "Refusing to write a commitment that differs from MONAD_COMMITMENT_ID.",
+    );
+  }
 
   try {
     const existing = await publicClient.readContract({
@@ -330,7 +482,7 @@ export async function attestRainSettlementOnMonad(input: {
 
 export function getConfiguredCommitmentId(): Hex | undefined {
   const value = process.env.MONAD_COMMITMENT_ID?.trim();
-  if (!value) return getRuntimeMonadPreparation()?.commitmentId;
+  if (!value) return undefined;
   if (!isHex(value, { strict: true }) || value.length !== 66) {
     throw new MonadRegistryError(
       "INVALID_COMMITMENT_ID",

@@ -84,7 +84,10 @@ export async function getMonadStatus() {
     );
   }
 
-  const commitmentId = getConfiguredCommitmentId();
+  // Runtime state improves same-isolate presentation only. Financial routes
+  // reconstruct today's proof from finalized chain state instead.
+  const commitmentId =
+    getConfiguredCommitmentId() ?? getRuntimeMonadPreparation()?.commitmentId;
   if (!commitmentId) {
     return {
       ...base,
