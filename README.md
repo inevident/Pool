@@ -2,6 +2,8 @@
 
 **Turn patience into bargaining power.**
 
+[Open the product preview](https://pool-agentic-market-preview-20260808-ldktkkf37-yeayea.vercel.app) · [See the Rain + Monad proof](https://pool-agentic-market-preview-20260808-ldktkkf37-yeayea.vercel.app/demo)
+
 POOL is a repeat-use group-buying product for people who are willing to wait for a better price. A buyer funds an account, describes what they want, and joins a compatible buying pool only when their available balance can cover the item’s full MSRP. POOL aggregates committed demand, lets merchants compete for the order, captures the negotiated amount, and releases the difference as savings.
 
 The default experience is a functioning product sandbox, not a scripted presentation. Buyers can add test funds, create buying intents, join and leave forming pools, inspect commitments, and follow balance activity. Product state persists in the browser across reloads.
