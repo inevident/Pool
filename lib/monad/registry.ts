@@ -38,6 +38,13 @@ export const POOL_COMMITMENT_REGISTRY_ABI = [
   },
   {
     type: "function",
+    name: "operator",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
     name: "computeCommitmentId",
     stateMutability: "view",
     inputs: [

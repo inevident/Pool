@@ -7,6 +7,7 @@ import {
   http,
   isAddress,
   isHex,
+  zeroAddress,
   zeroHash,
   type Address,
   type Hex,
@@ -14,7 +15,10 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import type { PreparedCoalitionCommitment } from "./commitment.ts";
+import {
+  buildHeroCoalitionCommitment,
+  type PreparedCoalitionCommitment,
+} from "./commitment.ts";
 import {
   MONAD_TESTNET,
   POOL_COMMITMENT_REGISTRY_ABI,
@@ -58,31 +62,173 @@ const getRpcUrl = () => {
 export function getMonadRegistryAddress(): Address | undefined {
   const value = process.env.MONAD_REGISTRY_ADDRESS?.trim();
   if (!value) return undefined;
-  if (!isAddress(value)) {
+  if (!isAddress(value) || value.toLowerCase() === zeroAddress) {
     throw new MonadRegistryError(
       "INVALID_REGISTRY_ADDRESS",
-      "MONAD_REGISTRY_ADDRESS must be a valid EVM address.",
+      "MONAD_REGISTRY_ADDRESS must be a valid, non-zero EVM address.",
     );
   }
   return getAddress(value);
 }
 
+export function isMonadLiveRequired() {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.MONAD_LIVE_REQUIRED?.trim() === "true"
+  );
+}
+
 export function getMonadWriteConfiguration() {
+  const registryValue = process.env.MONAD_REGISTRY_ADDRESS?.trim() ?? "";
+  const privateKey = process.env.MONAD_PRIVATE_KEY?.trim() ?? "";
+  const commitmentValue = process.env.MONAD_COMMITMENT_ID?.trim() ?? "";
+  const requirementValue = process.env.MONAD_LIVE_REQUIRED?.trim() ?? "";
+  const registryPresent = registryValue.length > 0;
+  const operatorPresent = privateKey.length > 0;
+  const commitmentPresent = commitmentValue.length > 0;
+  const issues: Array<{ code: string; message: string }> = [];
+
+  if (
+    requirementValue.length > 0 &&
+    requirementValue !== "true" &&
+    requirementValue !== "false"
+  ) {
+    issues.push({
+      code: "INVALID_MONAD_REQUIRED_FLAG",
+      message: "MONAD_LIVE_REQUIRED must be exactly true or false when set.",
+    });
+  }
+
   let registryConfigured = false;
-  let operatorConfigured = false;
   try {
     registryConfigured = Boolean(getMonadRegistryAddress());
-  } catch {
-    registryConfigured = false;
+  } catch (error) {
+    issues.push({
+      code:
+        error instanceof MonadRegistryError
+          ? error.code
+          : "INVALID_REGISTRY_ADDRESS",
+      message:
+        error instanceof MonadRegistryError
+          ? error.message
+          : "MONAD_REGISTRY_ADDRESS is invalid.",
+    });
   }
-  const privateKey = process.env.MONAD_PRIVATE_KEY?.trim() ?? "";
-  operatorConfigured = /^0x[0-9a-fA-F]{64}$/.test(privateKey);
+
+  let operatorConfigured = false;
+  if (operatorPresent) {
+    try {
+      if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) throw new Error("format");
+      privateKeyToAccount(privateKey as Hex);
+      operatorConfigured = true;
+    } catch {
+      issues.push({
+        code: "INVALID_OPERATOR_PRIVATE_KEY",
+        message: "MONAD_PRIVATE_KEY must be a valid 32-byte EVM private key.",
+      });
+    }
+  }
+
+  if (registryPresent !== operatorPresent) {
+    issues.push({
+      code: "PARTIAL_MONAD_CONFIGURATION",
+      message:
+        "MONAD_REGISTRY_ADDRESS and MONAD_PRIVATE_KEY must be configured together.",
+    });
+  }
+
+  try {
+    getRpcUrl();
+  } catch (error) {
+    issues.push({
+      code: error instanceof MonadRegistryError ? error.code : "INVALID_RPC_URL",
+      message:
+        error instanceof MonadRegistryError
+          ? error.message
+          : "MONAD_TESTNET_RPC_URL is invalid.",
+    });
+  }
+
+  if (commitmentPresent) {
+    try {
+      getConfiguredCommitmentId();
+    } catch (error) {
+      issues.push({
+        code:
+          error instanceof MonadRegistryError
+            ? error.code
+            : "INVALID_COMMITMENT_ID",
+        message:
+          error instanceof MonadRegistryError
+            ? error.message
+            : "MONAD_COMMITMENT_ID is invalid.",
+      });
+    }
+  }
+
+  if (commitmentPresent && (!registryPresent || !operatorPresent)) {
+    issues.push({
+      code: "ORPHANED_COMMITMENT_ID",
+      message:
+        "MONAD_COMMITMENT_ID cannot be used without the registry address and operator key.",
+    });
+  }
+
+  const required = isMonadLiveRequired();
+  const ready =
+    issues.length === 0 && registryConfigured && operatorConfigured;
+  const state = ready
+    ? ("ready" as const)
+    : !registryPresent && !operatorPresent && !commitmentPresent && issues.length === 0
+      ? ("not-configured" as const)
+      : issues.some((issue) => issue.code === "PARTIAL_MONAD_CONFIGURATION") &&
+          issues.every((issue) => issue.code === "PARTIAL_MONAD_CONFIGURATION")
+        ? ("partial" as const)
+        : ("invalid" as const);
+
   return {
-    ready: registryConfigured && operatorConfigured,
+    ready,
+    required,
+    state,
+    rainOnlyAllowed: !required && state === "not-configured",
     registryConfigured,
     operatorConfigured,
+    issues,
     network: "Monad Testnet" as const,
     chainId: MONAD_TESTNET.id,
+  };
+}
+
+export function getMonadRainGate(
+  configuration = getMonadWriteConfiguration(),
+) {
+  const misconfigured =
+    configuration.state === "partial" || configuration.state === "invalid";
+  if (misconfigured || (configuration.required && !configuration.ready)) {
+    return {
+      allowed: false as const,
+      mode: "blocked" as const,
+      code:
+        configuration.issues[0]?.code ?? "MONAD_CONFIGURATION_REQUIRED",
+      message:
+        configuration.issues[0]?.message ??
+        "Monad Testnet configuration is required before Rain execution.",
+    };
+  }
+  if (configuration.ready) {
+    return {
+      allowed: true as const,
+      mode: "rain-plus-monad" as const,
+      code: null,
+      message: null,
+    };
+  }
+  return {
+    allowed: true as const,
+    mode: "rain-only-development" as const,
+    code: null,
+    message:
+      "Development-only Rain integration; Monad proof is local and no on-chain claim is made.",
   };
 }
 
@@ -105,7 +251,14 @@ const getOperatorAccount = () => {
       "A valid testnet-only MONAD_PRIVATE_KEY is required for registry writes.",
     );
   }
-  return privateKeyToAccount(value as Hex);
+  try {
+    return privateKeyToAccount(value as Hex);
+  } catch {
+    throw new MonadRegistryError(
+      "INVALID_OPERATOR_PRIVATE_KEY",
+      "MONAD_PRIVATE_KEY must be a valid 32-byte EVM private key.",
+    );
+  }
 };
 
 export function createMonadPublicClient() {
@@ -133,6 +286,77 @@ const createMonadOperatorClient = () => {
     }),
   };
 };
+
+export function assertMonadOperatorMatchesRegistry(
+  configuredOperator: Address,
+  registryOperator: Address,
+) {
+  if (getAddress(configuredOperator) !== getAddress(registryOperator)) {
+    throw new MonadRegistryError(
+      "OPERATOR_MISMATCH",
+      "MONAD_PRIVATE_KEY does not control the configured registry operator account.",
+    );
+  }
+}
+
+async function verifyOperatorAgainstRegistry(
+  publicClient: PublicClient,
+  registryAddress: Address,
+) {
+  const chainId = await publicClient.getChainId();
+  if (chainId !== MONAD_TESTNET.id) {
+    throw new MonadRegistryError(
+      "WRONG_CHAIN",
+      `RPC reported chain ${chainId}; only Monad Testnet ${MONAD_TESTNET.id} is allowed.`,
+    );
+  }
+  const bytecode = await publicClient.getCode({
+    address: registryAddress,
+    blockTag: "finalized",
+  });
+  if (!bytecode || bytecode === "0x") {
+    throw new MonadRegistryError(
+      "REGISTRY_CODE_MISSING",
+      "No finalized contract bytecode exists at MONAD_REGISTRY_ADDRESS.",
+    );
+  }
+
+  const registryOperator = await publicClient.readContract({
+    address: registryAddress,
+    abi: POOL_COMMITMENT_REGISTRY_ABI,
+    functionName: "operator",
+    blockTag: "finalized",
+  });
+  const configuredOperator = getOperatorAccount().address;
+  assertMonadOperatorMatchesRegistry(configuredOperator, registryOperator);
+  return { configuredOperator, registryOperator };
+}
+
+/**
+ * Proves that the configured signer can mutate the finalized registry before
+ * any external payment side effect is allowed.
+ */
+export async function verifyMonadOperatorReadiness() {
+  const configuration = getMonadWriteConfiguration();
+  if (!configuration.ready) {
+    const issue = configuration.issues[0];
+    throw new MonadRegistryError(
+      issue?.code ?? "MONAD_NOT_CONFIGURED",
+      issue?.message ?? "Monad Testnet writes are not configured.",
+    );
+  }
+  const registryAddress = requireRegistryAddress();
+  const publicClient = createMonadPublicClient();
+  const operator = await verifyOperatorAgainstRegistry(
+    publicClient,
+    registryAddress,
+  );
+  return {
+    registryAddress,
+    ...operator,
+    confirmation: "finalized-state" as const,
+  };
+}
 
 const sleep = (milliseconds: number) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -187,13 +411,7 @@ const executeWrite = async (
 ) => {
   const address = requireRegistryAddress();
   const publicClient = createMonadPublicClient();
-  const chainId = await publicClient.getChainId();
-  if (chainId !== MONAD_TESTNET.id) {
-    throw new MonadRegistryError(
-      "WRONG_CHAIN",
-      `Refusing to sign: RPC reported chain ${chainId}, expected Monad Testnet ${MONAD_TESTNET.id}.`,
-    );
-  }
+  await verifyOperatorAgainstRegistry(publicClient, address);
   const { account, walletClient } = createMonadOperatorClient();
   const simulation = await publicClient.simulateContract({
     account,
@@ -212,8 +430,15 @@ export interface MonadWriteResult {
   readonly transaction: MonadFinalizedTransaction | null;
 }
 
+export interface MonadCommitResult extends MonadWriteResult {
+  /** Finalized block timestamp recorded by PoolCommitmentRegistry. */
+  readonly committedAt: bigint;
+}
+
 export interface VerifiedMonadPreparation {
   readonly commitmentId: Hex;
+  /** Canonical live offer hashes reconstructed from finalized committedAt. */
+  readonly commitment: PreparedCoalitionCommitment;
   readonly committedAt: bigint;
   readonly settledAt: bigint;
   readonly acceptedOfferHash: Hex;
@@ -223,6 +448,10 @@ export interface VerifiedMonadPreparation {
 
 const sameHex = (left: Hex, right: Hex) =>
   left.toLowerCase() === right.toLowerCase();
+
+const sameHexList = (left: readonly Hex[], right: readonly Hex[]) =>
+  left.length === right.length &&
+  left.every((value, index) => sameHex(value, right[index]));
 
 const isMissingCommitment = (error: unknown) => {
   if (!(error instanceof BaseError)) return false;
@@ -236,7 +465,7 @@ const isMissingCommitment = (error: unknown) => {
 };
 
 /**
- * Reconstructs the expected preparation and proves it from finalized chain
+ * Reconstructs the expected preparation and verifies it against finalized chain
  * state. This is intentionally independent of process memory so a Rain request
  * remains safe after a serverless cold start or isolate change.
  */
@@ -245,24 +474,7 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
 ): Promise<VerifiedMonadPreparation> {
   const address = requireRegistryAddress();
   const publicClient = createMonadPublicClient();
-  const chainId = await publicClient.getChainId();
-  if (chainId !== MONAD_TESTNET.id) {
-    throw new MonadRegistryError(
-      "WRONG_CHAIN",
-      `RPC reported chain ${chainId}; only Monad Testnet ${MONAD_TESTNET.id} is allowed.`,
-    );
-  }
-
-  const bytecode = await publicClient.getCode({
-    address,
-    blockTag: "finalized",
-  });
-  if (!bytecode || bytecode === "0x") {
-    throw new MonadRegistryError(
-      "REGISTRY_CODE_MISSING",
-      "No finalized contract bytecode exists at MONAD_REGISTRY_ADDRESS.",
-    );
-  }
+  await verifyOperatorAgainstRegistry(publicClient, address);
 
   const commitmentArgs = [
     commitment.poolIdHash,
@@ -286,7 +498,7 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
   ) {
     throw new MonadRegistryError(
       "CONFIGURED_COMMITMENT_MISMATCH",
-      "MONAD_COMMITMENT_ID does not match today's server-derived funded coalition.",
+      "MONAD_COMMITMENT_ID does not match today's server-derived funding-root commitment.",
     );
   }
 
@@ -303,7 +515,7 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
     if (isMissingCommitment(error)) {
       throw new MonadRegistryError(
         "MONAD_PREPARATION_REQUIRED",
-        "Today's funded coalition has not been finalized on Monad.",
+        "Today's funding-root commitment has not been finalized on Monad.",
       );
     }
     throw error;
@@ -321,12 +533,46 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
   if (!exactCommitment) {
     throw new MonadRegistryError(
       "MONAD_PREPARATION_CONFLICT",
-      "Finalized Monad state does not exactly match today's funded coalition.",
+      "Finalized Monad state does not exactly match today's funding-root commitment.",
+    );
+  }
+
+  // Offer timestamps are not trusted from process memory. The finalized
+  // coalition timestamp is the sole clock input used to reconstruct them.
+  const reconstructedCommitment = buildHeroCoalitionCommitment({
+    bidClosesAt: new Date(Number(finalized.bidClosesAt) * 1_000).toISOString(),
+    finalizedCommittedAt: finalized.committedAt,
+  });
+  const reconstructedCoreMatches =
+    sameHex(reconstructedCommitment.poolIdHash, commitment.poolIdHash) &&
+    sameHex(reconstructedCommitment.termsHash, commitment.termsHash) &&
+    sameHex(reconstructedCommitment.fundingRoot, commitment.fundingRoot) &&
+    reconstructedCommitment.unitCount === commitment.unitCount &&
+    reconstructedCommitment.reservedCents === commitment.reservedCents &&
+    reconstructedCommitment.bidClosesAt === commitment.bidClosesAt;
+  const suppliedLiveTimelineMatches =
+    commitment.finalizedCommittedAt === null ||
+    (commitment.finalizedCommittedAt ===
+      reconstructedCommitment.finalizedCommittedAt &&
+      commitment.firstOfferIssuedAt ===
+        reconstructedCommitment.firstOfferIssuedAt &&
+      sameHexList(
+        commitment.offerHashes,
+        reconstructedCommitment.offerHashes,
+      ) &&
+      sameHex(
+        commitment.winningOfferHash,
+        reconstructedCommitment.winningOfferHash,
+      ));
+  if (!reconstructedCoreMatches || !suppliedLiveTimelineMatches) {
+    throw new MonadRegistryError(
+      "MONAD_OFFER_RECONSTRUCTION_CONFLICT",
+      "Live offer commitments do not match the finalized coalition timestamp.",
     );
   }
 
   const offerRegistrations = await Promise.all(
-    commitment.offerHashes.map((offerHash) =>
+    reconstructedCommitment.offerHashes.map((offerHash) =>
       publicClient.readContract({
         address,
         abi: POOL_COMMITMENT_REGISTRY_ABI,
@@ -339,12 +585,13 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
   if (offerRegistrations.some((registered) => !registered)) {
     throw new MonadRegistryError(
       "MONAD_OFFERS_NOT_FINALIZED",
-      "Every sealed offer must be finalized against today's coalition before Rain can settle.",
+      "Every offer commitment must be finalized against today's coalition before Rain can settle.",
     );
   }
 
   return {
     commitmentId,
+    commitment: reconstructedCommitment,
     committedAt: finalized.committedAt,
     settledAt: finalized.settledAt,
     acceptedOfferHash: finalized.acceptedOfferHash,
@@ -355,7 +602,7 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
 
 export async function commitCoalitionOnMonad(
   commitment: PreparedCoalitionCommitment,
-): Promise<MonadWriteResult> {
+): Promise<MonadCommitResult> {
   const address = requireRegistryAddress();
   const publicClient = createMonadPublicClient();
   const args = [
@@ -404,13 +651,46 @@ export async function commitCoalitionOnMonad(
         "The derived Monad commitment already exists with different terms.",
       );
     }
-    return { commitmentId, replayed: true, transaction: null };
+    return {
+      commitmentId,
+      committedAt: existing.committedAt,
+      replayed: true,
+      transaction: null,
+    };
   } catch (error) {
     if (error instanceof MonadRegistryError) throw error;
+    if (!isMissingCommitment(error)) throw error;
   }
 
   const transaction = await executeWrite("commitCoalition", args);
-  return { commitmentId, replayed: false, transaction };
+  const finalized = await publicClient.readContract({
+    address,
+    abi: POOL_COMMITMENT_REGISTRY_ABI,
+    functionName: "getCommitment",
+    args: [commitmentId],
+    blockTag: "finalized",
+  });
+  const exactFinalizedCommitment =
+    sameHex(finalized.poolIdHash, commitment.poolIdHash) &&
+    sameHex(finalized.termsHash, commitment.termsHash) &&
+    sameHex(finalized.fundingRoot, commitment.fundingRoot) &&
+    finalized.unitCount === commitment.unitCount &&
+    finalized.reservedCents === commitment.reservedCents &&
+    finalized.bidClosesAt === commitment.bidClosesAt &&
+    finalized.committedAt > BigInt(0);
+  if (!exactFinalizedCommitment) {
+    throw new MonadRegistryError(
+      "MONAD_COMMITMENT_FINALITY_CONFLICT",
+      "The finalized coalition state differed from the transaction input.",
+      transaction.hash,
+    );
+  }
+  return {
+    commitmentId,
+    committedAt: finalized.committedAt,
+    replayed: false,
+    transaction,
+  };
 }
 
 export async function registerMerchantOfferOnMonad(input: {

@@ -51,11 +51,23 @@ export interface PreparedCoalitionCommitment {
   readonly unitCount: number;
   readonly reservedCents: bigint;
   readonly bidClosesAt: bigint;
+  /** Present only for a live proof reconstructed from finalized Monad state. */
+  readonly finalizedCommittedAt: string | null;
   readonly latestFundingFreezeAt: string;
   readonly firstOfferIssuedAt: string;
   readonly preBidFundingGatePassed: true;
   readonly offerHashes: readonly Hex[];
   readonly winningOfferHash: Hex;
+}
+
+export interface HeroCoalitionCommitmentOptions {
+  readonly bidClosesAt?: string;
+  /**
+   * Finalized onchain timestamp for the coalition commitment. When supplied,
+   * the seller timeline is deterministically shifted to begin one second later.
+   * Omitting it intentionally preserves the fixed local evidence replay.
+   */
+  readonly finalizedCommittedAt?: bigint;
 }
 
 interface FundingLeafInput {
@@ -210,9 +222,125 @@ export function hashRainSettlement(input: {
   );
 }
 
-export function buildHeroCoalitionCommitment(input?: {
-  readonly bidClosesAt?: string;
-}): PreparedCoalitionCommitment {
+const isoFromUnixSeconds = (seconds: bigint, label: string) => {
+  const milliseconds = Number(seconds) * 1_000;
+  if (!Number.isSafeInteger(milliseconds)) {
+    throw new MonadCommitmentError(
+      "INVALID_TIMESTAMP",
+      `${label} is outside the supported JavaScript timestamp range.`,
+    );
+  }
+  return new Date(milliseconds).toISOString();
+};
+
+const shiftDateByMilliseconds = (value: string, milliseconds: number) => {
+  const shifted = new Date(Date.parse(`${value}T00:00:00.000Z`) + milliseconds);
+  if (!Number.isFinite(shifted.getTime())) {
+    throw new MonadCommitmentError(
+      "INVALID_TIMESTAMP",
+      "Offer delivery date could not be shifted onto the finalized timeline.",
+    );
+  }
+  return shifted.toISOString().slice(0, 10);
+};
+
+/**
+ * Re-times the deterministic hero auction without changing its economics or
+ * relative sequencing. The first offer is issued one second after the
+ * finalized coalition timestamp; later offers retain their fixture offsets.
+ */
+export function buildHeroOffersAfterFinalizedCommitment(
+  finalizedCommittedAt: bigint,
+): {
+  readonly allOffers: readonly MerchantOffer[];
+  readonly winningOffer: MerchantOffer;
+  readonly firstOfferIssuedAt: string;
+} {
+  if (finalizedCommittedAt <= BigInt(0)) {
+    throw new MonadCommitmentError(
+      "INVALID_COMMITMENT_TIME",
+      "Finalized commitment time must be a positive Unix timestamp.",
+    );
+  }
+
+  const fixtureOffers = [
+    ...HERO_DEMO.negotiation.initialOffers,
+    ...HERO_DEMO.negotiation.finalOffers,
+  ];
+  const fixtureFirstMilliseconds = Math.min(
+    ...fixtureOffers.map((offer) => Date.parse(offer.issuedAt)),
+  );
+  const runtimeFirstMilliseconds = Number(finalizedCommittedAt + BigInt(1)) * 1_000;
+  if (
+    !Number.isSafeInteger(runtimeFirstMilliseconds) ||
+    !Number.isFinite(fixtureFirstMilliseconds)
+  ) {
+    throw new MonadCommitmentError(
+      "INVALID_TIMESTAMP",
+      "The finalized offer timeline is outside the supported timestamp range.",
+    );
+  }
+  const timelineShiftMilliseconds =
+    runtimeFirstMilliseconds - fixtureFirstMilliseconds;
+  const fixtureFirstDate = new Date(fixtureFirstMilliseconds)
+    .toISOString()
+    .slice(0, 10);
+  const runtimeFirstDate = new Date(runtimeFirstMilliseconds)
+    .toISOString()
+    .slice(0, 10);
+  const deliveryDateShiftMilliseconds =
+    Date.parse(`${runtimeFirstDate}T00:00:00.000Z`) -
+    Date.parse(`${fixtureFirstDate}T00:00:00.000Z`);
+
+  const retime = (offer: MerchantOffer): MerchantOffer => {
+    const issuedAtMilliseconds =
+      Date.parse(offer.issuedAt) + timelineShiftMilliseconds;
+    const validUntilMilliseconds =
+      Date.parse(offer.validUntil) + timelineShiftMilliseconds;
+    if (
+      !Number.isFinite(issuedAtMilliseconds) ||
+      !Number.isFinite(validUntilMilliseconds)
+    ) {
+      throw new MonadCommitmentError(
+        "INVALID_TIMESTAMP",
+        "The seller offer timeline contains an invalid timestamp.",
+      );
+    }
+    return {
+      ...offer,
+      deliveryDate: shiftDateByMilliseconds(
+        offer.deliveryDate,
+        deliveryDateShiftMilliseconds,
+      ),
+      issuedAt: new Date(issuedAtMilliseconds).toISOString(),
+      validUntil: new Date(validUntilMilliseconds).toISOString(),
+    };
+  };
+
+  const allOffers = fixtureOffers.map(retime);
+  const winningOffer = allOffers.find(
+    (offer) => offer.id === HERO_DEMO.negotiation.winningOffer.id,
+  );
+  if (!winningOffer) {
+    throw new MonadCommitmentError(
+      "WINNING_OFFER_MISSING",
+      "The winning offer could not be reconstructed on the finalized timeline.",
+    );
+  }
+
+  return {
+    allOffers,
+    winningOffer,
+    firstOfferIssuedAt: isoFromUnixSeconds(
+      finalizedCommittedAt + BigInt(1),
+      "First live offer time",
+    ),
+  };
+}
+
+export function buildHeroCoalitionCommitment(
+  input: HeroCoalitionCommitmentOptions = {},
+): PreparedCoalitionCommitment {
   const frozenReservations = HERO_FUNDING.frozenReservations;
   if (
     frozenReservations.length === 0 ||
@@ -228,11 +356,20 @@ export function buildHeroCoalitionCommitment(input?: {
     .map((reservation) => reservation.frozenAt as string)
     .sort()
     .at(-1) as string;
-  const allOffers = [
+  const fixtureOffers = [
     ...HERO_DEMO.negotiation.initialOffers,
     ...HERO_DEMO.negotiation.finalOffers,
   ];
-  const firstOfferIssuedAt = allOffers.map((offer) => offer.issuedAt).sort()[0];
+  const finalizedTimeline =
+    input.finalizedCommittedAt === undefined
+      ? undefined
+      : buildHeroOffersAfterFinalizedCommitment(input.finalizedCommittedAt);
+  const allOffers = finalizedTimeline?.allOffers ?? fixtureOffers;
+  const winningOffer =
+    finalizedTimeline?.winningOffer ?? HERO_DEMO.negotiation.winningOffer;
+  const firstOfferIssuedAt =
+    finalizedTimeline?.firstOfferIssuedAt ??
+    allOffers.map((offer) => offer.issuedAt).sort()[0];
   if (asUnixSeconds(latestFundingFreezeAt, "Funding freeze") >= asUnixSeconds(firstOfferIssuedAt, "First offer")) {
     throw new MonadCommitmentError(
       "PRE_BID_GATE_FAILED",
@@ -258,7 +395,22 @@ export function buildHeroCoalitionCommitment(input?: {
     );
   }
 
-  const bidClosesAt = input?.bidClosesAt ?? "2026-08-08T17:11:00.000Z";
+  const bidClosesAt = input.bidClosesAt ?? "2026-08-08T17:11:00.000Z";
+  if (
+    input.finalizedCommittedAt !== undefined &&
+    input.finalizedCommittedAt >= asUnixSeconds(firstOfferIssuedAt, "First offer")
+  ) {
+    throw new MonadCommitmentError(
+      "POST_COMMIT_OFFER_GATE_FAILED",
+      "Live seller offers must be issued after the finalized coalition commitment.",
+    );
+  }
+  if (asUnixSeconds(firstOfferIssuedAt, "First offer") >= asUnixSeconds(bidClosesAt, "Bid close")) {
+    throw new MonadCommitmentError(
+      "OFFER_WINDOW_CLOSED",
+      "The first seller offer must be issued before the bid window closes.",
+    );
+  }
   const requirement = HERO_DEMO.intents[0].demand.requirement;
   const termsHash = keccak256(
     encodeAbiParameters(
@@ -315,7 +467,7 @@ export function buildHeroCoalitionCommitment(input?: {
   const offerHashes = allOffers.map((offer) => hashSealedMerchantOffer(termsHash, offer));
   const winningOfferHash = hashSealedMerchantOffer(
     termsHash,
-    HERO_DEMO.negotiation.winningOffer,
+    winningOffer,
   );
 
   return {
@@ -327,6 +479,13 @@ export function buildHeroCoalitionCommitment(input?: {
     unitCount,
     reservedCents: BigInt(reservedCents),
     bidClosesAt: asUnixSeconds(bidClosesAt, "Bid close"),
+    finalizedCommittedAt:
+      input.finalizedCommittedAt === undefined
+        ? null
+        : isoFromUnixSeconds(
+            input.finalizedCommittedAt,
+            "Finalized commitment time",
+          ),
     latestFundingFreezeAt,
     firstOfferIssuedAt,
     preBidFundingGatePassed: true,
@@ -335,4 +494,5 @@ export function buildHeroCoalitionCommitment(input?: {
   };
 }
 
+/** Fixed, offline evidence replay. Live writes must use finalizedCommittedAt. */
 export const HERO_MONAD_COMMITMENT = buildHeroCoalitionCommitment();

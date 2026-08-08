@@ -74,13 +74,17 @@ async function executePreparation(input: {
   readonly now: Date;
   readonly adapter: MonadWorkflowAdapter;
 }): Promise<PrepareResult> {
-  const commitment = buildHeroCoalitionCommitment({
+  const coalitionCommitment = buildHeroCoalitionCommitment({
     bidClosesAt: input.bidClosesAt,
   });
 
-  // This finalized write is deliberately awaited before any seller offer hash
-  // can be registered. The ordering is the core economic role Monad plays.
-  const committed = await input.adapter.commitCoalition(commitment);
+  // The finalized onchain timestamp is deliberately awaited before offer
+  // timestamps or hashes exist. It is the clock anchor for the live auction.
+  const committed = await input.adapter.commitCoalition(coalitionCommitment);
+  const commitment = buildHeroCoalitionCommitment({
+    bidClosesAt: input.bidClosesAt,
+    finalizedCommittedAt: committed.committedAt,
+  });
   const offerResults: MonadWriteResult[] = [];
   for (const offerHash of commitment.offerHashes) {
     offerResults.push(
@@ -98,10 +102,16 @@ async function executePreparation(input: {
       "The finalized commitment identifier did not match the prepared write.",
     );
   }
+  if (verified.committedAt !== committed.committedAt) {
+    throw new MonadRegistryError(
+      "MONAD_COMMITMENT_TIME_CONFLICT",
+      "The finalized commitment timestamp changed during offer verification.",
+    );
+  }
 
   const preparation: RuntimeMonadPreparation = {
     runKey: input.runKey,
-    commitment,
+    commitment: verified.commitment,
     commitmentId: committed.commitmentId,
     commitmentTransaction: committed.transaction,
     offerTransactions: offerResults.map((result) => result.transaction),
@@ -159,18 +169,18 @@ export async function requireFinalizedHeroMarketOnMonad(options: {
 } = {}): Promise<RuntimeMonadPreparation> {
   const now = options.now ?? new Date();
   const { runKey, bidClosesAt } = getStableHeroBidWindow(now);
-  const commitment = buildHeroCoalitionCommitment({ bidClosesAt });
+  const coalitionCommitment = buildHeroCoalitionCommitment({ bidClosesAt });
   const verified = await (options.adapter ?? defaultAdapter).verifyPreparation(
-    commitment,
+    coalitionCommitment,
   );
-  assertCoherentSettlement(commitment, verified);
+  assertCoherentSettlement(verified.commitment, verified);
 
   return rememberRuntimeMonadPreparation({
     runKey,
-    commitment,
+    commitment: verified.commitment,
     commitmentId: verified.commitmentId,
     commitmentTransaction: null,
-    offerTransactions: commitment.offerHashes.map(() => null),
+    offerTransactions: verified.commitment.offerHashes.map(() => null),
     preparedAt: new Date(Number(verified.committedAt) * 1_000).toISOString(),
   });
 }

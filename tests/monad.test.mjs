@@ -15,6 +15,7 @@ import {
   attestSettledRainTransactionsOnMonad,
   getStableHeroBidWindow,
   prepareHeroMarketOnMonad,
+  requireFinalizedHeroMarketOnMonad,
 } from "../lib/monad/workflow.ts";
 import { keccak256, toBytes, zeroHash } from "viem";
 
@@ -27,6 +28,7 @@ const fakeTransaction = (label) => ({
 });
 
 function fakeAdapter(calls) {
+  const committedAt = BigInt(1_786_213_800);
   const durableState = {
     commitment: undefined,
     commitmentId: undefined,
@@ -42,6 +44,7 @@ function fakeAdapter(calls) {
       );
       return {
         commitmentId: durableState.commitmentId,
+        committedAt,
         replayed: false,
         transaction: fakeTransaction("commit"),
       };
@@ -68,14 +71,27 @@ function fakeAdapter(calls) {
       calls.push(["verify", commitment.termsHash]);
       assert.equal(commitment.termsHash, durableState.commitment?.termsHash);
       assert.equal(commitment.fundingRoot, durableState.commitment?.fundingRoot);
+      const reconstructedCommitment = buildHeroCoalitionCommitment({
+        bidClosesAt: new Date(
+          Number(durableState.commitment.bidClosesAt) * 1_000,
+        ).toISOString(),
+        finalizedCommittedAt: committedAt,
+      });
+      if (commitment.finalizedCommittedAt !== null) {
+        assert.deepEqual(
+          commitment.offerHashes,
+          reconstructedCommitment.offerHashes,
+        );
+      }
       assert.ok(
-        commitment.offerHashes.every((offerHash) =>
+        reconstructedCommitment.offerHashes.every((offerHash) =>
           durableState.offers.has(offerHash),
         ),
       );
       return {
         commitmentId: durableState.commitmentId,
-        committedAt: BigInt(1_786_213_800),
+        commitment: reconstructedCommitment,
+        committedAt,
         settledAt: durableState.settlement ? BigInt(1_786_214_400) : BigInt(0),
         acceptedOfferHash:
           durableState.settlement?.acceptedOfferHash ?? zeroHash,
@@ -88,8 +104,9 @@ function fakeAdapter(calls) {
   };
 }
 
-test("the Monad coalition commitment proves funding froze before seller bidding", () => {
+test("the Monad commitment records funding-freeze ordering before seller bidding", () => {
   const proof = buildHeroCoalitionCommitment();
+  assert.equal(proof.finalizedCommittedAt, null);
   assert.equal(proof.preBidFundingGatePassed, true);
   assert.ok(Date.parse(proof.latestFundingFreezeAt) < Date.parse(proof.firstOfferIssuedAt));
   assert.equal(proof.unitCount, HERO_DEMO.coalition.totalQuantity);
@@ -182,6 +199,21 @@ test("live preparation finalizes the commitment before registering any offer and
     [...Array(6).fill("offer"), "verify"],
   );
   assert.equal(first.preparation.commitment.offerHashes.length, 6);
+  assert.equal(first.preparation.preparedAt, "2026-08-08T18:30:00.000Z");
+  assert.equal(
+    first.preparation.commitment.finalizedCommittedAt,
+    first.preparation.preparedAt,
+  );
+  assert.ok(
+    Date.parse(first.preparation.preparedAt) <
+      Date.parse(first.preparation.commitment.firstOfferIssuedAt),
+    "the first offer encoded onchain must postdate finalized committedAt",
+  );
+  assert.notDeepEqual(
+    first.preparation.commitment.offerHashes,
+    HERO_MONAD_COMMITMENT.offerHashes,
+    "live offer hashes must not encode the fixed evidence-replay timestamps",
+  );
   assert.equal(first.preparation.commitmentId, replay.preparation.commitmentId);
   assert.equal(replay.replayed, true);
   assert.equal(calls.length, 8, "runtime replay must not create another chain write");
@@ -190,6 +222,34 @@ test("live preparation finalizes the commitment before registering any offer and
   const late = getStableHeroBidWindow(new Date("2026-08-08T23:59:00.000Z"));
   assert.deepEqual(early, late);
   assert.ok(Date.parse(early.bidClosesAt) > now.getTime());
+});
+
+test("a cold start reconstructs the exact live offer hashes from finalized state", async () => {
+  clearRuntimeMonadPreparation();
+  const calls = [];
+  const adapter = fakeAdapter(calls);
+  const now = new Date("2026-08-08T18:30:00.000Z");
+  const prepared = await prepareHeroMarketOnMonad({ now, adapter });
+  const expectedHashes = prepared.preparation.commitment.offerHashes;
+  const expectedWinningHash =
+    prepared.preparation.commitment.winningOfferHash;
+
+  clearRuntimeMonadPreparation();
+  const reconstructed = await requireFinalizedHeroMarketOnMonad({
+    now,
+    adapter,
+  });
+
+  assert.deepEqual(reconstructed.commitment.offerHashes, expectedHashes);
+  assert.equal(
+    reconstructed.commitment.winningOfferHash,
+    expectedWinningHash,
+  );
+  assert.equal(
+    reconstructed.commitment.firstOfferIssuedAt,
+    "2026-08-08T18:30:01.000Z",
+  );
+  assert.equal(calls.at(-1)[0], "verify");
 });
 
 test("post-Rain attestation binds the exact unique provider transaction set", async () => {
