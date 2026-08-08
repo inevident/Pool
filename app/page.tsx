@@ -3,6 +3,7 @@
 import {
   ArrowDown,
   ArrowRight,
+  Bot,
   Check,
   ChevronRight,
   CircleDollarSign,
@@ -10,6 +11,8 @@ import {
   CloudLightning,
   EyeOff,
   Fingerprint,
+  Gavel,
+  Link2,
   LockKeyhole,
   Pause,
   Play,
@@ -17,11 +20,12 @@ import {
   ShieldCheck,
   Sparkles,
   Store,
+  TerminalSquare,
   Users,
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type RainStatus = {
   configured: boolean;
@@ -65,6 +69,39 @@ type SettlementState =
   | { kind: "live"; result: RainResult }
   | { kind: "rehearsal" }
   | { kind: "failed"; message: string };
+
+type TraceLine = {
+  label: string;
+  detail: string;
+  status: "complete" | "blocked" | "info";
+};
+
+type ConsoleResult = {
+  kind: "idle" | "running" | "complete" | "failed";
+  mode?: string;
+  title?: string;
+  detail?: string;
+  trace?: TraceLine[];
+};
+
+type MonadStatus = {
+  configured?: boolean;
+  environment?: string;
+  chainName?: string;
+  chainId?: number | string;
+  explorerUrl?: string;
+  contractAddress?: string;
+  commitment?: {
+    id?: string;
+    hash?: string;
+    txHash?: string;
+    status?: string;
+  };
+  settlement?: {
+    txHash?: string;
+    status?: string;
+  };
+};
 
 const MSRP_UNIT = 479;
 const DEAL_UNIT = 389;
@@ -137,11 +174,11 @@ const timeline = [
   { stage: 2, time: "00:03", label: "Patchwork joins; $1,916 becomes unavailable elsewhere", tone: "accent" },
   { stage: 3, time: "00:05", label: "Kernel reserves $2,395 and adds HDMI as a hard constraint", tone: "accent" },
   { stage: 4, time: "00:07", label: "Ultrawide request isolated — form-factor mismatch", tone: "danger" },
-  { stage: 5, time: "00:09", label: "12 units and $5,748 in MSRP reservations clear into POOL-017", tone: "accent" },
-  { stage: 6, time: "00:12", label: "Three merchant agents receive an anonymized RFP", tone: "neutral" },
-  { stage: 7, time: "00:16", label: "Initial market opens with a best bid of $401", tone: "accent" },
-  { stage: 8, time: "00:21", label: "Coalition counters at $383 for immediate commitment", tone: "accent" },
-  { stage: 9, time: "00:24", label: "Signal clears at $389; accepted offer freezes reservations", tone: "success" },
+  { stage: 5, time: "00:09", label: "12 units and $5,748 freeze before any seller sees the RFP", tone: "success" },
+  { stage: 6, time: "00:12", label: "Monad anchors the funded coalition commitment", tone: "monad" },
+  { stage: 7, time: "00:16", label: "Only now do three merchant agents receive the anonymized RFP", tone: "neutral" },
+  { stage: 8, time: "00:21", label: "Market opens at $401; coalition counters at $383", tone: "accent" },
+  { stage: 9, time: "00:24", label: "Signal clears at $389 against the already-frozen commitment", tone: "success" },
   { stage: 10, time: "00:27", label: "$4,668 clears for capture; $1,080 releases only after settlement", tone: "success" },
   { stage: 11, time: "00:30", label: "Rain receives scoped authority only after POOL clearing", tone: "rain" },
 ] as const;
@@ -152,10 +189,10 @@ const stageCopy = [
   { eyebrow: "RESERVATION 02 / 03", title: "Patchwork locks its buying commitment." },
   { eyebrow: "RESERVATION 03 / 03", title: "Every unit is now covered before negotiation." },
   { eyebrow: "CONSTRAINT CHECK", title: "Similarity is not permission." },
-  { eyebrow: "COALITION FORMED", title: "Twelve funded units now negotiate as one." },
-  { eyebrow: "SELLER MARKET OPEN", title: "Merchants compete for the whole block." },
-  { eyebrow: "REVERSE AUCTION", title: "Competition converts quantity into leverage." },
-  { eyebrow: "COUNTEROFFER", title: "Commitment moves the market again." },
+  { eyebrow: "PRE-BID FREEZE", title: "The coalition commits before sellers can price it." },
+  { eyebrow: "MONAD COMMITMENT", title: "Funded demand becomes an independently verifiable fact." },
+  { eyebrow: "SELLER MARKET OPEN", title: "Only committed demand reaches the merchant market." },
+  { eyebrow: "REVERSE AUCTION", title: "Competition converts committed quantity into leverage." },
   { eyebrow: "AGREEMENT FOUND", title: "The coalition clears at $389 per unit." },
   { eyebrow: "CAPTURE CLEARING", title: "Only the deal price can leave each reservation." },
   { eyebrow: "PAYMENT AUTHORITY", title: "POOL clears first. Rain executes second." },
@@ -182,6 +219,41 @@ function shortId(value?: string) {
   return `${value.slice(0, 6)}…${value.slice(-5)}`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function textValue(value: unknown, fallback = "") {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+function traceFrom(value: unknown, fallback: TraceLine[]): TraceLine[] {
+  if (!Array.isArray(value)) return fallback;
+  const lines = value.flatMap((entry): TraceLine[] => {
+    if (typeof entry === "string") return [{ label: "agent", detail: entry, status: "info" }];
+    const item = asRecord(entry);
+    const label = textValue(item.tool ?? item.action ?? item.name ?? item.label, "agent");
+    const detail = textValue(item.detail ?? item.output ?? item.result ?? item.reason, "completed");
+    const rawStatus = textValue(item.status, "complete").toLowerCase();
+    const status = rawStatus.includes("block") || rawStatus.includes("reject") ? "blocked" : rawStatus.includes("complete") || rawStatus.includes("pass") || rawStatus.includes("success") ? "complete" : "info";
+    return [{ label, detail, status }];
+  });
+  return lines.length > 0 ? lines.slice(0, 5) : fallback;
+}
+
+function safeExplorerHref(base: string | undefined, txHash: string | undefined) {
+  if (!base || !txHash) return undefined;
+  try {
+    const url = new URL(base);
+    if (url.protocol !== "https:") return undefined;
+    return `${url.href.replace(/\/$/, "")}/tx/${encodeURIComponent(txHash)}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function RainWordmark() {
   return <span className="rain-wordmark" aria-label="Rain">rain</span>;
 }
@@ -190,16 +262,53 @@ function StatusDot({ online }: { online: boolean }) {
   return <span className={`status-dot ${online ? "is-online" : ""}`} aria-hidden="true" />;
 }
 
+function ConsoleOutput({ state, empty }: { state: ConsoleResult; empty: string }) {
+  if (state.kind === "idle") {
+    return <div className="console-empty"><TerminalSquare size={15} /><span>{empty}</span></div>;
+  }
+  if (state.kind === "running") {
+    return <div className="console-empty is-running" aria-live="polite"><span className="mini-spinner" /><span>Calling the runtime and recording tool decisions…</span></div>;
+  }
+  if (state.kind === "failed") {
+    return <div className="console-empty is-failed" role="alert"><X size={15} /><span>{state.detail ?? "This test did not complete."}</span></div>;
+  }
+  return (
+    <div className="console-result" aria-live="polite">
+      <div className="console-result-head">
+        <div><Check size={14} /><strong>{state.title}</strong></div>
+        <span>{state.mode ?? "policy runtime"}</span>
+      </div>
+      {state.detail ? <p>{state.detail}</p> : null}
+      <div className="tool-trace">
+        {(state.trace ?? []).map((line, index) => (
+          <div className={`tool-line is-${line.status}`} key={`${line.label}-${index}`}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <strong>{line.label}</strong>
+            <p>{line.detail}</p>
+            {line.status === "blocked" ? <X size={12} /> : line.status === "complete" ? <Check size={12} /> : <ChevronRight size={12} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [stage, setStage] = useState(0);
   const [autoplay, setAutoplay] = useState(false);
   const [rainStatus, setRainStatus] = useState<RainStatus | null>(null);
+  const [monadStatus, setMonadStatus] = useState<MonadStatus | null>(null);
+  const [intent, setIntent] = useState('I need 2 color-accurate 27" 4K USB-C monitors under $430 each within 10 days.');
+  const [intentResult, setIntentResult] = useState<ConsoleResult>({ kind: "idle" });
+  const [merchantPrice, setMerchantPrice] = useState("389");
+  const [merchantDelivery, setMerchantDelivery] = useState("7");
+  const [bidResult, setBidResult] = useState<ConsoleResult>({ kind: "idle" });
   const [settlement, setSettlement] = useState<SettlementState>({ kind: "idle" });
   const [paymentProgress, setPaymentProgress] = useState(0);
   const eventStreamRef = useRef<HTMLDivElement>(null);
 
   const round = merchantRound(stage);
-  const currentPrice = stage >= 8 ? DEAL_UNIT : stage >= 6 ? 401 : MSRP_UNIT;
+  const currentPrice = stage >= 9 ? DEAL_UNIT : stage >= 7 ? 401 : MSRP_UNIT;
   const visibleEvents = timeline.filter((event) => event.stage <= stage);
   const savings = (MSRP_UNIT - DEAL_UNIT) * 12;
   const baseline = MSRP_UNIT * 12;
@@ -212,21 +321,36 @@ export default function Home() {
   const currentCopy = stageCopy[Math.min(stage, stageCopy.length - 1)];
   const marketIsPlaying = autoplay && stage < 11;
 
+  async function refreshMonadStatus(signal?: AbortSignal) {
+    try {
+      const response = await fetch("/api/monad/status", { cache: "no-store", signal });
+      if (!response.ok) throw new Error("Monad status unavailable");
+      const body = await response.json() as MonadStatus;
+      setMonadStatus(body);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setMonadStatus({ configured: false, environment: "local-proof" });
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/rain/status", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const body = (await response.json()) as RainStatus;
-        setRainStatus(body);
-      })
-      .catch(() => {
-        setRainStatus({
-          configured: false,
-          connected: false,
-          environment: "rehearsal",
-          liveExecutionEnabled: false,
-        });
-      });
+    void Promise.all([
+      fetch("/api/rain/status", { cache: "no-store", signal: controller.signal })
+        .then(async (response) => {
+          const body = (await response.json()) as RainStatus;
+          setRainStatus(body);
+        })
+        .catch(() => {
+          setRainStatus({
+            configured: false,
+            connected: false,
+            environment: "rehearsal",
+            liveExecutionEnabled: false,
+          });
+        }),
+      refreshMonadStatus(controller.signal),
+    ]);
     return () => controller.abort();
   }, []);
 
@@ -259,7 +383,8 @@ export default function Home() {
     if (stage === 0) return "Waiting for demand";
     if (stage <= 3) return "Reserving MSRP";
     if (stage === 4) return "Protecting hard constraints";
-    if (stage === 5) return "Pool live";
+    if (stage === 5) return "Membership frozen";
+    if (stage === 6) return "Anchoring commitment";
     if (stage <= 8) return "Merchants competing";
     if (stage === 9) return "Deal agreed";
     if (stage === 10) return "Capture amounts cleared";
@@ -280,6 +405,98 @@ export default function Home() {
     setAutoplay(false);
     setSettlement({ kind: "idle" });
     setPaymentProgress(0);
+  }
+
+  async function runBuyerAgent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanIntent = intent.trim();
+    if (!cleanIntent) return;
+    setIntentResult({ kind: "running" });
+    try {
+      const response = await fetch("/api/agent/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent: cleanIntent }),
+      });
+      const payload = asRecord(await response.json());
+      if (!response.ok) throw new Error(textValue(payload.message ?? payload.error, "Agent route unavailable"));
+      const normalized = asRecord(payload.normalized ?? payload.intent ?? payload.parsedIntent);
+      const quantity = textValue(normalized.quantity ?? payload.quantity, "requested quantity");
+      const deadline = textValue(normalized.deadlineDays ?? normalized.deliveryDays ?? payload.deadlineDays, "requested window");
+      const decision = textValue(payload.decision ?? payload.status, "eligible");
+      const mode = textValue(payload.mode ?? payload.provider, "policy-agent");
+      setIntentResult({
+        kind: "complete",
+        mode,
+        title: `${decision.replace(/_/g, " ")} · ${quantity} unit${quantity === "1" ? "" : "s"}`,
+        detail: `Normalized deadline: ${deadline}${/^\d+$/.test(deadline) ? " days" : ""}. This test does not mutate the fixed 12-unit Rain evidence run.`,
+        trace: traceFrom(payload.trace ?? payload.toolTrace, [
+          { label: "normalize_intent", detail: "Converted natural language into typed purchase constraints", status: "complete" },
+          { label: "check_catalog", detail: "Compared hard product and delivery constraints", status: "complete" },
+          { label: "check_funding", detail: "MSRP coverage is required before admission", status: "info" },
+        ]),
+      });
+    } catch (error) {
+      setIntentResult({
+        kind: "complete",
+        mode: "local rehearsal",
+        title: "Compatible intent · 2 units",
+        detail: "The hosted agent route is unavailable, so this is an explicitly labeled local policy rehearsal. It does not join the fixed Rain run.",
+        trace: [
+          { label: "normalize_intent", detail: "27-inch · 4K · USB-C · quantity 2 · deadline 10 days", status: "complete" },
+          { label: "check_catalog", detail: "Hard specifications match POOL-017", status: "complete" },
+          { label: "reserve_funds", detail: "Would require $958 in deposited balance", status: "info" },
+        ],
+      });
+    }
+  }
+
+  async function evaluateMerchantBid(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const unitPrice = Number(merchantPrice);
+    const deliveryDays = Number(merchantDelivery);
+    if (!Number.isFinite(unitPrice) || !Number.isFinite(deliveryDays)) return;
+    setBidResult({ kind: "running" });
+    try {
+      const response = await fetch("/api/merchant/bid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          poolId: "POOL-2408-017",
+          unitPriceInCents: Math.round(unitPrice * 100),
+          quantity: 12,
+          deliveryDays: Math.round(deliveryDays),
+          warrantyMonths: 36,
+        }),
+      });
+      const payload = asRecord(await response.json());
+      if (!response.ok) throw new Error(textValue(payload.message ?? payload.error, "Bid route unavailable"));
+      const decision = textValue(payload.decision ?? payload.status, payload.accepted === true ? "accepted" : "evaluated");
+      setBidResult({
+        kind: "complete",
+        mode: textValue(payload.mode, "deterministic policy"),
+        title: `${decision.replace(/_/g, " ")} · ${money.format(unitPrice)}/unit`,
+        detail: textValue(payload.reason ?? payload.message, "Evaluated against the already-frozen coalition mandate without revealing buyer ceilings."),
+        trace: traceFrom(payload.trace ?? payload.toolTrace, [
+          { label: "verify_commitment", detail: "Coalition commitment must predate this offer", status: "complete" },
+          { label: "clear_mandates", detail: "Price, delivery, warranty, and inventory checked", status: "complete" },
+        ]),
+      });
+    } catch {
+      const accepted = unitPrice <= DEAL_UNIT && deliveryDays <= 10;
+      setBidResult({
+        kind: "complete",
+        mode: "local rehearsal",
+        title: `${accepted ? "policy pass" : "counter required"} · ${money.format(unitPrice)}/unit`,
+        detail: accepted
+          ? "This rehearsal offer fits the public demo policy. It does not alter or settle the recorded Rain scenario."
+          : "This rehearsal offer misses the $389 clearing target or delivery window. Private buyer ceilings remain sealed.",
+        trace: [
+          { label: "verify_commitment", detail: "Pre-bid freeze ordering checked locally", status: "complete" },
+          { label: "clear_offer", detail: accepted ? "Public demo constraints pass" : "Offer requires a counter", status: accepted ? "complete" : "blocked" },
+        ],
+      });
+    }
   }
 
   async function executeRainSettlement() {
@@ -305,6 +522,7 @@ export default function Home() {
       setPaymentProgress(100);
       setSettlement({ kind: "live", result });
       setStage(12);
+      void refreshMonadStatus();
     } catch (error) {
       setSettlement({
         kind: "failed",
@@ -321,6 +539,15 @@ export default function Home() {
 
   const livePayments = settlement.kind === "live" ? settlement.result.payments ?? [] : [];
   const outcomeMode = settlement.kind === "live" ? "RAIN SANDBOX · VERIFIED" : "REHEARSAL · SIMULATED";
+  const commitmentTx = monadStatus?.commitment?.txHash;
+  const settlementTx = monadStatus?.settlement?.txHash;
+  const commitmentHref = safeExplorerHref(monadStatus?.explorerUrl, commitmentTx);
+  const settlementHref = safeExplorerHref(monadStatus?.explorerUrl, settlementTx);
+  const monadLabel = commitmentTx
+    ? `${monadStatus?.chainName ?? "Monad testnet"} · on-chain`
+    : monadStatus?.configured
+      ? `${monadStatus.chainName ?? "Monad testnet"} · ready`
+      : "local proof only · not on-chain";
 
   return (
     <main className={`app-shell stage-${stage}`}>
@@ -330,6 +557,7 @@ export default function Home() {
           <span>POOL</span>
         </a>
         <nav className="topnav" aria-label="Product navigation">
+          <a href="#judge-console">Judge console</a>
           <a href="#market">Live market</a>
           <a href="#authority">Funds & authority</a>
           <a href="#outcome">Outcome</a>
@@ -391,8 +619,102 @@ export default function Home() {
             <ArrowRight size={14} />
             <div className={`funding-step ${stage >= 9 ? "is-active" : ""}`}><span>03 · SETTLE</span><strong>{money.format(poolTotal)} captured</strong><small>{money.format(savings)} unlocks</small></div>
           </div>
-          <div className="funding-exit-rule"><LockKeyhole size={12} /><span>Leave before the commitment cutoff → full release. After offer acceptance → frozen through settlement, cancellation, or reconciliation.</span></div>
+          <div className="funding-exit-rule"><LockKeyhole size={12} /><span>Leave while the pool recruits → full release. Before the RFP opens, membership and MSRP reservations freeze through settlement, cancellation, or reconciliation.</span></div>
           <div className="hero-ticker"><span>POOL-2408-017</span><span>{currentCopy.eyebrow}</span><span>NYC / USD</span></div>
+        </div>
+      </section>
+
+      <section className="judge-console" id="judge-console" aria-labelledby="judge-console-title">
+        <div className="judge-console-head">
+          <div>
+            <span className="eyebrow">00 / JUDGE CONSOLE</span>
+            <h2 id="judge-console-title">Test the agents.<br /><em>Inspect every boundary.</em></h2>
+          </div>
+          <p>
+            These controls exercise the runtime APIs without rewriting the fixed, auditable Rain sandbox scenario below.
+            Every result names whether it came from AI, deterministic policy, testnet, or a local rehearsal.
+          </p>
+        </div>
+
+        <div className="judge-console-grid">
+          <article className="console-card agent-console-card">
+            <div className="console-card-head">
+              <div><Bot size={16} /><span>BUYER INTENT AGENT</span></div>
+              <span>natural language → mandate</span>
+            </div>
+            <form className="console-form" onSubmit={runBuyerAgent}>
+              <label htmlFor="buyer-intent">Try your own purchase intent</label>
+              <textarea
+                id="buyer-intent"
+                value={intent}
+                onChange={(event) => setIntent(event.target.value)}
+                maxLength={500}
+                rows={3}
+                aria-describedby="buyer-intent-help"
+              />
+              <div className="console-form-footer">
+                <small id="buyer-intent-help">No account or money movement · maximum 500 characters</small>
+                <button className="console-submit" type="submit" disabled={intentResult.kind === "running" || intent.trim().length === 0}>
+                  {intentResult.kind === "running" ? <span className="mini-spinner" /> : <Bot size={14} />}
+                  {intentResult.kind === "running" ? "Running…" : "Run buyer agent"}
+                </button>
+              </div>
+            </form>
+            <ConsoleOutput state={intentResult} empty="Run an intent to see normalization, catalog matching, and the funding gate." />
+          </article>
+
+          <article className="console-card merchant-console-card">
+            <div className="console-card-head">
+              <div><Gavel size={16} /><span>MERCHANT BID AGENT</span></div>
+              <span>offer → mandate clearing</span>
+            </div>
+            <form className="bid-form" onSubmit={evaluateMerchantBid}>
+              <label>
+                <span>Unit price</span>
+                <span className="input-shell"><i>$</i><input type="number" min="1" max="999" step="1" value={merchantPrice} onChange={(event) => setMerchantPrice(event.target.value)} aria-label="Merchant unit price in dollars" /></span>
+              </label>
+              <label>
+                <span>Delivery</span>
+                <span className="input-shell"><input type="number" min="1" max="90" step="1" value={merchantDelivery} onChange={(event) => setMerchantDelivery(event.target.value)} aria-label="Merchant delivery days" /><i>days</i></span>
+              </label>
+              <button className="console-submit" type="submit" disabled={bidResult.kind === "running"}>
+                {bidResult.kind === "running" ? <span className="mini-spinner" /> : <Gavel size={14} />}
+                {bidResult.kind === "running" ? "Evaluating…" : "Submit test bid"}
+              </button>
+            </form>
+            <div className="bid-disclosure"><EyeOff size={12} /> The merchant sees quantity and public requirements—never private buyer maximums.</div>
+            <ConsoleOutput state={bidResult} empty="Submit an offer to test price, delivery, warranty, and commitment rules." />
+          </article>
+
+          <article className="console-card proof-console-card">
+            <div className="console-card-head">
+              <div><Link2 size={16} /><span>COMMITMENT PROOF</span></div>
+              <span className={commitmentTx ? "proof-live" : ""}>{monadLabel}</span>
+            </div>
+            <div className="proof-order" aria-label="Required transaction ordering">
+              <div className="proof-step is-complete"><span>01</span><strong>$5,748 funded</strong><small>MSRP verified</small></div>
+              <ArrowRight size={14} />
+              <div className="proof-step is-complete"><span>02</span><strong>12 units frozen</strong><small>membership sealed</small></div>
+              <ArrowRight size={14} />
+              <div className={`proof-step ${commitmentTx ? "is-onchain" : "is-local"}`}><span>03</span><strong>Monad commit</strong><small>{commitmentTx ? "testnet anchored" : "locally derived"}</small></div>
+              <ArrowRight size={14} />
+              <div className="proof-step"><span>04</span><strong>RFP opens</strong><small>sellers may bid</small></div>
+            </div>
+            <div className="proof-facts">
+              <div><span>Coalition ID</span><strong>POOL-2408-017</strong></div>
+              <div><span>Commitment</span><strong>{shortId(monadStatus?.commitment?.hash ?? monadStatus?.commitment?.id)}</strong></div>
+              <div><span>Contract</span><strong>{shortId(monadStatus?.contractAddress)}</strong></div>
+              <div><span>Chain</span><strong>{monadStatus?.chainId ? `${monadStatus.chainName ?? "Monad"} · ${monadStatus.chainId}` : "not configured"}</strong></div>
+            </div>
+            <div className="proof-links">
+              {commitmentHref ? <a href={commitmentHref} target="_blank" rel="noopener noreferrer"><Link2 size={12} /> Commitment tx <span>{shortId(commitmentTx)}</span></a> : <span><Link2 size={12} /> No on-chain commitment transaction claimed</span>}
+              {settlementHref ? <a href={settlementHref} target="_blank" rel="noopener noreferrer"><Check size={12} /> Settlement attestation <span>{shortId(settlementTx)}</span></a> : <span><Clock3 size={12} /> Settlement proof appears after Rain completes</span>}
+            </div>
+            <p className="proof-disclosure">
+              Monad proves what was funded and frozen before bidding; Rain executes only the cleared spend afterward.
+              A local hash is never presented as a testnet transaction.
+            </p>
+          </article>
         </div>
       </section>
 
@@ -481,11 +803,11 @@ export default function Home() {
           <section className="market-column sellers-column" aria-labelledby="sellers-title">
             <div className="column-head">
               <div><Store size={15} /><span id="sellers-title">SELLER COMPETITION</span></div>
-              <span>{stage >= 6 ? "3 bidding" : "market closed"}</span>
+              <span>{stage >= 7 ? "3 bidding" : "market closed"}</span>
             </div>
             <div className="merchant-list">
               {merchants.map((merchant, index) => {
-                const visible = stage >= 6;
+                const visible = stage >= 7;
                 const winning = merchant.id === "signal" && stage >= 9;
                 const price = merchant.prices[round];
                 const stepped = stage >= 7;
@@ -511,7 +833,7 @@ export default function Home() {
 
         <div className="market-lower-grid">
           <section className="event-panel">
-            <div className="panel-head"><div><CloudLightning size={15} /><span>MARKET EVENT STREAM</span></div><span>deterministic replay</span></div>
+            <div className="panel-head"><div><CloudLightning size={15} /><span>MARKET EVENT STREAM</span></div><span>fixed evidence replay</span></div>
             <div className="event-stream" ref={eventStreamRef} aria-live="polite">
               {visibleEvents.length === 0 ? (
                 <div className="empty-stream"><Sparkles size={18} /><span>Launch the market to watch agents coordinate demand.</span></div>
@@ -545,10 +867,10 @@ export default function Home() {
           <h2>Fund the intent.<br /><em>Reserve the MSRP.</em></h2>
           <p>
             POOL admits a buyer only when their balance covers quantity × MSRP. Joining creates a reservation:
-            that money remains theirs, but cannot be withdrawn or used elsewhere. A buyer may leave before the commitment cutoff;
-            after an offer is accepted, the reservation stays frozen until settlement, cancellation, or reconciliation.
+            that money remains theirs, but cannot be withdrawn or used elsewhere. A buyer may leave while the pool recruits;
+            before the RFP opens, membership and reservations freeze until settlement, cancellation, or reconciliation.
           </p>
-          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL reserves</strong><ArrowRight size={14} /><span>agents negotiate</span><ArrowRight size={14} /><strong>Rain executes</strong></div>
+          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL freezes</strong><ArrowRight size={14} /><span>Monad proves</span><ArrowRight size={14} /><strong>sellers bid</strong><ArrowRight size={14} /><strong>Rain executes</strong></div>
           <div className="custody-boundary"><ShieldCheck size={15} /><span><strong>Clear boundary:</strong> POOL balance and reservation are the product ledger. Rain is used only at execution; Rain is not presented as the custodial deposit account.</span></div>
         </div>
 
@@ -557,7 +879,7 @@ export default function Home() {
           <div className="reservation-rules">
             <div><span>JOIN</span><strong>Balance ≥ MSRP</strong><small>or participation is denied</small></div>
             <ArrowRight size={14} />
-            <div><span>ACTIVE</span><strong>MSRP is reserved</strong><small>no withdrawal or other spend</small></div>
+            <div><span>PRE-BID</span><strong>Membership freezes</strong><small>before sellers receive the RFP</small></div>
             <ArrowRight size={14} />
             <div><span>SETTLE</span><strong>Capture deal price</strong><small>unlock the difference</small></div>
           </div>
@@ -579,7 +901,7 @@ export default function Home() {
             })}
             <div className="reservation-total"><span>TOTAL · 12 UNITS</span><strong>{money.format(baseline)} reserved</strong><ArrowRight size={13} /><strong>{money.format(poolTotal)} captured</strong><strong className="unlock-value">+{money.format(savings)} available</strong></div>
           </div>
-          <div className="leave-rule"><RefreshCcw size={13} /><span><strong>Before the commitment cutoff:</strong> leaving releases the full MSRP reservation. <strong>After offer acceptance:</strong> it stays frozen through settlement, cancellation, or reconciliation. Failed or partial execution never appears as released.</span></div>
+          <div className="leave-rule"><RefreshCcw size={13} /><span><strong>While recruiting:</strong> leaving releases the full MSRP reservation. <strong>Before the RFP opens:</strong> membership and funds freeze through settlement, cancellation, or reconciliation. Failed or partial execution never appears as released.</span></div>
         </div>
 
         <div className="mandate-panel">
@@ -702,7 +1024,7 @@ export default function Home() {
 
       <footer className="site-footer">
         <div><span className="brand compact"><span className="brand-mark"><span /><span /><span /></span><span>POOL</span></span><span>Autonomous collective purchasing for the agentic economy.</span></div>
-        <div><span>Built for Raingentic Commerce Hackathon NYC</span><span>Rain sandbox · fictional merchants · deterministic demo</span></div>
+        <div><span>Built for Raingentic Commerce Hackathon NYC</span><span>Rain sandbox · Monad proof rail · fictional merchants · fixed evidence replay</span></div>
       </footer>
     </main>
   );
