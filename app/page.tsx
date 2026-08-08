@@ -25,14 +25,23 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type RainStatus = {
   configured: boolean;
   connected: boolean;
   environment: "sandbox" | "rehearsal";
   liveExecutionEnabled: boolean;
+  accessRequired?: boolean;
+  accessUnlocked?: boolean;
+  message?: string;
 };
+
+type DemoAccessState =
+  | { kind: "idle" }
+  | { kind: "submitting" }
+  | { kind: "authorized"; message: string }
+  | { kind: "error"; message: string };
 
 type RainPayment = {
   buyerId: string;
@@ -59,6 +68,17 @@ type RainResult = {
     merchantCategoryCode: string;
   };
   payments?: RainPayment[];
+  monad?: {
+    status?: "attested" | "attestation_pending" | "not_configured";
+    commitmentId?: string;
+    rainSettlementHash?: string;
+    replayed?: boolean;
+    message?: string;
+    transaction?: {
+      hash?: string;
+      explorerUrl?: string;
+    } | null;
+  };
   message?: string;
   code?: string;
 };
@@ -85,23 +105,55 @@ type ConsoleResult = {
 };
 
 type MonadStatus = {
+  status?: string;
+  mode?: string;
+  state?: string;
+  confirmation?: string;
+  message?: string;
   configured?: boolean;
   environment?: string;
   chainName?: string;
   chainId?: number | string;
   explorerUrl?: string;
   contractAddress?: string;
+  registryAddress?: string | null;
+  registryExplorerUrl?: string | null;
+  commitmentId?: string | null;
+  network?: {
+    name?: string;
+    chainId?: number | string;
+    explorerUrl?: string;
+  };
+  localProof?: {
+    termsHash?: string;
+    fundingRoot?: string;
+  };
+  onchainProof?: {
+    termsHash?: string;
+    rainSettlementHash?: string | null;
+  };
   commitment?: {
     id?: string;
     hash?: string;
+    termsHash?: string;
     txHash?: string;
     status?: string;
   };
   settlement?: {
     txHash?: string;
+    hash?: string;
+    explorerUrl?: string;
     status?: string;
   };
+  transactions?: {
+    commitment?: {
+      hash?: string;
+      explorerUrl?: string;
+    } | null;
+  };
 };
+
+type MonadPreparationState = "idle" | "running" | "ready" | "local" | "failed";
 
 const MSRP_UNIT = 479;
 const DEAL_UNIT = 389;
@@ -175,7 +227,7 @@ const timeline = [
   { stage: 3, time: "00:05", label: "Kernel reserves $2,395 and adds HDMI as a hard constraint", tone: "accent" },
   { stage: 4, time: "00:07", label: "Ultrawide request isolated — form-factor mismatch", tone: "danger" },
   { stage: 5, time: "00:09", label: "12 units and $5,748 freeze before any seller sees the RFP", tone: "success" },
-  { stage: 6, time: "00:12", label: "Monad anchors the funded coalition commitment", tone: "monad" },
+  { stage: 6, time: "00:12", label: "Funded terms are committed; Monad Testnet timestamps them when configured", tone: "monad" },
   { stage: 7, time: "00:16", label: "Only now do three merchant agents receive the anonymized RFP", tone: "neutral" },
   { stage: 8, time: "00:21", label: "Market opens at $401; coalition counters at $383", tone: "accent" },
   { stage: 9, time: "00:24", label: "Signal clears at $389 against the already-frozen commitment", tone: "success" },
@@ -190,7 +242,7 @@ const stageCopy = [
   { eyebrow: "RESERVATION 03 / 03", title: "Every unit is now covered before negotiation." },
   { eyebrow: "CONSTRAINT CHECK", title: "Similarity is not permission." },
   { eyebrow: "PRE-BID FREEZE", title: "The coalition commits before sellers can price it." },
-  { eyebrow: "MONAD COMMITMENT", title: "Funded demand becomes an independently verifiable fact." },
+  { eyebrow: "MONAD COMMITMENT", title: "POOL’s funded-demand claim gets a tamper-evident timestamp." },
   { eyebrow: "SELLER MARKET OPEN", title: "Only committed demand reaches the merchant market." },
   { eyebrow: "REVERSE AUCTION", title: "Competition converts committed quantity into leverage." },
   { eyebrow: "AGREEMENT FOUND", title: "The coalition clears at $389 per unit." },
@@ -254,6 +306,16 @@ function safeExplorerHref(base: string | undefined, txHash: string | undefined) 
   }
 }
 
+function safeHttpsHref(value?: string) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function RainWordmark() {
   return <span className="rain-wordmark" aria-label="Rain">rain</span>;
 }
@@ -297,7 +359,10 @@ export default function Home() {
   const [stage, setStage] = useState(0);
   const [autoplay, setAutoplay] = useState(false);
   const [rainStatus, setRainStatus] = useState<RainStatus | null>(null);
+  const [accessCode, setAccessCode] = useState("");
+  const [demoAccess, setDemoAccess] = useState<DemoAccessState>({ kind: "idle" });
   const [monadStatus, setMonadStatus] = useState<MonadStatus | null>(null);
+  const [monadPreparation, setMonadPreparation] = useState<MonadPreparationState>("idle");
   const [intent, setIntent] = useState('I need 2 color-accurate 27" 4K USB-C monitors under $430 each within 10 days.');
   const [intentResult, setIntentResult] = useState<ConsoleResult>({ kind: "idle" });
   const [merchantPrice, setMerchantPrice] = useState("389");
@@ -326,12 +391,46 @@ export default function Home() {
       const response = await fetch("/api/monad/status", { cache: "no-store", signal });
       if (!response.ok) throw new Error("Monad status unavailable");
       const body = await response.json() as MonadStatus;
-      setMonadStatus(body);
+      setMonadStatus((current) => ({
+        ...body,
+        transactions: body.transactions ?? current?.transactions,
+        settlement: body.settlement ?? current?.settlement,
+      }));
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setMonadStatus({ configured: false, environment: "local-proof" });
     }
   }
+
+  const prepareMonadCommitment = useCallback(async () => {
+    setMonadPreparation("running");
+    try {
+      const response = await fetch("/api/monad/prepare", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Pool-Agent-Action": "prepare-monad",
+        },
+        body: JSON.stringify({
+          scenarioVersion: "monitor-pool-v1",
+          confirmation: "prepare-monad-testnet",
+        }),
+      });
+      const body = (await response.json()) as MonadStatus;
+      setMonadStatus((current) => ({
+        ...current,
+        ...body,
+        network: { ...current?.network, ...body.network },
+        localProof: body.localProof ?? current?.localProof,
+      }));
+      if (!response.ok) throw new Error(body.message ?? "Monad preparation failed");
+      setMonadPreparation(body.status === "prepared" ? "ready" : "local");
+      return true;
+    } catch {
+      setMonadPreparation("failed");
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -349,7 +448,15 @@ export default function Home() {
             liveExecutionEnabled: false,
           });
         }),
-      refreshMonadStatus(controller.signal),
+      fetch("/api/monad/status", { cache: "no-store", signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Monad status unavailable");
+          setMonadStatus((await response.json()) as MonadStatus);
+        })
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setMonadStatus({ configured: false, environment: "local-proof" });
+        }),
     ]);
     return () => controller.abort();
   }, []);
@@ -358,12 +465,24 @@ export default function Home() {
     if (!autoplay || stage === 0 || stage >= 11) {
       return;
     }
+    if (stage === 5) {
+      const timeout = window.setTimeout(() => {
+        void prepareMonadCommitment().then((prepared) => {
+          if (prepared) {
+            setStage(6);
+          } else {
+            setAutoplay(false);
+          }
+        });
+      }, timings[stage] ?? 1100);
+      return () => window.clearTimeout(timeout);
+    }
     const timeout = window.setTimeout(
       () => setStage((current) => Math.min(current + 1, 11)),
       timings[stage] ?? 1100,
     );
     return () => window.clearTimeout(timeout);
-  }, [autoplay, stage]);
+  }, [autoplay, prepareMonadCommitment, stage]);
 
   useEffect(() => {
     if (settlement.kind !== "running") return;
@@ -380,6 +499,8 @@ export default function Home() {
   }, [visibleEvents.length]);
 
   const marketState = useMemo(() => {
+    if (monadPreparation === "running") return "Finalizing commitment proof";
+    if (monadPreparation === "failed") return "Commitment proof blocked";
     if (stage === 0) return "Waiting for demand";
     if (stage <= 3) return "Reserving MSRP";
     if (stage === 4) return "Protecting hard constraints";
@@ -391,7 +512,7 @@ export default function Home() {
     if (settlement.kind === "running") return "Rain authorizing";
     if (stage >= 12) return "Pool settled";
     return "Ready to transact";
-  }, [settlement.kind, stage]);
+  }, [monadPreparation, settlement.kind, stage]);
 
   function launchDemo() {
     setSettlement({ kind: "idle" });
@@ -400,11 +521,75 @@ export default function Home() {
     setAutoplay(true);
   }
 
+  async function stepManually() {
+    setAutoplay(false);
+    if (stage === 5) {
+      if (await prepareMonadCommitment()) setStage(6);
+      return;
+    }
+    setStage((current) => current === 0 ? 1 : Math.min(current + 1, 11));
+  }
+
   function resetDemo() {
     setStage(0);
     setAutoplay(false);
     setSettlement({ kind: "idle" });
     setPaymentProgress(0);
+    setMonadPreparation("idle");
+  }
+
+  async function unlockDemoExecution(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = accessCode.trim();
+    if (!code) {
+      setDemoAccess({ kind: "error", message: "Enter the private demo access code." });
+      return;
+    }
+
+    setDemoAccess({ kind: "submitting" });
+    try {
+      const sessionResponse = await fetch("/api/demo/session", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessCode: code }),
+      });
+      const sessionBody = await sessionResponse.json() as { message?: string };
+      if (!sessionResponse.ok) {
+        throw new Error(sessionBody.message ?? "Demo access was not accepted.");
+      }
+
+      const rainReadiness = fetch("/api/rain/status", {
+        cache: "no-store",
+        credentials: "same-origin",
+      }).then(async (response) => {
+        const body = await response.json() as RainStatus;
+        setRainStatus(body);
+        return body;
+      });
+      const [nextRainStatus] = await Promise.all([
+        rainReadiness,
+        refreshMonadStatus(),
+      ]);
+
+      if (nextRainStatus.accessRequired) {
+        throw new Error("The session cookie could not be verified. Please try the code again.");
+      }
+
+      setAccessCode("");
+      setDemoAccess({
+        kind: "authorized",
+        message: nextRainStatus.liveExecutionEnabled
+          ? "Access confirmed. Rain sandbox settlement is ready."
+          : "Access confirmed. Rain is still in rehearsal mode; check its connection status.",
+      });
+    } catch (error) {
+      setDemoAccess({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Demo access could not be verified.",
+      });
+    }
   }
 
   async function runBuyerAgent(event: FormEvent<HTMLFormElement>) {
@@ -439,7 +624,7 @@ export default function Home() {
           { label: "check_funding", detail: "MSRP coverage is required before admission", status: "info" },
         ]),
       });
-    } catch (error) {
+    } catch {
       setIntentResult({
         kind: "complete",
         mode: "local rehearsal",
@@ -456,6 +641,7 @@ export default function Home() {
 
   async function evaluateMerchantBid(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (stage < 7) return;
     const unitPrice = Number(merchantPrice);
     const deliveryDays = Number(merchantDelivery);
     if (!Number.isFinite(unitPrice) || !Number.isFinite(deliveryDays)) return;
@@ -472,7 +658,7 @@ export default function Home() {
           unitPriceCents: Math.round(unitPrice * 100),
           deliveryDays: Math.round(deliveryDays),
           warrantyMonths: 36,
-          rfpVersion: 1,
+          rfpVersion: 2,
         }),
       });
       const payload = asRecord(await response.json());
@@ -528,6 +714,23 @@ export default function Home() {
       setPaymentProgress(100);
       setSettlement({ kind: "live", result });
       setStage(12);
+      if (result.monad?.status === "attested") {
+        setMonadStatus((current) => ({
+          ...current,
+          mode: "monad-testnet",
+          state: "rain-settlement-attested",
+          commitmentId: result.monad?.commitmentId ?? current?.commitmentId,
+          settlement: {
+            txHash: result.monad?.transaction?.hash,
+            explorerUrl: result.monad?.transaction?.explorerUrl,
+            status: "finalized",
+          },
+          onchainProof: {
+            ...current?.onchainProof,
+            rainSettlementHash: result.monad?.rainSettlementHash ?? null,
+          },
+        }));
+      }
       void refreshMonadStatus();
     } catch (error) {
       setSettlement({
@@ -545,15 +748,53 @@ export default function Home() {
 
   const livePayments = settlement.kind === "live" ? settlement.result.payments ?? [] : [];
   const outcomeMode = settlement.kind === "live" ? "RAIN SANDBOX · VERIFIED" : "REHEARSAL · SIMULATED";
-  const commitmentTx = monadStatus?.commitment?.txHash;
-  const settlementTx = monadStatus?.settlement?.txHash;
-  const commitmentHref = safeExplorerHref(monadStatus?.explorerUrl, commitmentTx);
-  const settlementHref = safeExplorerHref(monadStatus?.explorerUrl, settlementTx);
+  const monadChainName = monadStatus?.chainName ?? monadStatus?.network?.name;
+  const monadChainId = monadStatus?.chainId ?? monadStatus?.network?.chainId;
+  const monadExplorerUrl = monadStatus?.explorerUrl ?? monadStatus?.network?.explorerUrl;
+  const monadContractAddress = monadStatus?.contractAddress ?? monadStatus?.registryAddress;
+  const monadCommitmentId = monadStatus?.commitment?.id ?? monadStatus?.commitmentId;
+  const monadCommitmentHash = monadStatus?.commitment?.hash ?? monadStatus?.commitment?.termsHash ?? monadStatus?.onchainProof?.termsHash ?? monadStatus?.localProof?.termsHash;
+  const commitmentTx = monadStatus?.commitment?.txHash ?? monadStatus?.transactions?.commitment?.hash;
+  const settlementTx = monadStatus?.settlement?.txHash ?? monadStatus?.settlement?.hash;
+  const registryHref = safeHttpsHref(monadStatus?.registryExplorerUrl ?? undefined);
+  const commitmentHref = safeHttpsHref(monadStatus?.transactions?.commitment?.explorerUrl) ?? safeExplorerHref(monadExplorerUrl, commitmentTx);
+  const settlementHref = safeHttpsHref(monadStatus?.settlement?.explorerUrl) ?? safeExplorerHref(monadExplorerUrl, settlementTx);
+  const monadIsConfigured = Boolean(monadContractAddress) || monadStatus?.mode === "monad-testnet";
+  const monadHasFinalizedCommitment = Boolean(monadCommitmentId) && (monadStatus?.confirmation === "finalized" || monadStatus?.confirmation === "finalized-state");
+  const commitmentProofHref = commitmentHref ?? (monadHasFinalizedCommitment ? registryHref : undefined);
+  const monadCommitmentIsOnchain = Boolean(commitmentTx) || monadHasFinalizedCommitment;
   const monadLabel = commitmentTx
-    ? `${monadStatus?.chainName ?? "Monad testnet"} · on-chain`
-    : monadStatus?.configured
-      ? `${monadStatus.chainName ?? "Monad testnet"} · ready`
+    ? `${monadChainName ?? "Monad testnet"} · on-chain`
+    : monadHasFinalizedCommitment
+      ? `${monadChainName ?? "Monad testnet"} · finalized state`
+    : monadIsConfigured
+      ? `${monadChainName ?? "Monad testnet"} · ready`
+      : monadPreparation === "running"
+        ? "deriving commitment…"
+        : monadPreparation === "failed"
+          ? "proof blocked · sellers held"
       : "local proof only · not on-chain";
+  const outcomeMonad = settlement.kind === "live" ? settlement.result.monad : undefined;
+  const outcomeMonadStatus = outcomeMonad?.status ?? "not_configured";
+  const outcomeMonadTx = outcomeMonad?.transaction?.hash ?? settlementTx;
+  const outcomeMonadReplay = outcomeMonadStatus === "attested" && outcomeMonad?.replayed === true && !outcomeMonad?.transaction;
+  const outcomeMonadHref = safeHttpsHref(outcomeMonad?.transaction?.explorerUrl) ?? settlementHref ?? commitmentProofHref;
+  const outcomeMonadTitle = outcomeMonadReplay
+    ? "Finalized state · idempotent replay verified"
+    : outcomeMonadStatus === "attested"
+    ? "Rain settlement digest timestamped on Monad Testnet"
+    : outcomeMonadStatus === "attestation_pending"
+      ? "Rain settled; Monad attestation is pending"
+      : settlement.kind === "live"
+        ? "Rain settled with a local commitment proof"
+        : "Local commitment proof · no on-chain claim";
+  const outcomeMonadDetail = outcomeMonadReplay
+    ? "The registry already contained the same settlement digest; finalized state was verified without submitting a duplicate transaction."
+    : outcomeMonad?.message ?? (outcomeMonadStatus === "attested"
+    ? "The finalized registry transaction binds POOL’s Rain settlement digest to its pre-bid commitment."
+    : outcomeMonadStatus === "attestation_pending"
+      ? "The Rain receipts are final; POOL is not claiming an on-chain settlement timestamp until confirmation completes."
+      : "Monad testnet signing is not configured, so this run does not claim an on-chain transaction.");
 
   return (
     <main className={`app-shell stage-${stage}`}>
@@ -572,7 +813,7 @@ export default function Home() {
           <div className="sandbox-badge" title="No real money moves in the Rain hackathon sandbox">
             <StatusDot online={Boolean(rainStatus?.connected)} />
             <RainWordmark />
-            <span>{rainStatus?.connected ? "sandbox connected" : "rehearsal ready"}</span>
+            <span>{rainStatus?.accessRequired ? "sandbox locked" : rainStatus?.connected ? "sandbox connected" : "rehearsal ready"}</span>
           </div>
           <button className="icon-button" onClick={resetDemo} aria-label="Reset demo" title="Reset demo">
             <RefreshCcw size={15} />
@@ -580,10 +821,55 @@ export default function Home() {
         </div>
       </header>
 
+      {rainStatus?.accessRequired ? (
+        <aside className="demo-access" aria-labelledby="demo-access-title">
+          <div className="demo-access-card">
+            <div className="demo-access-copy">
+              <span className="demo-access-icon" aria-hidden="true"><LockKeyhole size={16} /></span>
+              <div>
+                <span className="demo-access-kicker">JUDGE ACCESS · LIVE RAIL PROTECTED</span>
+                <strong id="demo-access-title">Unlock Rain sandbox execution</strong>
+                <p id="demo-access-help">Enter the private demo code. Rehearsal mode remains available without it.</p>
+              </div>
+            </div>
+            <form className="demo-access-form" onSubmit={unlockDemoExecution} aria-busy={demoAccess.kind === "submitting"}>
+              <label htmlFor="demo-access-code">Demo access code</label>
+              <div className="demo-access-control">
+                <input
+                  id="demo-access-code"
+                  name="accessCode"
+                  type="password"
+                  value={accessCode}
+                  onChange={(event) => {
+                    setAccessCode(event.target.value);
+                    if (demoAccess.kind === "error") setDemoAccess({ kind: "idle" });
+                  }}
+                  autoComplete="one-time-code"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  disabled={demoAccess.kind === "submitting"}
+                  aria-describedby={`demo-access-help${demoAccess.kind === "error" ? " demo-access-error" : ""}`}
+                  aria-invalid={demoAccess.kind === "error"}
+                  placeholder="Private access code"
+                />
+                <button type="submit" disabled={demoAccess.kind === "submitting" || accessCode.trim().length === 0}>
+                  {demoAccess.kind === "submitting" ? <span className="demo-access-spinner" aria-hidden="true" /> : <LockKeyhole size={13} />}
+                  {demoAccess.kind === "submitting" ? "Verifying…" : "Unlock"}
+                </button>
+              </div>
+              {demoAccess.kind === "error" ? <p className="demo-access-error" id="demo-access-error" role="alert">{demoAccess.message}</p> : null}
+            </form>
+          </div>
+        </aside>
+      ) : null}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {demoAccess.kind === "submitting" ? "Verifying demo access." : demoAccess.kind === "authorized" ? demoAccess.message : ""}
+      </p>
+
       <section className="hero" id="top">
         <div className="hero-copy">
           <div className="section-label"><span>PREFUNDED COLLECTIVE COMMERCE</span><span>01 / LIVE MARKET</span></div>
-          <h1>Buyers don’t find<br />the market. <em>They become it.</em></h1>
+          <h1>Buyers don’t find <br />the market. <em>They become it.</em></h1>
           <p>
             To join, every buyer first deposits at least the item’s MSRP into their POOL balance.
             Joining reserves that amount so it cannot be withdrawn or spent elsewhere while the group buy is active.
@@ -593,10 +879,7 @@ export default function Home() {
               {stage === 0 ? <Play size={15} fill="currentColor" /> : marketIsPlaying ? <Pause size={15} fill="currentColor" /> : stage >= 11 ? <Check size={15} /> : <Play size={15} fill="currentColor" />}
               {stage === 0 ? "Launch prefunded market" : marketIsPlaying ? "Pause market" : stage >= 11 ? "Market cleared" : "Resume market"}
             </button>
-            <button className="text-button" onClick={() => {
-              setAutoplay(false);
-              setStage((current) => current === 0 ? 1 : Math.min(current + 1, 11));
-            }} disabled={stage >= 11}>
+            <button className="text-button" onClick={() => void stepManually()} disabled={stage >= 11 || monadPreparation === "running"}>
               Step manually <ArrowRight size={15} />
             </button>
           </div>
@@ -683,9 +966,9 @@ export default function Home() {
                 <span>Delivery</span>
                 <span className="input-shell"><input type="number" min="1" max="90" step="1" value={merchantDelivery} onChange={(event) => setMerchantDelivery(event.target.value)} aria-label="Merchant delivery days" /><i>days</i></span>
               </label>
-              <button className="console-submit" type="submit" disabled={bidResult.kind === "running"}>
-                {bidResult.kind === "running" ? <span className="mini-spinner" /> : <Gavel size={14} />}
-                {bidResult.kind === "running" ? "Evaluating…" : "Submit test bid"}
+              <button className="console-submit" type="submit" disabled={stage < 7 || bidResult.kind === "running"}>
+                {bidResult.kind === "running" ? <span className="mini-spinner" /> : stage < 7 ? <LockKeyhole size={14} /> : <Gavel size={14} />}
+                {bidResult.kind === "running" ? "Evaluating…" : stage < 7 ? "Launch market to open committed RFP" : "Submit test bid"}
               </button>
             </form>
             <div className="bid-disclosure"><EyeOff size={12} /> The merchant sees quantity and public requirements—never private buyer maximums.</div>
@@ -695,29 +978,35 @@ export default function Home() {
           <article className="console-card proof-console-card">
             <div className="console-card-head">
               <div><Link2 size={16} /><span>COMMITMENT PROOF</span></div>
-              <span className={commitmentTx ? "proof-live" : ""}>{monadLabel}</span>
+              <span className={commitmentProofHref ? "proof-live" : ""}>{monadLabel}</span>
             </div>
             <div className="proof-order" aria-label="Required transaction ordering">
               <div className="proof-step is-complete"><span>01</span><strong>$5,748 funded</strong><small>MSRP verified</small></div>
               <ArrowRight size={14} />
               <div className="proof-step is-complete"><span>02</span><strong>12 units frozen</strong><small>membership sealed</small></div>
               <ArrowRight size={14} />
-              <div className={`proof-step ${commitmentTx ? "is-onchain" : "is-local"}`}><span>03</span><strong>Monad commit</strong><small>{commitmentTx ? "testnet anchored" : "locally derived"}</small></div>
+              {monadCommitmentIsOnchain && commitmentProofHref ? (
+                <a className="proof-step is-onchain" href={commitmentProofHref} target="_blank" rel="noopener noreferrer" aria-label="Open finalized Monad commitment evidence">
+                  <span>03</span><strong>Monad commit</strong><small>{commitmentTx ? "testnet transaction" : monadHasFinalizedCommitment ? "finalized registry state" : "locally derived"}</small>
+                </a>
+              ) : (
+                <div className="proof-step is-local"><span>03</span><strong>Monad commit</strong><small>locally derived</small></div>
+              )}
               <ArrowRight size={14} />
               <div className="proof-step"><span>04</span><strong>RFP opens</strong><small>sellers may bid</small></div>
             </div>
             <div className="proof-facts">
               <div><span>Coalition ID</span><strong>POOL-2408-017</strong></div>
-              <div><span>Commitment</span><strong>{shortId(monadStatus?.commitment?.hash ?? monadStatus?.commitment?.id)}</strong></div>
-              <div><span>Contract</span><strong>{shortId(monadStatus?.contractAddress)}</strong></div>
-              <div><span>Chain</span><strong>{monadStatus?.chainId ? `${monadStatus.chainName ?? "Monad"} · ${monadStatus.chainId}` : "not configured"}</strong></div>
+              <div><span>Commitment</span><strong>{shortId(monadCommitmentHash ?? monadCommitmentId ?? undefined)}</strong></div>
+              <div><span>Contract</span><strong>{shortId(monadContractAddress ?? undefined)}</strong></div>
+              <div><span>Chain</span><strong>{monadChainId ? `${monadChainName ?? "Monad"} · ${monadChainId}` : "not configured"}</strong></div>
             </div>
             <div className="proof-links">
-              {commitmentHref ? <a href={commitmentHref} target="_blank" rel="noopener noreferrer"><Link2 size={12} /> Commitment tx <span>{shortId(commitmentTx)}</span></a> : <span><Link2 size={12} /> No on-chain commitment transaction claimed</span>}
+              {commitmentProofHref ? <a href={commitmentProofHref} target="_blank" rel="noopener noreferrer"><Link2 size={12} /> {commitmentTx ? "Commitment tx" : "Finalized commitment state"} <span>{shortId(commitmentTx ?? monadCommitmentId ?? undefined)}</span></a> : <span><Link2 size={12} /> No on-chain commitment transaction claimed</span>}
               {settlementHref ? <a href={settlementHref} target="_blank" rel="noopener noreferrer"><Check size={12} /> Settlement attestation <span>{shortId(settlementTx)}</span></a> : <span><Clock3 size={12} /> Settlement proof appears after Rain completes</span>}
             </div>
             <p className="proof-disclosure">
-              Monad proves what was funded and frozen before bidding; Rain executes only the cleared spend afterward.
+              The registry timestamps POOL’s funding-root commitment before bidding; observers reconcile POOL and Rain evidence afterward.
               A local hash is never presented as a testnet transaction.
             </p>
           </article>
@@ -876,7 +1165,7 @@ export default function Home() {
             that money remains theirs, but cannot be withdrawn or used elsewhere. A buyer may leave while the pool recruits;
             before the RFP opens, membership and reservations freeze until settlement, cancellation, or reconciliation.
           </p>
-          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL freezes</strong><ArrowRight size={14} /><span>Monad proves</span><ArrowRight size={14} /><strong>sellers bid</strong><ArrowRight size={14} /><strong>Rain executes</strong></div>
+          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL freezes</strong><ArrowRight size={14} /><span>Monad timestamps</span><ArrowRight size={14} /><strong>sellers bid</strong><ArrowRight size={14} /><strong>Rain executes</strong></div>
           <div className="custody-boundary"><ShieldCheck size={15} /><span><strong>Clear boundary:</strong> POOL balance and reservation are the product ledger. Rain is used only at execution; Rain is not presented as the custodial deposit account.</span></div>
         </div>
 
@@ -994,6 +1283,28 @@ export default function Home() {
             <div><span>DEAL CAPTURED</span><strong>{money.format(poolTotal)}</strong></div>
             <div><span>UNLOCKED</span><strong>{money.format(savings)}</strong></div>
             <div><span>PRICE IMPROVEMENT</span><strong>18.8%</strong></div>
+          </div>
+
+          <div className={`outcome-monad-proof is-${outcomeMonadStatus}`} role="status" aria-live="polite">
+            <div className="outcome-monad-copy">
+              <span className="outcome-monad-icon" aria-hidden="true"><Fingerprint size={17} /></span>
+              <div>
+                <span>MONAD SETTLEMENT EVIDENCE</span>
+                <strong>{outcomeMonadTitle}</strong>
+                <p>{outcomeMonadDetail}</p>
+              </div>
+            </div>
+            {outcomeMonadStatus === "attested" ? (
+              outcomeMonadHref ? (
+                <a href={outcomeMonadHref} target="_blank" rel="noopener noreferrer"><Link2 size={13} /> {outcomeMonadTx ? "View attestation" : "View finalized registry state"} <span>{shortId(outcomeMonadTx ?? monadCommitmentId ?? monadContractAddress ?? undefined)}</span></a>
+              ) : (
+                <span className="outcome-monad-state"><Check size={13} /> Finalized · {shortId(outcomeMonadTx)}</span>
+              )
+            ) : outcomeMonadStatus === "attestation_pending" ? (
+              <span className="outcome-monad-state"><Clock3 size={13} /> Confirmation pending</span>
+            ) : (
+              <span className="outcome-monad-state"><EyeOff size={13} /> No testnet transaction claimed</span>
+            )}
           </div>
 
           <div className="receipts-panel">
