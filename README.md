@@ -62,16 +62,18 @@ Cleared POOL balance
   └─ atomic MSRP reservation
        └─ eligible buying intent
             └─ deterministic compatibility engine
-                 └─ temporary coalition + explicit state machine
-                      └─ merchant quantity-tier economics
-                           └─ structured negotiation offers
-                                └─ buyer policy + offer integrity checks
-                                     └─ freeze reservation for execution
-                                          └─ server-only Rain adapter
-                                               ├─ scoped cards at negotiated amount
-                                               ├─ enforced MCC decline
-                                               └─ authorization + settlement
-                                                    └─ capture deal + release savings
+                 └─ freeze funded coalition membership
+                      └─ finalized Monad commitment (terms + funding root)
+                           └─ sealed merchant offer hashes registered on Monad
+                                └─ merchant quantity-tier economics
+                                     └─ structured negotiation offers
+                                          └─ buyer policy + offer integrity checks
+                                               └─ server-only Rain adapter
+                                                    ├─ scoped cards at negotiated amount
+                                                    ├─ enforced MCC decline
+                                                    └─ authorization + settlement
+                                                         └─ finalized Monad Rain attestation
+                                                              └─ capture deal + release savings
 ```
 
 - `app/page.tsx` — cinematic market replay and explicit live/rehearsal states
@@ -79,7 +81,10 @@ Cleared POOL balance
 - `lib/market/` — typed compatibility, negotiation, policy, state, integrity, and idempotency engine
 - `lib/rain/client.ts` — server-only Rain sandbox adapter with schema validation, timeouts, and safe retries
 - `app/api/rain/execute/route.ts` — same-origin, server-authoritative demo execution
-- `tests/` — market invariants and rendered-product checks
+- `contracts/PoolCommitmentRegistry.sol` — pre-bid funded commitment, sealed-offer registry, and post-Rain attestation
+- `lib/monad/` — privacy-preserving hashes, testnet client, finalized-state reads, and causal workflow
+- `app/api/monad/prepare/route.ts` — protected server-authoritative pre-bid testnet sequence
+- `tests/` and `test/` — market, funding, agent, Monad hash, and Solidity state-machine checks
 
 All money is represented as integer cents. The client never supplies a settlement amount. Rain credentials, private buyer mandates, merchant floors, PAN, and CVC never cross into the browser bundle.
 
@@ -112,6 +117,21 @@ npm run lint
 
 `npm test` runs the deployment build before exercising rendered output and market invariants.
 
+## Monad Testnet
+
+Monad is causal, not decorative: POOL waits for finalized Monad state before exposing the RFP to seller agents. The registry then accepts only sealed offer hashes under that commitment. After Rain settles every buyer allocation, POOL hashes the complete Rain transaction-ID set and attests it against the registered winning offer. Buyer ceilings and merchant prices never appear onchain.
+
+The repository ships a testnet-only Hardhat target; there is intentionally no mainnet deployment configuration.
+
+```bash
+npm run monad:compile
+npm run test:contracts
+npx hardhat keystore set MONAD_PRIVATE_KEY
+npm run monad:deploy:testnet
+```
+
+After deployment, set `MONAD_REGISTRY_ADDRESS` and provide `MONAD_PRIVATE_KEY` only as a server-side secret for the protected demo runtime. `/api/monad/status` reports either finalized testnet state or an explicit `not-onchain` local proof—it never invents a transaction or address.
+
 ## Financial safety decisions
 
 - Private mandates and seller floors are not part of the public market projection.
@@ -128,10 +148,6 @@ npm run lint
 - Decrypted card credentials are never requested, stored, logged, or returned.
 - Browser responses receive `nosniff`, clickjacking, referrer, permissions, and opener isolation headers.
 
-## Why Monad is not in the critical path
-
-Monad was evaluated for escrow, deal commitments, reputation, and x402. None improves the core physical-goods transaction enough to justify adding wallet, facilitator, testnet, and fulfillment risk to the live Rain demo. The clean future extension is an optional x402 micropayment where a seller agent pays to unlock an anonymized coalition bid packet; it should remain non-blocking until a funded testnet wallet is available.
-
 ## Official Rain references
 
 - [Hackathon quickstart](https://rain-sandbox-trial.mintlify.site/docs/quickstart)
@@ -140,6 +156,12 @@ Monad was evaluated for escrow, deal commitments, reputation, and x402. None imp
 - [Simulate authorization](https://rain-sandbox-trial.mintlify.site/reference/simulate/simulate-a-card-authorization)
 - [Idempotency](https://rain-sandbox-trial.mintlify.site/reference/idempotency)
 
+## Official Monad references
+
+- [Testnet network information](https://docs.monad.xyz/developer-essentials/testnet)
+- [Hardhat deployment guide](https://docs.monad.xyz/guides/deploy-smart-contract/hardhat)
+- [Wallet finality guidance](https://docs.monad.xyz/developer-essentials/wallet-developers)
+
 ## Stack
 
-Next.js 16 / React 19 / TypeScript / vinext / Cloudflare Workers / Rain sandbox.
+Next.js 16 / React 19 / TypeScript / vinext / Cloudflare Workers / Rain sandbox / Monad Testnet / Solidity / Hardhat / viem.
