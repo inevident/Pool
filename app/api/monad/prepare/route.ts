@@ -38,10 +38,14 @@ export async function POST(request: NextRequest) {
 
     const configuration = getMonadWriteConfiguration();
     if (!configuration.ready) {
+      const configurationBlocksWrites =
+        configuration.required || configuration.state !== "not-configured";
       return NextResponse.json(
         {
-          status: "not_configured",
-          mode: "local-proof",
+          status: configurationBlocksWrites
+            ? "configuration_error"
+            : "not_configured",
+          mode: configurationBlocksWrites ? "blocked" : "local-proof",
           network: {
             name: MONAD_TESTNET.name,
             chainId: MONAD_TESTNET.id,
@@ -49,9 +53,15 @@ export async function POST(request: NextRequest) {
           },
           configuration,
           message:
-            "Monad testnet writes are not configured; no onchain transaction was claimed.",
+            configuration.issues[0]?.message ??
+            (configurationBlocksWrites
+              ? "Monad Testnet configuration is required before this live workflow can continue."
+              : "Development-only local proof: Monad testnet writes are not configured and no on-chain transaction is claimed."),
         },
-        { headers: noStoreHeaders },
+        {
+          status: configurationBlocksWrites ? 503 : 200,
+          headers: noStoreHeaders,
+        },
       );
     }
     if (!canExecuteLiveDemo(request)) {
@@ -103,7 +113,7 @@ export async function POST(request: NextRequest) {
           offers: preparation.offerTransactions.map(monadTransactionForJson),
         },
         message:
-          "Funded coalition finalized first; every sealed merchant offer now references that Monad commitment.",
+          "The funding-root commitment finalized first; every merchant offer commitment now references it.",
       },
       { headers: noStoreHeaders },
     );

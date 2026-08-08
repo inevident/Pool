@@ -73,7 +73,8 @@ export function getMonadRegistryAddress(): Address | undefined {
 
 export function isMonadLiveRequired() {
   return (
-    process.env.NODE_ENV === "production" ||
+    (process.env.NODE_ENV === "production" &&
+      process.env.RAIN_LIVE_EXECUTION_ENABLED === "true") ||
     process.env.MONAD_LIVE_REQUIRED?.trim() === "true"
   );
 }

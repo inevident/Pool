@@ -2,6 +2,10 @@
 
 **Autonomous collective purchasing for the agentic economy.**
 
+[![CI](https://github.com/inevident/Pool/actions/workflows/ci.yml/badge.svg)](https://github.com/inevident/Pool/actions/workflows/ci.yml)
+
+![POOL prefunded collective-commerce demo](docs/pool-hero.png)
+
 POOL turns prefunded buying intents into a temporary demand coalition. Buyer agents reserve the full MSRP before joining, discover compatible requirements, make sellers compete for the combined order, and spend only the negotiated amount after deterministic policy verifies the deal.
 
 This repository is the deterministic 2–3 minute hero demo for the Raingentic Commerce Hackathon NYC.
@@ -64,7 +68,7 @@ Cleared POOL balance
             └─ deterministic compatibility engine
                  └─ freeze funded coalition membership
                       └─ finalized Monad commitment (terms + funding root)
-                           └─ sealed merchant offer hashes registered on Monad
+                           └─ merchant offer commitments registered on Monad
                                 └─ merchant quantity-tier economics
                                      └─ structured negotiation offers
                                           └─ buyer policy + offer integrity checks
@@ -81,7 +85,7 @@ Cleared POOL balance
 - `lib/market/` — typed compatibility, negotiation, policy, state, integrity, and idempotency engine
 - `lib/rain/client.ts` — server-only Rain sandbox adapter with schema validation, timeouts, and safe retries
 - `app/api/rain/execute/route.ts` — same-origin, server-authoritative demo execution
-- `contracts/PoolCommitmentRegistry.sol` — pre-bid funded commitment, sealed-offer registry, and post-Rain attestation
+- `contracts/PoolCommitmentRegistry.sol` — pre-bid funding-root commitment, offer-hash registry, and post-Rain attestation
 - `lib/monad/` — privacy-preserving hashes, testnet client, finalized-state reads, and causal workflow
 - `app/api/monad/prepare/route.ts` — protected server-authoritative pre-bid testnet sequence
 - `tests/` and `test/` — market, funding, agent, Monad hash, and Solidity state-machine checks
@@ -100,13 +104,19 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+Run `npm run demo:preflight` before presenting. It reports which integrations are live without printing any secret values. The complete 2:30 judge flow and honest fallback order are in [`DEMO.md`](./DEMO.md).
+
 To enable the real sandbox button, fill the Rain values issued at the workshop and set:
 
 ```dotenv
 RAIN_LIVE_EXECUTION_ENABLED=true
 ```
 
-Keep that flag disabled in public environments unless the route is placed behind an appropriate access boundary. With the flag absent or false, the product remains fully demoable in clearly labeled rehearsal mode.
+Keep that flag disabled unless the environment passes `npm run demo:preflight`. With the flag absent or false, the product remains fully demoable in clearly labeled rehearsal mode.
+
+Production live actions require a random `POOL_DEMO_ACCESS_TOKEN` of at least 24 characters. The server exchanges that one-time judge code for a short-lived, HttpOnly, SameSite session. A loopback URL bypasses this gate only in non-production development and only when no access token value was supplied. A production build with live execution disabled remains a no-secret, fully labeled rehearsal.
+
+Production with `RAIN_LIVE_EXECUTION_ENABLED=true` also requires a complete Monad Testnet write configuration before Rain can be reported ready or execute. Set `MONAD_LIVE_REQUIRED=true` to enforce the identical competition gate during a local rehearsal. A fully absent Monad configuration is allowed only when no live production action is enabled, as an explicitly labeled `rain-only-development` path locally or a rehearsal-only public build; partial, malformed, wrong-chain, missing-bytecode, and wrong-registry-operator configurations fail closed instead of silently downgrading.
 
 ## Validate
 
@@ -119,7 +129,9 @@ npm run lint
 
 ## Monad Testnet
 
-Monad is causal, not decorative: POOL waits for finalized Monad state before exposing the RFP to seller agents. The registry then accepts only sealed offer hashes under that commitment. After Rain settles every buyer allocation, POOL hashes the complete Rain transaction-ID set and attests it against the registered winning offer. Buyer ceilings and merchant prices never appear onchain.
+Monad is causal, not decorative: POOL waits for finalized Monad state before exposing the RFP to seller agents. The registry then accepts only merchant offer commitments under that funding-root commitment. After Rain settles every buyer allocation, POOL hashes the complete Rain transaction-ID set and attests it against the registered winning offer. Buyer ceilings and merchant prices are not posted onchain in plaintext.
+
+The trust boundary is explicit: the contract timestamps and makes POOL's claims tamper-evident; it cannot independently inspect POOL bank balances or authenticate Rain's API. An observer can verify those claims when the corresponding reservation proofs and Rain receipts are disclosed and reconciled against the onchain roots and digests. This demo builds the root and receipt digest but does not ship a third-party disclosure portal. Offer hashes in this public deterministic fixture are commitments, not a promise that low-entropy prices cannot be guessed.
 
 The repository ships a testnet-only Hardhat target; there is intentionally no mainnet deployment configuration.
 
@@ -130,7 +142,7 @@ npx hardhat keystore set MONAD_PRIVATE_KEY
 npm run monad:deploy:testnet
 ```
 
-After deployment, set `MONAD_REGISTRY_ADDRESS` and provide `MONAD_PRIVATE_KEY` only as a server-side secret for the protected demo runtime. `/api/monad/status` reports either finalized testnet state or an explicit `not-onchain` local proof—it never invents a transaction or address.
+After deployment, set `MONAD_REGISTRY_ADDRESS` and provide `MONAD_PRIVATE_KEY` only as a server-side secret for the protected demo runtime. The configured key must control the registry's finalized `operator()` address; POOL verifies that relationship before any Rain side effect. `/api/monad/status` reports either finalized testnet state or an explicit `not-onchain` local proof—it never invents a transaction or address.
 
 ## Financial safety decisions
 
