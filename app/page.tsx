@@ -10,7 +10,6 @@ import {
   CloudLightning,
   EyeOff,
   Fingerprint,
-  Gauge,
   LockKeyhole,
   Pause,
   Play,
@@ -66,6 +65,9 @@ type SettlementState =
   | { kind: "live"; result: RainResult }
   | { kind: "rehearsal" }
   | { kind: "failed"; message: string };
+
+const MSRP_UNIT = 479;
+const DEAL_UNIT = 389;
 
 const buyers = [
   {
@@ -131,33 +133,33 @@ const merchants = [
 ] as const;
 
 const timeline = [
-  { stage: 1, time: "00:01", label: "Harbor agent publishes a sealed buying intent", tone: "neutral" },
-  { stage: 2, time: "00:03", label: "Patchwork intent enters independently", tone: "neutral" },
-  { stage: 3, time: "00:05", label: "Kernel adds HDMI as a hard constraint", tone: "neutral" },
+  { stage: 1, time: "00:01", label: "Harbor qualifies with $1,437 deposited; MSRP is reserved", tone: "accent" },
+  { stage: 2, time: "00:03", label: "Patchwork joins; $1,916 becomes unavailable elsewhere", tone: "accent" },
+  { stage: 3, time: "00:05", label: "Kernel reserves $2,395 and adds HDMI as a hard constraint", tone: "accent" },
   { stage: 4, time: "00:07", label: "Ultrawide request isolated — form-factor mismatch", tone: "danger" },
-  { stage: 5, time: "00:09", label: "Compatibility graph clears 12 units into POOL-017", tone: "accent" },
+  { stage: 5, time: "00:09", label: "12 units and $5,748 in MSRP reservations clear into POOL-017", tone: "accent" },
   { stage: 6, time: "00:12", label: "Three merchant agents receive an anonymized RFP", tone: "neutral" },
   { stage: 7, time: "00:16", label: "Initial market opens with a best bid of $401", tone: "accent" },
   { stage: 8, time: "00:21", label: "Coalition counters at $383 for immediate commitment", tone: "accent" },
-  { stage: 9, time: "00:24", label: "Signal clears at $389 · 7 days · 36-month warranty", tone: "success" },
-  { stage: 10, time: "00:27", label: "Three private buyer mandates pass deterministically", tone: "success" },
-  { stage: 11, time: "00:30", label: "Deal is ready for Rain-scoped payment authority", tone: "rain" },
+  { stage: 9, time: "00:24", label: "Signal clears at $389; accepted offer freezes reservations", tone: "success" },
+  { stage: 10, time: "00:27", label: "$4,668 clears for capture; $1,080 releases only after settlement", tone: "success" },
+  { stage: 11, time: "00:30", label: "Rain receives scoped authority only after POOL clearing", tone: "rain" },
 ] as const;
 
 const stageCopy = [
-  { eyebrow: "MARKET STANDBY", title: "Three buyers are about to become one market." },
-  { eyebrow: "INTENT 01 / 03", title: "Demand arrives independently." },
-  { eyebrow: "INTENT 02 / 03", title: "A second buyer wants the same outcome." },
-  { eyebrow: "INTENT 03 / 03", title: "Compatible demand is now hiding in plain sight." },
+  { eyebrow: "PREFUNDED MARKET", title: "Participation starts with the MSRP on balance." },
+  { eyebrow: "RESERVATION 01 / 03", title: "Harbor joins. Its full MSRP becomes reserved." },
+  { eyebrow: "RESERVATION 02 / 03", title: "Patchwork locks its buying commitment." },
+  { eyebrow: "RESERVATION 03 / 03", title: "Every unit is now covered before negotiation." },
   { eyebrow: "CONSTRAINT CHECK", title: "Similarity is not permission." },
-  { eyebrow: "COALITION FORMED", title: "Twelve units now negotiate as one." },
+  { eyebrow: "COALITION FORMED", title: "Twelve funded units now negotiate as one." },
   { eyebrow: "SELLER MARKET OPEN", title: "Merchants compete for the whole block." },
   { eyebrow: "REVERSE AUCTION", title: "Competition converts quantity into leverage." },
   { eyebrow: "COUNTEROFFER", title: "Commitment moves the market again." },
   { eyebrow: "AGREEMENT FOUND", title: "The coalition clears at $389 per unit." },
-  { eyebrow: "POLICY CLEARING", title: "The model proposes. Deterministic policy decides." },
-  { eyebrow: "PAYMENT AUTHORITY", title: "Only the negotiated deal can spend." },
-  { eyebrow: "POOL SETTLED", title: "Demand organized itself — and closed." },
+  { eyebrow: "CAPTURE CLEARING", title: "Only the deal price can leave each reservation." },
+  { eyebrow: "PAYMENT AUTHORITY", title: "POOL clears first. Rain executes second." },
+  { eyebrow: "POOL SETTLED", title: "The deal is captured. The difference is available again." },
 ] as const;
 
 const money = new Intl.NumberFormat("en-US", {
@@ -197,12 +199,16 @@ export default function Home() {
   const eventStreamRef = useRef<HTMLDivElement>(null);
 
   const round = merchantRound(stage);
-  const currentPrice = stage >= 8 ? 389 : stage >= 6 ? 401 : 479;
+  const currentPrice = stage >= 8 ? DEAL_UNIT : stage >= 6 ? 401 : MSRP_UNIT;
   const visibleEvents = timeline.filter((event) => event.stage <= stage);
-  const savings = (479 - 389) * 12;
-  const baseline = 479 * 12;
-  const poolTotal = 389 * 12;
+  const savings = (MSRP_UNIT - DEAL_UNIT) * 12;
+  const baseline = MSRP_UNIT * 12;
+  const poolTotal = DEAL_UNIT * 12;
   const totalUnits = buyers.reduce((total, buyer) => total + buyer.quantity, 0);
+  const reservedUnits = buyers
+    .slice(0, Math.min(stage, buyers.length))
+    .reduce((total, buyer) => total + buyer.quantity, 0);
+  const activeReservation = stage >= 12 ? 0 : reservedUnits * MSRP_UNIT;
   const currentCopy = stageCopy[Math.min(stage, stageCopy.length - 1)];
   const marketIsPlaying = autoplay && stage < 11;
 
@@ -251,12 +257,12 @@ export default function Home() {
 
   const marketState = useMemo(() => {
     if (stage === 0) return "Waiting for demand";
-    if (stage <= 3) return "Reading intents";
+    if (stage <= 3) return "Reserving MSRP";
     if (stage === 4) return "Protecting hard constraints";
     if (stage === 5) return "Pool live";
     if (stage <= 8) return "Merchants competing";
     if (stage === 9) return "Deal agreed";
-    if (stage === 10) return "Mandates cleared";
+    if (stage === 10) return "Capture amounts cleared";
     if (settlement.kind === "running") return "Rain authorizing";
     if (stage >= 12) return "Pool settled";
     return "Ready to transact";
@@ -325,7 +331,7 @@ export default function Home() {
         </a>
         <nav className="topnav" aria-label="Product navigation">
           <a href="#market">Live market</a>
-          <a href="#authority">Authority</a>
+          <a href="#authority">Funds & authority</a>
           <a href="#outcome">Outcome</a>
         </nav>
         <div className="topbar-status">
@@ -342,16 +348,16 @@ export default function Home() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <div className="section-label"><span>DEMAND-FIRST COMMERCE</span><span>01 / LIVE MARKET</span></div>
+          <div className="section-label"><span>PREFUNDED COLLECTIVE COMMERCE</span><span>01 / LIVE MARKET</span></div>
           <h1>Buyers don’t find<br />the market. <em>They become it.</em></h1>
           <p>
-            Autonomous buyer agents discover compatible demand, form a temporary coalition,
-            and make sellers compete — without exposing anyone’s private limit.
+            To join, every buyer first deposits at least the item’s MSRP into their POOL balance.
+            Joining reserves that amount so it cannot be withdrawn or spent elsewhere while the group buy is active.
           </p>
           <div className="hero-actions">
             <button className="primary-button" onClick={stage === 0 ? launchDemo : () => setAutoplay((value) => !value)} disabled={stage >= 11}>
               {stage === 0 ? <Play size={15} fill="currentColor" /> : marketIsPlaying ? <Pause size={15} fill="currentColor" /> : stage >= 11 ? <Check size={15} /> : <Play size={15} fill="currentColor" />}
-              {stage === 0 ? "Launch the market" : marketIsPlaying ? "Pause market" : stage >= 11 ? "Market cleared" : "Resume market"}
+              {stage === 0 ? "Launch prefunded market" : marketIsPlaying ? "Pause market" : stage >= 11 ? "Market cleared" : "Resume market"}
             </button>
             <button className="text-button" onClick={() => {
               setAutoplay(false);
@@ -370,14 +376,22 @@ export default function Home() {
             <div className="product-glyph" aria-hidden="true"><span /></div>
             <div>
               <strong>27” 4K USB-C displays</strong>
-              <span>Standardized developer hardware · New York</span>
+              <span>12-unit group buy · MSRP {money.format(MSRP_UNIT)} each · New York</span>
             </div>
           </div>
           <div className="hero-metrics">
-            <div><span>Public market</span><strong>$479<small>/unit</small></strong></div>
-            <div><span>Demand signal</span><strong>{stage >= 5 ? "12" : stage > 0 ? String(buyers.slice(0, Math.min(stage, 3)).reduce((sum, buyer) => sum + buyer.quantity, 0)).padStart(2, "0") : "00"}<small>units</small></strong></div>
-            <div><span>Private limits</span><strong><EyeOff size={18} /> sealed</strong></div>
+            <div><span>MSRP requirement</span><strong>{money.format(MSRP_UNIT)}<small>/unit</small></strong></div>
+            <div><span>POOL balances</span><strong>{money.format(baseline)}<small>deposited</small></strong></div>
+            <div><span>Active reservation</span><strong>{money.format(activeReservation)}<small>{stage >= 12 ? "released" : "locked"}</small></strong></div>
           </div>
+          <div className="funding-rail" aria-label="POOL funding lifecycle">
+            <div className="funding-step is-active"><span>01 · DEPOSIT</span><strong>{money.format(baseline)}</strong><small>across 3 POOL balances</small></div>
+            <ArrowRight size={14} />
+            <div className={`funding-step ${stage >= 1 ? "is-active" : ""}`}><span>02 · JOIN</span><strong>Reserve MSRP</strong><small>unavailable while active</small></div>
+            <ArrowRight size={14} />
+            <div className={`funding-step ${stage >= 9 ? "is-active" : ""}`}><span>03 · SETTLE</span><strong>{money.format(poolTotal)} captured</strong><small>{money.format(savings)} unlocks</small></div>
+          </div>
+          <div className="funding-exit-rule"><LockKeyhole size={12} /><span>Leave before the commitment cutoff → full release. After offer acceptance → frozen through settlement, cancellation, or reconciliation.</span></div>
           <div className="hero-ticker"><span>POOL-2408-017</span><span>{currentCopy.eyebrow}</span><span>NYC / USD</span></div>
         </div>
       </section>
@@ -405,6 +419,7 @@ export default function Home() {
               {buyers.map((buyer, index) => {
                 const visible = stage >= index + 1;
                 const cleared = stage >= 5;
+                const requiredDeposit = buyer.quantity * MSRP_UNIT;
                 return (
                   <article className={`buyer-row ${visible ? "is-visible" : ""}`} key={buyer.id}>
                     <div className={`avatar avatar-${buyer.accent}`}>{buyer.initials}</div>
@@ -415,6 +430,10 @@ export default function Home() {
                         <span><strong>{buyer.quantity}</strong> units</span>
                         <span><Clock3 size={12} /> ≤ {buyer.deadline}d</span>
                         <span><LockKeyhole size={12} /> max sealed</span>
+                      </div>
+                      <div className={`buyer-funds ${visible ? "is-reserved" : ""}`}>
+                        <span>POOL balance <strong>{money.format(requiredDeposit)}</strong></span>
+                        <span>{visible ? "MSRP reserved" : "deposit required"} <strong>{money.format(requiredDeposit)}</strong></span>
                       </div>
                     </div>
                     <span className={`match-mark ${cleared ? "is-cleared" : ""}`} aria-label={cleared ? "Compatible" : "Pending"}>
@@ -435,7 +454,7 @@ export default function Home() {
             </div>
             <div className={`privacy-note ${stage >= 5 ? "is-active" : ""}`}>
               <Fingerprint size={16} />
-              <div><strong>Compatibility without disclosure</strong><span>Product fit is shared. Reservation prices never leave the buyer agents.</span></div>
+              <div><strong>Funded without exposing a ceiling</strong><span>POOL verifies MSRP coverage and reserves funds. Private maximum prices never leave the buyer agents.</span></div>
             </div>
           </section>
 
@@ -453,8 +472,8 @@ export default function Home() {
               <div><span>Kernel</span><i style={{ width: stage >= 3 ? "100%" : "0%" }} /></div>
             </div>
             <div className="price-compression">
-              <div className="compression-label"><span>PRICE COMPRESSION</span><span>{stage >= 6 ? `${Math.round(((479 - currentPrice) / 479) * 100)}%` : "—"}</span></div>
-              <div className="price-track"><span className="price-fill" style={{ width: `${stage >= 6 ? Math.max(8, ((479 - currentPrice) / 100) * 100) : 0}%` }} /><i className="baseline-pin">$479</i><i className="deal-pin">${currentPrice}</i></div>
+              <div className="compression-label"><span>PRICE COMPRESSION</span><span>{stage >= 6 ? `${Math.round(((MSRP_UNIT - currentPrice) / MSRP_UNIT) * 100)}%` : "—"}</span></div>
+              <div className="price-track"><span className="price-fill" style={{ width: `${stage >= 6 ? Math.max(8, ((MSRP_UNIT - currentPrice) / 100) * 100) : 0}%` }} /><i className="baseline-pin">${MSRP_UNIT}</i><i className="deal-pin">${currentPrice}</i></div>
             </div>
             <div className="pool-footer"><EyeOff size={14} /><span>0 private limits revealed</span></div>
           </section>
@@ -484,7 +503,7 @@ export default function Home() {
             </div>
             <div className={`auction-callout ${stage >= 8 ? "is-active" : ""}`}>
               <div className="auction-icon"><Zap size={16} /></div>
-              <div><span>COALITION COUNTER</span><strong>$383 / unit</strong><small>12 committed · immediate payment authority</small></div>
+              <div><span>COALITION COUNTER</span><strong>$383 / unit</strong><small>12 prefunded · immediate funded commitment</small></div>
               <ArrowRight size={17} />
             </div>
           </section>
@@ -507,7 +526,7 @@ export default function Home() {
           <section className={`deal-panel ${stage >= 9 ? "is-agreed" : ""}`}>
             <div className="deal-price-block">
               <div><span>{stage >= 9 ? "NEGOTIATED UNIT PRICE" : "BEST LIVE OFFER"}</span><strong>{money.format(currentPrice)}</strong></div>
-              <div className="price-delta"><ArrowDown size={15} /><strong>{stage >= 6 ? money.format(479 - currentPrice) : "$0"}</strong><span>per unit</span></div>
+              <div className="price-delta"><ArrowDown size={15} /><strong>{stage >= 6 ? money.format(MSRP_UNIT - currentPrice) : "$0"}</strong><span>per unit</span></div>
             </div>
             <div className="deal-facts">
               <div><span>Quantity</span><strong>{stage >= 5 ? "12 units" : "forming"}</strong></div>
@@ -522,13 +541,45 @@ export default function Home() {
 
       <section className="authority-section" id="authority">
         <div className="authority-intro">
-          <span className="eyebrow">02 / AUTHORITY LAYER</span>
-          <h2>Reason freely.<br /><em>Spend narrowly.</em></h2>
+          <span className="eyebrow">02 / FUNDS + AUTHORITY</span>
+          <h2>Fund the intent.<br /><em>Reserve the MSRP.</em></h2>
           <p>
-            POOL keeps negotiation flexible and authority deterministic. The seller never sees a buyer’s ceiling.
-            The payment rail never sees a prompt — only exact, bounded terms.
+            POOL admits a buyer only when their balance covers quantity × MSRP. Joining creates a reservation:
+            that money remains theirs, but cannot be withdrawn or used elsewhere. A buyer may leave before the commitment cutoff;
+            after an offer is accepted, the reservation stays frozen until settlement, cancellation, or reconciliation.
           </p>
-          <div className="authority-rule"><Gauge size={17} /><span>LLM / agent judgment</span><ArrowRight size={14} /><strong>structured offer</strong><ArrowRight size={14} /><span>deterministic policy</span><ArrowRight size={14} /><strong>Rain scope</strong></div>
+          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL reserves</strong><ArrowRight size={14} /><span>agents negotiate</span><ArrowRight size={14} /><strong>Rain executes</strong></div>
+          <div className="custody-boundary"><ShieldCheck size={15} /><span><strong>Clear boundary:</strong> POOL balance and reservation are the product ledger. Rain is used only at execution; Rain is not presented as the custodial deposit account.</span></div>
+        </div>
+
+        <div className={`reservation-panel ${stage >= 1 ? "is-active" : ""}`}>
+          <div className="panel-head"><div><LockKeyhole size={16} /><span>POOL BALANCE RESERVATIONS</span></div><span>MSRP COVERAGE REQUIRED</span></div>
+          <div className="reservation-rules">
+            <div><span>JOIN</span><strong>Balance ≥ MSRP</strong><small>or participation is denied</small></div>
+            <ArrowRight size={14} />
+            <div><span>ACTIVE</span><strong>MSRP is reserved</strong><small>no withdrawal or other spend</small></div>
+            <ArrowRight size={14} />
+            <div><span>SETTLE</span><strong>Capture deal price</strong><small>unlock the difference</small></div>
+          </div>
+          <div className="reservation-table">
+            <div className="reservation-table-head"><span>Buyer</span><span>POOL balance</span><span>MSRP reserved</span><span>Deal captured</span><span>Unlocked</span></div>
+            {buyers.map((buyer, index) => {
+              const msrpReservation = buyer.quantity * MSRP_UNIT;
+              const dealCapture = buyer.quantity * DEAL_UNIT;
+              const unlocked = msrpReservation - dealCapture;
+              return (
+                <div className={`reservation-row ${stage >= index + 1 ? "is-reserved" : ""} ${stage >= 12 ? "is-settled" : ""}`} key={buyer.id}>
+                  <span><i className={`mini-avatar avatar-${buyer.accent}`}>{buyer.initials}</i>{buyer.name}</span>
+                  <span><strong>{money.format(msrpReservation)}</strong><small>deposited</small></span>
+                  <span><strong>{money.format(msrpReservation)}</strong><small>{stage >= 12 ? "reservation reconciled" : "locked while active"}</small></span>
+                  <span><strong>{money.format(dealCapture)}</strong><small>at settlement</small></span>
+                  <span className="unlock-value"><strong>+{money.format(unlocked)}</strong><small>available again</small></span>
+                </div>
+              );
+            })}
+            <div className="reservation-total"><span>TOTAL · 12 UNITS</span><strong>{money.format(baseline)} reserved</strong><ArrowRight size={13} /><strong>{money.format(poolTotal)} captured</strong><strong className="unlock-value">+{money.format(savings)} available</strong></div>
+          </div>
+          <div className="leave-rule"><RefreshCcw size={13} /><span><strong>Before the commitment cutoff:</strong> leaving releases the full MSRP reservation. <strong>After offer acceptance:</strong> it stays frozen through settlement, cancellation, or reconciliation. Failed or partial execution never appears as released.</span></div>
         </div>
 
         <div className="mandate-panel">
@@ -536,11 +587,11 @@ export default function Home() {
           <div className="mandate-table">
             <div className="table-head"><span>Buyer</span><span>Allocation</span><span>Hard max</span><span>Delivery</span><span>Decision</span></div>
             {buyers.map((buyer) => {
-              const total = buyer.quantity * 389;
+              const total = buyer.quantity * DEAL_UNIT;
               return (
                 <div className="mandate-row" key={buyer.id}>
                   <span><i className={`mini-avatar avatar-${buyer.accent}`}>{buyer.initials}</i>{buyer.name}</span>
-                  <span>{buyer.quantity} × $389</span>
+                  <span>{buyer.quantity} × ${DEAL_UNIT}</span>
                   <span className="sealed-value"><EyeOff size={12} /> SEALED</span>
                   <span>7d ≤ {buyer.deadline}d</span>
                   <span className={stage >= 10 ? "decision-pass" : "decision-wait"}>{stage >= 10 ? <><Check size={13} /> PASS · {money.format(total)}</> : "PENDING"}</span>
@@ -557,13 +608,14 @@ export default function Home() {
 
         <div className={`rain-panel ${stage >= 11 ? "is-ready" : ""}`}>
           <div className="rain-panel-head">
-            <div><RainWordmark /><span>PROGRAMMABLE PAYMENT AUTHORITY</span></div>
+            <div><RainWordmark /><span>EXECUTION RAIL · AFTER POOL CLEARING</span></div>
             <span className="sandbox-outline">SANDBOX · NO REAL MONEY</span>
           </div>
+          <div className="rain-boundary-note"><ShieldCheck size={14} /><span><strong>Rain does not hold the POOL balance or reservation.</strong> After the deal clears, POOL sends Rain only the negotiated, bounded execution terms shown below.</span></div>
           <div className="scope-grid">
             {buyers.map((buyer) => (
               <div className="scope-row" key={buyer.id}>
-                <div><span>{buyer.name}</span><strong>{money.format(buyer.quantity * 389)}</strong></div>
+                <div><span>{buyer.name}</span><strong>{money.format(buyer.quantity * DEAL_UNIT)}</strong></div>
                 <div className="scope-tags"><span><CircleDollarSign size={12} /> deal amount</span><span><Store size={12} /> MCC 5732</span><span><Clock3 size={12} /> 48h expiry</span></div>
                 <div className="scope-state">{stage >= 11 ? <><Check size={14} /> READY</> : <><Clock3 size={14} /> WAITING</>}</div>
               </div>
@@ -587,17 +639,17 @@ export default function Home() {
 
           {settlement.kind === "running" && (
             <div className="payment-progress" aria-live="polite">
-              <div className="payment-progress-copy"><div className="spinner" /><div><strong>Rain is executing bounded authority</strong><span>{paymentProgress < 28 ? "Issuing three scoped cards" : paymentProgress < 52 ? "Proving blocked merchant category" : paymentProgress < 76 ? "Authorizing buyer allocations" : "Settling transaction records"}</span></div><strong>{paymentProgress}%</strong></div>
+              <div className="payment-progress-copy"><div className="spinner" /><div><strong>Rain is executing bounded authority</strong><span>{paymentProgress < 28 ? "POOL reservations remain frozen · issuing scoped cards" : paymentProgress < 52 ? "Proving blocked merchant category" : paymentProgress < 76 ? "Authorizing buyer allocations" : "Settling transaction records"}</span></div><strong>{paymentProgress}%</strong></div>
               <div className="payment-progress-track"><span style={{ width: `${paymentProgress}%` }} /></div>
             </div>
           )}
 
           {settlement.kind === "failed" && (
-            <div className="payment-error"><X size={17} /><div><strong>Live sandbox run did not complete</strong><span>{settlement.message} No simulated receipt was substituted.</span></div><button onClick={useRehearsal}>Continue in rehearsal</button></div>
+            <div className="payment-error"><X size={17} /><div><strong>Live sandbox run did not complete</strong><span>{settlement.message} POOL reservations remain frozen for safe retry or reconciliation; no refund or simulated receipt is substituted.</span></div><button onClick={() => { setSettlement({ kind: "idle" }); setPaymentProgress(0); }}>Retry settlement</button></div>
           )}
 
           <div className="sandbox-disclosure">
-            <LockKeyhole size={13} /> Hackathon sandbox: three POOL allocations use separate scoped cards under one provisioned Rain test cardholder. Rain applies its documented 1.2× authorization-hold buffer; POOL admits only the agreed amounts. No PAN or CVC is stored or shown.
+            <LockKeyhole size={13} /> Hackathon sandbox: POOL’s deposit and reservation ledger is represented in the demo; Rain begins at execution. Three allocations use separate scoped cards under one provisioned Rain test cardholder. No PAN or CVC is stored or shown.
           </div>
         </div>
       </section>
@@ -606,14 +658,14 @@ export default function Home() {
         <section className={`outcome-section ${settlement.kind === "live" ? "is-live-outcome" : ""}`} id="outcome">
           <div className="outcome-topline"><span><StatusDot online />{outcomeMode}</span><span>POOL-2408-017 · CLOSED</span></div>
           <div className="outcome-main">
-            <div className="outcome-title"><span>MARKET CLEARED</span><h2>12 units purchased.<br /><em>No group chat required.</em></h2></div>
-            <div className="outcome-number"><strong>{money.format(savings)}</strong><span>buyer savings created</span></div>
+            <div className="outcome-title"><span>MARKET CLEARED</span><h2>MSRP secured the commitment.<br /><em>Only the deal price moved.</em></h2></div>
+            <div className="outcome-number"><strong>{money.format(savings)}</strong><span>returned to available balances</span></div>
           </div>
           <div className="outcome-metrics">
-            <div><span>PUBLIC BASELINE</span><strong>{money.format(baseline)}</strong></div>
-            <div><span>POOL COST</span><strong>{money.format(poolTotal)}</strong></div>
+            <div><span>MSRP RESERVED</span><strong>{money.format(baseline)}</strong></div>
+            <div><span>DEAL CAPTURED</span><strong>{money.format(poolTotal)}</strong></div>
+            <div><span>UNLOCKED</span><strong>{money.format(savings)}</strong></div>
             <div><span>PRICE IMPROVEMENT</span><strong>18.8%</strong></div>
-            <div><span>HUMAN NEGOTIATION</span><strong>NONE</strong></div>
           </div>
 
           <div className="receipts-panel">
@@ -621,10 +673,12 @@ export default function Home() {
             <div className="receipt-grid">
               {buyers.map((buyer) => {
                 const payment = livePayments.find((entry) => entry.buyerId === buyer.id);
+                const captured = buyer.quantity * DEAL_UNIT;
+                const unlocked = buyer.quantity * (MSRP_UNIT - DEAL_UNIT);
                 return (
                   <div className="receipt-row" key={buyer.id}>
                     <div><i className={`mini-avatar avatar-${buyer.accent}`}>{buyer.initials}</i><span>{buyer.name}</span></div>
-                    <strong>{money.format(buyer.quantity * 389)}</strong>
+                    <span className="receipt-money"><strong>{money.format(captured)}</strong><small>+{money.format(unlocked)} available</small></span>
                     <span className="receipt-id">{payment ? `tx ${shortId(payment.transactionId)}` : "demo receipt"}</span>
                     <span className="receipt-status"><Check size={13} /> SETTLED</span>
                   </div>

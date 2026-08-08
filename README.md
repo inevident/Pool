@@ -2,7 +2,7 @@
 
 **Autonomous collective purchasing for the agentic economy.**
 
-POOL turns independent buying intents into a temporary demand coalition. Buyer agents discover compatible requirements, seller agents compete for the combined order, deterministic policy verifies the winning terms, and Rain issues only the payment authority needed to execute that deal.
+POOL turns prefunded buying intents into a temporary demand coalition. Buyer agents reserve the full MSRP before joining, discover compatible requirements, make sellers compete for the combined order, and spend only the negotiated amount after deterministic policy verifies the deal.
 
 This repository is the deterministic 2–3 minute hero demo for the Raingentic Commerce Hackathon NYC.
 
@@ -19,17 +19,32 @@ Three fictional businesses independently request 27-inch 4K USB-C development di
 A fourth ultrawide OLED request is deliberately kept out because its hard form factor does not match. POOL forms a 12-unit coalition, opens a market to three simulated merchants with coherent private floors and quantity tiers, and negotiates the public price from **$479 to $389 per unit**.
 
 - Independent baseline: **$5,748**
+- MSRP reserved before joining: **$5,748**
 - POOL total: **$4,668**
-- Buyer savings: **$1,080 / 18.8%**
+- Savings released back to available balances: **$1,080 / 18.8%**
 - Human negotiation: **none**
 
 The UI can replay this market automatically or advance one event at a time. Resetting the UI never triggers a financial operation.
+
+## Prefunded commitment model
+
+Participation requires cleared funds before a buyer can affect the pool:
+
+1. Deposit at least `MSRP × quantity` into the buyer’s POOL balance.
+2. Joining atomically moves that amount from `available` to `reserved`.
+3. Reserved funds cannot be withdrawn or reused for another purchase.
+4. Leaving before the commitment cutoff releases the full reservation back to `available`.
+5. At settlement, POOL captures only `negotiated price × quantity` and releases the difference back to `available` as savings.
+
+For the hero market, the buyers reserve $1,437, $1,916, and $2,395. Settlement captures $1,167, $1,556, and $1,945, releasing $270, $360, and $450 respectively. Every balance change uses integer cents, a stable idempotency key, and a fail-closed state transition.
+
+The repository implements and tests this as POOL’s deterministic domain ledger. It is not represented as a real custodial account: production deposits and withdrawals require an authenticated, durable ledger backed by an appropriate regulated custody or banking partner.
 
 ## What is real
 
 The Rain path uses the event’s live sandbox at `https://api-dev.raincards.xyz/v1`:
 
-1. Fund sandbox collateral with an idempotency key.
+1. Fund team-level sandbox rail collateral with an idempotency key. This never credits a buyer balance or satisfies POOL’s deposit requirement.
 2. Issue one scoped card for each buyer allocation under the provisioned hackathon cardholder.
 3. Request each card for its negotiated allocation, electronics MCC `5732`, and a short expiration. Rain applies its documented 1.2× lifetime authorization buffer; POOL still admits only the exact agreed charges in deterministic preflight.
 4. Attempt an off-list MCC `7995` authorization and require Rain to return a decline.
@@ -38,24 +53,29 @@ The Rain path uses the event’s live sandbox at `https://api-dev.raincards.xyz/
 
 Rain’s hackathon sandbox provisions one test cardholder for the team, so the three POOL personas map to three separate scoped cards under that one sandbox user. The product discloses this instead of pretending the sandbox contains three independently verified identities.
 
-Fictional merchants and their offers are simulated. Rehearsal receipts are always labeled **REHEARSAL · SIMULATED** and are never substituted for a failed Rain response.
+The POOL balance ledger, fictional merchants, and offers are deterministic simulations. Rain is the real sandbox execution rail, not the system of record for each persona’s deposited balance. Rehearsal receipts are always labeled **REHEARSAL · SIMULATED** and are never substituted for a failed Rain response.
 
 ## Architecture
 
 ```text
-Buying intents
-  └─ deterministic compatibility engine
-       └─ temporary coalition + explicit state machine
-            └─ merchant quantity-tier economics
-                 └─ structured negotiation offers
-                      └─ buyer policy + offer integrity checks
-                           └─ server-only Rain adapter
-                                ├─ scoped cards
-                                ├─ enforced MCC decline
-                                └─ authorization + settlement
+Cleared POOL balance
+  └─ atomic MSRP reservation
+       └─ eligible buying intent
+            └─ deterministic compatibility engine
+                 └─ temporary coalition + explicit state machine
+                      └─ merchant quantity-tier economics
+                           └─ structured negotiation offers
+                                └─ buyer policy + offer integrity checks
+                                     └─ freeze reservation for execution
+                                          └─ server-only Rain adapter
+                                               ├─ scoped cards at negotiated amount
+                                               ├─ enforced MCC decline
+                                               └─ authorization + settlement
+                                                    └─ capture deal + release savings
 ```
 
 - `app/page.tsx` — cinematic market replay and explicit live/rehearsal states
+- `lib/funding/` — prefunded balance, reservation, release, capture, withdrawal, and idempotency invariants
 - `lib/market/` — typed compatibility, negotiation, policy, state, integrity, and idempotency engine
 - `lib/rain/client.ts` — server-only Rain sandbox adapter with schema validation, timeouts, and safe retries
 - `app/api/rain/execute/route.ts` — same-origin, server-authoritative demo execution
@@ -95,6 +115,10 @@ npm run lint
 ## Financial safety decisions
 
 - Private mandates and seller floors are not part of the public market projection.
+- A buyer cannot join unless its available cleared balance covers the full MSRP reservation.
+- Reserved funds cannot be withdrawn or double-committed; leaving before cutoff releases them exactly once.
+- Settlement cannot capture more than the reservation and releases the full MSRP-to-deal difference.
+- A failed external attempt keeps the reservation locked for a safe retry; any partial settlement freezes it for reconciliation instead of claiming a refund.
 - Compatibility can interpret non-identical requirements, but hard product constraints cannot be negotiated away.
 - The accepted offer is versioned and fingerprinted before payment authorization.
 - Stale, tampered, over-budget, duplicate, and idempotency-conflict requests are rejected deterministically.

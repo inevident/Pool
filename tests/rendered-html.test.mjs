@@ -34,7 +34,11 @@ test("server-renders the complete POOL market experience", async () => {
   assert.match(html, /Launch the market/);
   assert.match(html, /BUYER AGENTS/);
   assert.match(html, /SELLER COMPETITION/);
-  assert.match(html, /PROGRAMMABLE PAYMENT AUTHORITY/);
+  assert.match(html, /POOL BALANCE RESERVATIONS/);
+  assert.match(html, /MSRP COVERAGE REQUIRED/);
+  assert.match(html, /Rain does not hold the POOL balance or reservation/);
+  assert.match(html, /EXECUTION RAIL · AFTER POOL CLEARING/);
+  assert.match(html, /\$5,748/);
   assert.match(html, /SANDBOX · NO REAL MONEY/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });

@@ -6,11 +6,13 @@ import {
   DEMO_MERCHANT,
   DEMO_SCENARIO_VERSION,
   ELECTRONICS_MCC,
+  getDemoFundingState,
   settlementAllocations,
+  settlementTotalInCents,
 } from "../../../../lib/demo/settlement";
 import {
   authorizeCard,
-  fundDemoCollateral,
+  fundDemoRailCollateral,
   issueScopedCard,
   RainApiError,
   reverseAuthorization,
@@ -136,12 +138,13 @@ export async function POST(request: NextRequest) {
   const settled: Array<{
     buyerId: string;
     transactionId: string;
+    amountInCents: number;
     status: string;
     cached: boolean;
   }> = [];
 
   try {
-    await fundDemoCollateral(500_000, `${runKey}-fund`);
+    await fundDemoRailCollateral(500_000, `${runKey}-fund`);
 
     for (const allocation of settlementAllocations) {
       const issued = await issueScopedCard({
@@ -217,9 +220,17 @@ export async function POST(request: NextRequest) {
         amountInCents: authorization.amountInCents,
         idempotencyKey: `${runKey}-${authorization.buyerId}-settle`,
       });
+      if (settlement.transaction.status !== "settled") {
+        throw new RainApiError(
+          "Rain did not confirm settlement of an authorized allocation",
+          502,
+          "settlement_not_confirmed",
+        );
+      }
       settled.push({
         buyerId: authorization.buyerId,
         transactionId: settlement.transaction.transactionId,
+        amountInCents: authorization.amountInCents,
         status: settlement.transaction.status,
         cached: settlement.cached,
       });
@@ -233,6 +244,7 @@ export async function POST(request: NextRequest) {
         realSandbox: true,
         runKey,
         sharedSandboxCardholder: true,
+        funding: getDemoFundingState("settled", settlementTotalInCents),
         guardrail: {
           status: probe.transaction.status,
           reason: probe.transaction.declinedReason ?? "blocked_mcc",
@@ -264,12 +276,24 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const code =
       error instanceof RainApiError ? error.code : "rain_execution_failed";
+    const externalSettledInCents = settled.reduce(
+      (total, entry) => total + entry.amountInCents,
+      0,
+    );
+    const fundingState =
+      settled.length > 0
+        ? getDemoFundingState(
+            "reconciliation_required",
+            externalSettledInCents,
+          )
+        : getDemoFundingState("frozen_for_retry");
     return NextResponse.json(
       {
         status: settled.length > 0 ? "partial" : "failed",
         code,
         message:
           "Rain sandbox could not complete this run. No simulated receipt has been substituted.",
+        funding: fundingState,
         progress: {
           cardsIssued: cards.length,
           authorizations: authorized.length,

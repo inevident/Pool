@@ -232,7 +232,8 @@ export async function verifyRainConnection() {
   return { connected: true as const, environment: "sandbox" as const };
 }
 
-export async function fundDemoCollateral(
+/** Adds team-level Rain sandbox rail liquidity; this is never a buyer balance. */
+export async function fundDemoRailCollateral(
   amountInCents: number,
   idempotencyKey: string,
 ) {

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 const title = "POOL — Autonomous collective purchasing";
 const description =
-  "Buyer agents discover compatible demand, form temporary coalitions, negotiate with competing sellers, and transact through Rain-scoped authority.";
+  "Prefunded buyers reserve MSRP, form temporary demand coalitions, negotiate with competing sellers, and unlock the savings after settlement.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
