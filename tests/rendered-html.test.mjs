@@ -23,24 +23,56 @@ async function render(path = "/") {
   );
 }
 
-test("server-renders the complete POOL market experience", async () => {
+test("server-renders the functional POOL buyer product", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>POOL — Autonomous collective purchasing<\/title>/i);
-  assert.match(html, /Buyers don’t find/);
+  assert.match(html, /<title>POOL — Turn patience into bargaining power<\/title>/i);
+  assert.match(html, /What are you willing to/);
+  assert.match(html, /Product sandbox/i);
+  assert.match(html, /Available to commit/);
+  assert.match(html, /Active commitments/);
+  assert.match(html, /Popular group buys/);
+  assert.match(html, /Sony/);
+  assert.match(html, /Reserve &amp; join/);
+  assert.match(html, /Add test funds/);
+  assert.doesNotMatch(html, /Judge console/);
+  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+});
+
+test("keeps the cinematic market and payment proof isolated at /demo", async () => {
+  const response = await render("/demo");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<title>Live market walkthrough — POOL<\/title>/i);
   assert.match(html, /Launch the market/);
   assert.match(html, /BUYER AGENTS/);
   assert.match(html, /SELLER COMPETITION/);
   assert.match(html, /POOL BALANCE RESERVATIONS/);
-  assert.match(html, /MSRP COVERAGE REQUIRED/);
   assert.match(html, /Rain does not hold the POOL balance or reservation/);
   assert.match(html, /EXECUTION RAIL · AFTER POOL CLEARING/);
-  assert.match(html, /\$5,748/);
   assert.match(html, /SANDBOX · NO REAL MONEY/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+  assert.match(html, /Product workspace/);
+});
+
+test("server-renders every repeat-use product surface", async () => {
+  const surfaces = [
+    ["/explore", /Discover funded group buys/],
+    ["/wallet", /Know what is free and what is committed/],
+    ["/orders", /From reserved demand to delivery/],
+    [
+      "/pools/pool-sony-xm6-august",
+      /Full MSRP coverage/,
+    ],
+  ];
+
+  for (const [path, expected] of surfaces) {
+    const response = await render(path);
+    assert.equal(response.status, 200, `${path} should render successfully`);
+    assert.match(await response.text(), expected);
+  }
 });
 
 test("applies a secure browser header baseline", async () => {

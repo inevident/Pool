@@ -71,7 +71,7 @@ Workspace state is versioned and stored locally in the browser. It survives page
 | `/` | Buyer overview, primary actions, active commitments, discovery, and activity |
 | `/explore` | Browse realistic seeded group buys and evaluate commitment terms |
 | `/wallet` | Add test funds and inspect available, reserved, released, and spent movements |
-| `/orders` | Review active commitments and resolved sandbox purchases |
+| `/orders` | Review active commitments, exact releases, and the future fulfillment lifecycle without fabricating purchases |
 | `/demo` | Run the isolated Rain + Monad market and settlement proof |
 
 ### Deterministic commerce domain

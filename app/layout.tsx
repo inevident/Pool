@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const title = "POOL — Autonomous collective purchasing";
+const title = "POOL — Turn patience into bargaining power";
 const description =
-  "Prefunded buyers reserve MSRP, form temporary demand coalitions, negotiate with competing sellers, and unlock the savings after settlement.";
+  "Declare what you want, fully fund your commitment, and join patient buyers who make merchants compete for the whole order.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -41,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: "POOL turns 12 independent units of demand into one autonomous market." }],
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: "POOL turns patient, fully funded buyers into collective purchasing power." }],
     },
     twitter: {
       card: "summary_large_image",
@@ -58,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

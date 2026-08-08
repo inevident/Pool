@@ -17,7 +17,7 @@ Run the app and open `http://localhost:3000`:
 | `/` | Buyer home: available and reserved balances, active commitments, matching pools, and recent activity |
 | `/explore` | Discover group buys and inspect their price target, commitment progress, and timing |
 | `/wallet` | Add sandbox funds and audit reservation, release, and settlement activity |
-| `/orders` | Track commitments and completed sandbox purchases |
+| `/orders` | Track commitments, exact releases, and the disclosed path to future fulfillment |
 | `/demo` | Replay the cinematic Rain + Monad technical proof |
 
 The product workspace supports these complete sandbox interactions:
