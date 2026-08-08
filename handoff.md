@@ -75,7 +75,7 @@ Do not blur these boundaries. Product credibility depends on being exact about t
 
 1. **The Vercel preview is protected.** The linked preview may show “You Need Access.” It is not safe to assume a judge can open it.
 2. **The Vercel CLI and the browser are not using the same account context.** The CLI was verified as `haharandomaccover13-5904` under scope `yeayea`; the browser account shown by the owner did not have access to the protected deployment.
-3. **GitHub Actions is not executing jobs.** The latest workflow creates a job with zero steps because GitHub reports: “The job was not started because your account is locked due to a billing issue.” Local validation is therefore the current source of build evidence.
+3. **GitHub Actions is not executing jobs.** The audited workflow run created a job with zero steps because GitHub reported: “The job was not started because your account is locked due to a billing issue.” Local validation is therefore the current source of build evidence until the account lock is resolved.
 4. **Treat the Rain credential previously shared in chat or an image as exposed.** Never copy it into this document, a commit, a log, a screenshot, a client bundle, or a ticket. Rotate or re-provision it before any use outside the disposable event sandbox.
 5. **No production funds.** This repository is intentionally testnet/sandbox-only. Never add a mainnet-funded private key.
 
@@ -1292,7 +1292,7 @@ Re-run rather than trusting this snapshot after any dependency or behavior chang
 
 ### GitHub Actions caveat
 
-`.github/workflows/ci.yml` is correctly configured to run checkout, Node 22.13, `npm ci`, lint, Next build, all tests, and a high-severity production audit. However, the latest run at [GitHub Actions run 31278405482](https://github.com/inevident/Pool/actions/runs/31278405482) did not start any steps because the GitHub account is locked due to a billing issue.
+`.github/workflows/ci.yml` is correctly configured to run checkout, Node 22.13, `npm ci`, lint, Next build, all tests, and a high-severity production audit. The audited baseline run for application commit `7bcacd5`, [GitHub Actions run 31278405482](https://github.com/inevident/Pool/actions/runs/31278405482), did not start any steps because the GitHub account was locked due to a billing issue. New pushes may create newer run IDs with the same account-level failure until that lock is resolved.
 
 Do not interpret the red check as a code-test failure. Do not interpret it as success either. Resolve account billing, rerun CI, and require a green hosted check before external collaboration or production release.
 
