@@ -234,7 +234,7 @@ function traceFrom(value: unknown, fallback: TraceLine[]): TraceLine[] {
   const lines = value.flatMap((entry): TraceLine[] => {
     if (typeof entry === "string") return [{ label: "agent", detail: entry, status: "info" }];
     const item = asRecord(entry);
-    const label = textValue(item.tool ?? item.action ?? item.name ?? item.label, "agent");
+    const label = textValue(item.tool ?? item.action ?? item.name ?? item.label ?? item.stage, "agent");
     const detail = textValue(item.detail ?? item.output ?? item.result ?? item.reason, "completed");
     const rawStatus = textValue(item.status, "complete").toLowerCase();
     const status = rawStatus.includes("block") || rawStatus.includes("reject") ? "blocked" : rawStatus.includes("complete") || rawStatus.includes("pass") || rawStatus.includes("success") ? "complete" : "info";
@@ -415,7 +415,10 @@ export default function Home() {
     try {
       const response = await fetch("/api/agent/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Pool-Agent-Action": "interpret-buyer-intent",
+        },
         body: JSON.stringify({ intent: cleanIntent }),
       });
       const payload = asRecord(await response.json());
@@ -423,7 +426,7 @@ export default function Home() {
       const normalized = asRecord(payload.normalized ?? payload.intent ?? payload.parsedIntent);
       const quantity = textValue(normalized.quantity ?? payload.quantity, "requested quantity");
       const deadline = textValue(normalized.deadlineDays ?? normalized.deliveryDays ?? payload.deadlineDays, "requested window");
-      const decision = textValue(payload.decision ?? payload.status, "eligible");
+      const decision = textValue(payload.status, "eligible");
       const mode = textValue(payload.mode ?? payload.provider, "policy-agent");
       setIntentResult({
         kind: "complete",
@@ -460,18 +463,21 @@ export default function Home() {
     try {
       const response = await fetch("/api/merchant/bid", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Pool-Agent-Action": "evaluate-merchant-bid",
+        },
         body: JSON.stringify({
-          poolId: "POOL-2408-017",
-          unitPriceInCents: Math.round(unitPrice * 100),
-          quantity: 12,
+          merchantId: "merchant-signal",
+          unitPriceCents: Math.round(unitPrice * 100),
           deliveryDays: Math.round(deliveryDays),
           warrantyMonths: 36,
+          rfpVersion: 1,
         }),
       });
       const payload = asRecord(await response.json());
       if (!response.ok) throw new Error(textValue(payload.message ?? payload.error, "Bid route unavailable"));
-      const decision = textValue(payload.decision ?? payload.status, payload.accepted === true ? "accepted" : "evaluated");
+      const decision = textValue(payload.status, payload.accepted === true ? "accepted" : "evaluated");
       setBidResult({
         kind: "complete",
         mode: textValue(payload.mode, "deterministic policy"),
