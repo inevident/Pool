@@ -75,6 +75,7 @@ type ModalState =
   | { kind: "intent"; productId?: string; quickText?: string }
   | { kind: "join"; poolId: string }
   | { kind: "leave"; membershipId: string }
+  | { kind: "settle"; membershipId: string }
   | { kind: "reset" }
   | null;
 
@@ -159,6 +160,12 @@ function greetingFor(date: Date) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+/** Compact provider identifier for display; never a substitute for the full id. */
+function shortId(value?: string) {
+  if (!value) return "—";
+  return value.length <= 12 ? value : `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
 function createId(prefix: string) {
@@ -313,6 +320,8 @@ export default function ProductWorkspaceApp({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [quickIntent, setQuickIntent] = useState("");
+  // Bumped after a provider-side money movement so the rail figures re-read.
+  const [treasuryNonce, setTreasuryNonce] = useState(0);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -369,7 +378,15 @@ export default function ProductWorkspaceApp({
         if (!Number.isSafeInteger(body.spendingPowerCents)) return;
 
         setWorkspace((current) => {
-          if (current.treasury.source === "rain-sandbox") return current;
+          // Re-syncing after a settlement is how the rail's own numbers are
+          // shown moving; skip only when nothing actually changed.
+          if (
+            current.treasury.source === "rain-sandbox" &&
+            current.treasury.spendingPowerCents === body.spendingPowerCents &&
+            current.treasury.postedChargesCents === body.postedChargesCents
+          ) {
+            return current;
+          }
           try {
             return reduceProductWorkspace(current, {
               type: "treasury/sync",
@@ -392,7 +409,7 @@ export default function ProductWorkspaceApp({
       }
     })();
     return () => controller.abort();
-  }, [hydrated]);
+  }, [hydrated, treasuryNonce]);
 
   useEffect(() => {
     if (!toast) return;
@@ -643,6 +660,7 @@ export default function ProductWorkspaceApp({
           setToast={setToast}
           showError={showError}
           resetWorkspace={resetWorkspace}
+          refreshTreasury={() => setTreasuryNonce((value) => value + 1)}
         />
       ) : null}
 
@@ -1118,7 +1136,12 @@ function CommitmentList({
             </div>
             <div className={styles.rowAction}>
               <Link href={poolHref(pool)}>Details</Link>
-              {canLeavePool(pool, now) ? (
+              {membership.status === "active" ? (
+                <button type="button" onClick={() => setModal({ kind: "settle", membershipId: membership.id })}>
+                  Run market
+                </button>
+              ) : null}
+              {canLeavePool(pool, now) && membership.status === "active" ? (
                 <button type="button" onClick={() => setModal({ kind: "leave", membershipId: membership.id })}>
                   Leave
                 </button>
@@ -1200,6 +1223,11 @@ function WalletView({ workspace, balance, setModal }: SharedViewProps & {
           <span>Reserved</span>
           <strong>{cents(balance.reservedCents)}</strong>
           <small>Locked by active pools</small>
+        </div>
+        <div className={styles.walletMetric}>
+          <span>Captured</span>
+          <strong>{cents(balance.capturedCents)}</strong>
+          <small>Spent by settled orders</small>
         </div>
       </section>
 
@@ -1439,6 +1467,9 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
   }
   const product = workspace.products[pool.productId];
   const membership = activeMembershipForPool(workspace, pool.id);
+  const settledMembership = Object.values(workspace.memberships).find(
+    (entry) => entry.poolId === pool.id && entry.status === "settled",
+  );
   const progress = Math.min(100, (pool.committedUnitCount / pool.targetMemberCount) * 100);
   const savings = product.msrpUnitCents - pool.estimatedUnitPriceCents;
   const balance = workspace.balances[workspace.owner.id];
@@ -1456,13 +1487,26 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
           </div>
           <div className={styles.poolDetailAction}>
             {membership ? (
-              <button
-                className={styles.dangerButton}
-                type="button"
-                disabled={!canLeavePool(pool, now)}
-                onClick={() => setModal({ kind: "leave", membershipId: membership.id })}
-              >
-                Release commitment
+              <>
+                <button
+                  className={styles.primaryButton}
+                  type="button"
+                  onClick={() => setModal({ kind: "settle", membershipId: membership.id })}
+                >
+                  <Zap size={14} /> Run the market
+                </button>
+                <button
+                  className={styles.dangerButton}
+                  type="button"
+                  disabled={!canLeavePool(pool, now)}
+                  onClick={() => setModal({ kind: "leave", membershipId: membership.id })}
+                >
+                  Release commitment
+                </button>
+              </>
+            ) : settledMembership ? (
+              <button className={styles.secondaryButton} type="button" disabled>
+                Order settled
               </button>
             ) : (
               <button className={styles.primaryButton} type="button" onClick={() => setModal({ kind: "join", poolId: pool.id })}>
@@ -1471,10 +1515,10 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
             )}
             <small>
               {membership
-                ? canLeavePool(pool, now)
-                  ? "Available only before the published cutoff."
-                  : "The cutoff has passed; this reservation stays locked until the pool resolves."
-                : `${cents(balance.availableCents)} currently available.`}
+                ? "Freeze this coalition and make merchants compete for the order."
+                : settledMembership
+                  ? `Captured ${cents(settledMembership.settlement?.capturedCents ?? 0)} · released ${cents(settledMembership.settlement?.releasedCents ?? 0)}.`
+                  : `${cents(balance.availableCents)} currently available.`}
             </small>
           </div>
         </div>
@@ -1587,6 +1631,7 @@ function ProductModal({
   setToast,
   showError,
   resetWorkspace,
+  refreshTreasury,
 }: {
   modal: Exclude<ModalState, null>;
   workspace: ProductWorkspace;
@@ -1596,12 +1641,14 @@ function ProductModal({
   setToast: (toast: string | null) => void;
   showError: (error: unknown) => void;
   resetWorkspace: () => void;
+  refreshTreasury: () => void;
 }) {
   const titles: Record<Exclude<ModalState, null>["kind"], [string, string]> = {
     fund: ["Product sandbox", "Add test funds"],
     intent: ["Buying mandate", "Structure your intent"],
     join: ["Full-MSRP commitment", "Reserve funds and join"],
     leave: ["Before-cutoff exit", "Release your commitment"],
+    settle: ["Sealed merchant market", "Run the market"],
     reset: ["Local workspace", "Reset product sandbox"],
   };
   const [eyebrow, title] = titles[modal.kind];
@@ -1663,6 +1710,17 @@ function ProductModal({
           <LeaveForm
             workspace={workspace}
             membershipId={modal.membershipId}
+            setWorkspace={setWorkspace}
+            setModal={setModal}
+            setToast={setToast}
+            showError={showError}
+          />
+        ) : null}
+        {modal.kind === "settle" ? (
+          <SettleForm
+            workspace={workspace}
+            membershipId={modal.membershipId}
+            refreshTreasury={refreshTreasury}
             setWorkspace={setWorkspace}
             setModal={setModal}
             setToast={setToast}
@@ -2077,6 +2135,337 @@ function LeaveForm({
       <footer className={styles.modalFooter}>
         <button className={styles.secondaryButton} type="button" onClick={() => setModal(null)}>Keep commitment</button>
         <button className={styles.dangerButton} type="button" onClick={leave}>Release {cents(membership.reservedCents)}</button>
+      </footer>
+    </>
+  );
+}
+
+type PublicOffer = {
+  merchantId: string;
+  merchantName: string;
+  unitPriceCents: number;
+  deliveryDays: number;
+  warrantyMonths: number;
+};
+
+type SettleResponse =
+  | {
+      status: "cleared";
+      evidence: "rain-sandbox" | "rehearsal";
+      aggregateUnits: number;
+      volumeDiscountBps: number;
+      quantity: number;
+      reservedCents: number;
+      capturedCents: number;
+      releasedCents: number;
+      unitPriceCents: number;
+      msrpUnitCents: number;
+      targetUnitPriceCents: number;
+      offers: PublicOffer[];
+      winner: PublicOffer;
+      message: string;
+      rain?: {
+        cardId: string;
+        cardLast4: string;
+        allowedMcc: string;
+        blockedMccProof: { mcc: string; status: string; declinedReason: string };
+        transactionId: string;
+        settledAmountCents: number;
+        idempotencyCached: boolean;
+      };
+    }
+  | {
+      status: "no_acceptable_offer";
+      aggregateUnits: number;
+      reservedCents: number;
+      unitsToClear: number | null;
+      targetUnitPriceCents: number;
+      offers: PublicOffer[];
+      message: string;
+    }
+  | {
+      status: "failed" | "rejected" | "rate_limited";
+      code?: string;
+      compensated?: boolean;
+      reservationState?: string;
+      message: string;
+    };
+
+/**
+ * Runs the sealed merchant market for a real commitment and, when Rain is
+ * enabled, settles it on the provider.
+ *
+ * Every figure rendered here comes from the server response. The browser sends
+ * only a pool id, a quantity, and an idempotency key, so it cannot influence the
+ * clearing price or the captured amount.
+ */
+function SettleForm({
+  workspace,
+  membershipId,
+  refreshTreasury,
+  setWorkspace,
+  setModal,
+  setToast,
+  showError,
+}: ModalFormProps & { membershipId: string; refreshTreasury: () => void }) {
+  const membership = workspace.memberships[membershipId];
+  const pool = membership ? workspace.pools[membership.poolId] : undefined;
+  const product = pool ? workspace.products[pool.productId] : undefined;
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<SettleResponse | null>(null);
+
+  if (!membership || !pool || !product) {
+    return (
+      <div className={styles.modalBody}>
+        <p className={styles.modalIntro}>That commitment is no longer available.</p>
+      </div>
+    );
+  }
+
+  // Captured after the guard above so the request closure cannot be typed
+  // against a missing pool or membership.
+  const activePool = pool;
+  const activeMembership = membership;
+
+  async function run() {
+    setRunning(true);
+    setResult(null);
+    try {
+      const response = await fetch("/api/pool/settle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pool-demo-action": "settle-pool-order",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          poolId: activePool.id,
+          quantity: activeMembership.quantity,
+          settlementId: crypto.randomUUID(),
+          confirmation: "settle-pool-order",
+        }),
+      });
+      const body = (await response.json()) as SettleResponse;
+      setResult(body);
+
+      if (body.status === "cleared") {
+        // Amounts come from the server; the reducer still refuses any capture
+        // larger than the reservation it holds locally.
+        const next = reduceProductWorkspace(workspace, {
+          type: "pool/settle",
+          membershipId: activeMembership.id,
+          buyerId: workspace.owner.id,
+          evidence: body.evidence,
+          unitPriceCents: body.unitPriceCents,
+          capturedCents: body.capturedCents,
+          merchantName: body.winner.merchantName,
+          ...(body.rain
+            ? {
+                rainTransactionId: body.rain.transactionId,
+                rainCardLast4: body.rain.cardLast4,
+              }
+            : {}),
+          activityId: createId("activity-settle"),
+          at: new Date().toISOString(),
+        });
+        setWorkspace(next);
+        setToast(
+          `${cents(body.releasedCents)} released back to your available balance.`,
+        );
+        // Real provider money moved, so re-read Rain's own ceiling and charges.
+        if (body.evidence === "rain-sandbox") refreshTreasury();
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const cleared = result?.status === "cleared" ? result : null;
+  const declined = result?.status === "no_acceptable_offer" ? result : null;
+  const failed =
+    result && result.status !== "cleared" && result.status !== "no_acceptable_offer"
+      ? result
+      : null;
+
+  return (
+    <>
+      <div className={styles.modalBody}>
+        {!result ? (
+          <>
+            <p className={styles.modalIntro}>
+              POOL freezes this pool’s funded demand, sends one anonymized request to
+              every eligible merchant, and awards the cheapest offer that clears the
+              published target. Merchants never see each other’s bids or your maximum.
+            </p>
+            <div className={styles.reservationBox}>
+              <div className={styles.reservationProduct}>
+                <ProductGlyph product={product} size={18} />
+                <div>
+                  <strong>{product.brand} {product.name}</strong>
+                  <small>
+                    {membership.quantity} unit{membership.quantity === 1 ? "" : "s"} ·{" "}
+                    {pool.committedUnitCount} funded units in this coalition
+                  </small>
+                </div>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Your reservation</span>
+                <strong>{cents(membership.reservedCents)}</strong>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Published target</span>
+                <strong>{cents(pool.estimatedUnitPriceCents)} / unit</strong>
+              </div>
+            </div>
+            <div className={styles.ruleBox}>
+              <ShieldCheck size={15} />
+              <span>
+                The browser sends only this pool’s id and your committed quantity. The
+                server re-derives MSRP, the clearing price, and the captured amount from
+                its own catalog.
+              </span>
+            </div>
+          </>
+        ) : null}
+
+        {cleared ? (
+          <>
+            <div className={styles.reservationBox}>
+              <div className={styles.reservationProduct}>
+                <ProductGlyph product={product} size={18} />
+                <div>
+                  <strong>{cleared.winner.merchantName} won the order</strong>
+                  <small>
+                    {cents(cleared.unitPriceCents)} / unit ·{" "}
+                    {cleared.winner.deliveryDays}-day delivery ·{" "}
+                    {cleared.winner.warrantyMonths}-month warranty
+                  </small>
+                </div>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Sealed bids at {cleared.aggregateUnits} funded units</span>
+                <strong>{(cleared.volumeDiscountBps / 100).toFixed(0)}% volume tier</strong>
+              </div>
+              {cleared.offers.map((offer) => (
+                <div className={styles.reservationLine} key={offer.merchantId}>
+                  <span>
+                    {offer.merchantName}
+                    {offer.merchantId === cleared.winner.merchantId ? " · won" : ""}
+                  </span>
+                  <strong>{cents(offer.unitPriceCents)}</strong>
+                </div>
+              ))}
+              <div className={styles.reservationLine}>
+                <span>You reserved</span>
+                <strong>{cents(cleared.reservedCents)}</strong>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Captured</span>
+                <strong>{cents(cleared.capturedCents)}</strong>
+              </div>
+              <div className={classNames(styles.reservationLine, styles.reservationTotal)}>
+                <span>Released to you</span>
+                <strong>{cents(cleared.releasedCents)}</strong>
+              </div>
+            </div>
+
+            {cleared.rain ? (
+              <div className={styles.ruleBox}>
+                <ShieldCheck size={15} />
+                <span>
+                  <strong>Rain sandbox settled this order.</strong> Scoped card ••••
+                  {cleared.rain.cardLast4} was issued for exactly{" "}
+                  {cents(cleared.capturedCents)}, restricted to MCC{" "}
+                  {cleared.rain.allowedMcc}. An off-policy MCC{" "}
+                  {cleared.rain.blockedMccProof.mcc} attempt was{" "}
+                  {cleared.rain.blockedMccProof.status} by the provider before any real
+                  authorization ran. Transaction {shortId(cleared.rain.transactionId)}.
+                  {cleared.rain.idempotencyCached
+                    ? " This run replayed a cached idempotent response."
+                    : ""}
+                </span>
+              </div>
+            ) : (
+              <div className={styles.ruleBox}>
+                <Info size={15} />
+                <span>
+                  <strong>REHEARSAL · SIMULATED.</strong> The market cleared
+                  deterministically, but Rain execution is disabled or locked, so no
+                  provider transaction was created and no provider id is shown.
+                </span>
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {declined ? (
+          <>
+            <div className={styles.reservationBox}>
+              <div className={styles.reservationProduct}>
+                <ProductGlyph product={product} size={18} />
+                <div>
+                  <strong>No acceptable offer</strong>
+                  <small>
+                    {declined.aggregateUnits} funded units could not beat{" "}
+                    {cents(declined.targetUnitPriceCents)} per unit
+                  </small>
+                </div>
+              </div>
+              {declined.offers.map((offer) => (
+                <div className={styles.reservationLine} key={offer.merchantId}>
+                  <span>{offer.merchantName}</span>
+                  <strong>{cents(offer.unitPriceCents)}</strong>
+                </div>
+              ))}
+              <div className={classNames(styles.reservationLine, styles.reservationTotal)}>
+                <span>Your reservation is untouched</span>
+                <strong>{cents(declined.reservedCents)}</strong>
+              </div>
+            </div>
+            <div className={styles.ruleBox}>
+              <Info size={15} />
+              <span>
+                {declined.unitsToClear === null
+                  ? "No merchant can reach this pool's published target at any volume tier."
+                  : `Merchants reach the target at ${declined.unitsToClear} funded units. More funded demand unlocks a deeper volume tier — that is the entire mechanism.`}
+              </span>
+            </div>
+          </>
+        ) : null}
+
+        {failed ? (
+          <div className={styles.ruleBox}>
+            <Info size={15} />
+            <span>
+              <strong>The settlement run did not complete.</strong> {failed.message}
+              {failed.reservationState === "reconciliation_required"
+                ? " Your reservation stays locked pending reconciliation; POOL does not release funds on an ambiguous provider result."
+                : " Your reservation is unchanged and can be retried."}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      <footer className={styles.modalFooter}>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          onClick={() => setModal(null)}
+        >
+          {result ? "Done" : "Cancel"}
+        </button>
+        {!cleared ? (
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={run}
+            disabled={running}
+          >
+            {running ? "Running sealed market…" : result ? "Run again" : "Run the market"}
+          </button>
+        ) : null}
       </footer>
     </>
   );

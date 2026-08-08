@@ -184,6 +184,7 @@ export function createSeededProductWorkspace(
         totalDepositedCents: 0,
         availableCents: 0,
         reservedCents: 0,
+        capturedCents: 0,
       },
     },
     intents: {},

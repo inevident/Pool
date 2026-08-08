@@ -53,6 +53,8 @@ export interface SandboxBalance {
   readonly totalDepositedCents: Cents;
   readonly availableCents: Cents;
   readonly reservedCents: Cents;
+  /** Consumed by a settled order. Mirrors `lib/funding`'s capture bucket. */
+  readonly capturedCents: Cents;
 }
 
 /**
@@ -94,7 +96,10 @@ export interface ProductBuyingIntent {
   readonly status: BuyingIntentStatus;
 }
 
-export type PoolMembershipStatus = "active" | "left";
+export type PoolMembershipStatus = "active" | "left" | "settled";
+
+/** How a settlement's money movement was actually evidenced. */
+export type SettlementEvidence = "rain-sandbox" | "rehearsal";
 
 export interface PoolMembership {
   readonly id: string;
@@ -106,6 +111,25 @@ export interface PoolMembership {
   readonly status: PoolMembershipStatus;
   readonly joinedAt: IsoDateTime;
   readonly leftAt?: IsoDateTime;
+  readonly settlement?: MembershipSettlement;
+}
+
+/**
+ * The result of a cleared market, as applied to one buyer's commitment.
+ *
+ * Every amount here is derived by the server from its own catalog; the browser
+ * never proposes a capture. `evidence` records whether real Rain sandbox
+ * transactions backed the capture or it was a labeled rehearsal.
+ */
+export interface MembershipSettlement {
+  readonly evidence: SettlementEvidence;
+  readonly unitPriceCents: Cents;
+  readonly capturedCents: Cents;
+  readonly releasedCents: Cents;
+  readonly merchantName: string;
+  readonly settledAt: IsoDateTime;
+  readonly rainTransactionId?: string;
+  readonly rainCardLast4?: string;
 }
 
 export type ProductActivityKind =
@@ -114,7 +138,8 @@ export type ProductActivityKind =
   | "sandbox.deposit_recorded"
   | "intent.created"
   | "pool.joined"
-  | "pool.left";
+  | "pool.left"
+  | "pool.settled";
 
 export type ProductActivityMetadata = Readonly<
   Record<string, string | number | boolean>
@@ -186,6 +211,17 @@ export type ProductWorkspaceAction =
       readonly type: "pool/leave";
       readonly membershipId: string;
       readonly buyerId: string;
+    })
+  | (ProductActionEnvelope & {
+      readonly type: "pool/settle";
+      readonly membershipId: string;
+      readonly buyerId: string;
+      readonly evidence: SettlementEvidence;
+      readonly unitPriceCents: Cents;
+      readonly capturedCents: Cents;
+      readonly merchantName: string;
+      readonly rainTransactionId?: string;
+      readonly rainCardLast4?: string;
     });
 
 export type ProductDomainErrorCode =
@@ -209,7 +245,8 @@ export type ProductDomainErrorCode =
   | "POOL_CUTOFF_PASSED"
   | "INSUFFICIENT_AVAILABLE_BALANCE"
   | "MEMBERSHIP_NOT_ACTIVE"
-  | "TREASURY_LIMIT_EXCEEDED";
+  | "TREASURY_LIMIT_EXCEEDED"
+  | "CAPTURE_EXCEEDS_RESERVATION";
 
 export class ProductDomainError extends Error {
   readonly code: ProductDomainErrorCode;

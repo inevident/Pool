@@ -355,18 +355,18 @@ Never describe the project using a single word such as “live.” Use the follo
 
 | Capability | Current implementation | Evidence level | Not claimed |
 | --- | --- | --- | --- |
-| Buyer funds | Browser-local deterministic credits | Local product sandbox | Real money, custody, bank or crypto balance |
+| Buyer funds | Browser-local credits, capped by Rain's live `spendingPower` | Local ledger bounded by a real provider ceiling | Real money, custody, bank or crypto balance |
 | Buyer reservation | Pure domain transition with exact accounting | Local, tested | Legal escrow or provider hold |
 | Product catalog | Four seeded products | Fixture | Live retailer catalog or inventory |
 | Product pools | Four seeded pools | Fixture | Real participant or merchant commitments |
 | Buying intent UI | Local structured state | Interactive sandbox | Authenticated cross-device mandate |
 | Natural-language intent | Optional OpenAI Responses extraction with deterministic fallback | Real API only when configured/unlocked; otherwise local | Model authorization or money movement |
 | Demand compatibility | Deterministic typed market fixture | Local, tested | Broad production semantic matching |
-| Merchant competition | Three coherent fictional merchants | Deterministic simulation | Real retailers or binding bids |
+| Merchant competition | Three coherent fictional merchants, consumer and B2B | Deterministic simulation | Real retailers or binding bids |
 | Funding commitment | Hash/root built locally; finalized on Monad Testnet when configured | Local proof or Testnet evidence, explicitly labeled | Onchain proof that a bank deposit exists |
 | Rain execution | Scoped-card issuance, decline, authorizations, settlements when enabled | Real Rain event sandbox records | Production card program or real funds |
 | Monad settlement attestation | Digest of real Rain sandbox IDs when configured | Monad Testnet transaction/finalized state | Chain-native settlement or independent Rain oracle |
-| Orders/fulfillment | Buyer-facing lifecycle copy and demo outcome | Fixture | Real order placement, shipping, returns, disputes |
+| Orders/fulfillment | Buyer pools clear and settle on Rain; fulfillment is copy only | Real Rain sandbox capture; fixture beyond it | Real order placement, shipping, returns, disputes |
 | Identity | Fictional personas / one Rain team cardholder | Demo fixture | KYC/KYB or distinct verified customers |
 
 Honest language examples:
@@ -518,16 +518,24 @@ The first four boxes exist as an interactive local product sandbox. The entire f
 
 API routes enforce content type, size, origin/action headers, rate limits, access sessions, no-store responses, and strict Zod schemas before calling domain or provider code.
 
-### Most important architectural seam
+### The product now settles end to end
 
-There are currently two parallel domain surfaces:
+The buyer workspace is no longer a dead end. A pool a user actually joined can freeze, run a sealed merchant market, clear, and settle on the Rain sandbox:
 
-1. `lib/product/` powers the generic Sony-led buyer workspace and implements deposit, intent, join, and leave.
-2. `lib/funding/` plus `lib/market/` power the monitor-specific proof and implement freeze, negotiation, immutable agreement, capture, release, reconciliation, and provider allocation.
+- `lib/market/consumer.ts` is the deterministic consumer market: three merchants, private floors, volume tiers, and a policy that awards the cheapest offer beating the pool's published target.
+- `POST /api/pool/settle` re-derives MSRP, aggregate demand, the clearing price, and the capture from the **server's own catalog copy**. The browser sends only a pool id, a committed quantity, and an idempotency key.
+- `pool/settle` in `lib/product/` captures the deal price, releases the exact difference, and refuses any capture above the reservation.
 
-They are both coherent and tested, but they do not share one durable pool/order aggregate. The consumer pool a user joins cannot currently become the monitor market that Rain settles. This is the largest engineering gap in the product.
+Verified live on 2026-08-08 against the event sandbox: joining the Sony pool and running the market issued a scoped card for `$377.65`, saw Rain **decline** an off-policy MCC `7995` attempt with `scoped_card_mcc_not_allowed`, settled `$377.65`, and released `$72.34`. Rain's own `GET /issuing/balances` moved `postedCharges` from `466800` to `504565` — exactly the captured amount. Replaying the same `settlementId` returned the cached transaction and did not charge again.
 
-Future work should not add a third parallel state machine. Establish one canonical server-side aggregate for buyer balance, intent, membership, pool, RFP, offer, award, settlement, order, and reconciliation; then migrate the product UI and preserve `/demo` as a fixed fallback fixture.
+### Remaining seam
+
+Two domain surfaces still exist, and this is now the largest engineering gap:
+
+1. `lib/product/` powers the buyer workspace: deposit, intent, join, leave, settle. Its state is still browser-local.
+2. `lib/funding/` plus `lib/market/index.ts` power the fixed monitor proof at `/demo` with the richer freeze/reconciliation model.
+
+They share merchant identities and the same settlement discipline but not one durable aggregate. Do not add a third parallel state machine. Establish one canonical server-side aggregate for buyer balance, intent, membership, pool, RFP, offer, award, settlement, order, and reconciliation; then migrate the product UI and preserve `/demo` as a fixed fallback fixture.
 
 ### Next.js-specific contributor rule
 
@@ -1479,9 +1487,9 @@ Demand density, repeated buyer mandates, merchant participation, transaction out
 
 ### Product gaps
 
-- Product UI and monitor proof use separate catalogs and state models.
+- Product UI and monitor proof still use separate catalogs and state models, though both now settle through Rain.
 - No general natural-language intent creation for the four consumer products.
-- No server-side pool creation or matching.
+- No server-side pool creation or matching; the settle route re-derives from the seed rather than a database.
 - No real merchant onboarding, console, or sealed-bid exchange.
 - No automatic cutoff scheduler or durable pool lifecycle.
 - Orders page communicates future states but does not own a real order.
@@ -1494,10 +1502,8 @@ Demand density, repeated buyer mandates, merchant participation, transaction out
 
 - `app/_components/product-workspace.tsx` is approximately 1,900 lines and owns every product view, modal, persistence concern, and interaction.
 - `app/demo/demo-experience.tsx` is approximately 1,340 lines and owns the complete proof UI.
-- The greeting is fixed to “Good afternoon, Alex” instead of deriving locale/time.
-- A forming pool can continue to show a leave affordance after wall-clock cutoff; the reducer correctly rejects the action, but the UI does not automatically advance the displayed state.
+- The greeting and the post-cutoff leave affordance were both fixed on 2026-08-08.
 - Reset replaces local activity, so “append-only” applies only within the current workspace instance and is not a tamper-proof audit history.
-- The demo currently renders one Monad outcome explanatory paragraph twice; remove the cosmetic duplicate before presentation.
 - Product records contain remote image URLs, while browser CSP permits only same-origin/data/blob images. The current UI uses local category glyphs; any future remote image rendering requires an explicit asset, `next/image`, and CSP decision for both deployment targets.
 - Dialogs need a full focus trap, focus restoration, and formal accessibility review.
 - Product/demo component decomposition should preserve domain isolation rather than moving financial rules into smaller UI files.

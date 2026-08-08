@@ -18,9 +18,11 @@ Run the app and open `http://localhost:3000`:
 | --- | --- |
 | `/` | Buyer home: available and reserved balances, active commitments, matching pools, and recent activity |
 | `/explore` | Discover group buys and inspect their price target, commitment progress, and timing |
-| `/wallet` | Add sandbox funds and audit reservation, release, and settlement activity |
+| `/wallet` | Add sandbox funds (capped by Rain's live spending power) and audit reservation, capture, and release activity |
 | `/orders` | Track commitments, exact releases, and the disclosed path to future fulfillment |
 | `/demo` | Replay the cinematic Rain + Monad technical proof |
+
+**The pool you join is the pool that settles.** Run the market on a commitment and POOL freezes the coalition, sends one anonymized request to three merchants, awards the cheapest offer that beats the published target, and — when Rain is enabled — issues a scoped card for exactly the cleared amount, proves an off-policy MCC is declined by the provider, settles, and releases the difference to your available balance.
 
 The product workspace supports these complete sandbox interactions:
 
@@ -32,6 +34,8 @@ The product workspace supports these complete sandbox interactions:
 - Leave before the commitment cutoff and release the reservation exactly once.
 - Review commitments, savings, and an immutable activity trail.
 - Keep the workspace state across reloads with versioned browser-local persistence.
+- Run a sealed merchant market on a real commitment and settle it on the Rain sandbox.
+- Watch a pool refuse to buy when funded demand is too thin to beat its target.
 - Reset the sandbox without triggering an external or financial operation.
 
 The prominent Sony WH-1000XM6 pool reflects the product’s intended use: the buyer does not need the item immediately, but will fully commit today in exchange for access to a stronger group price later.

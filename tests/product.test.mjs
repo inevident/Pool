@@ -324,3 +324,81 @@ test("a ceiling below existing credits is rejected, not silently applied", () =>
   assert.equal(funded.treasury.spendingPowerCents, RAIL_SPENDING_POWER_CENTS);
   assert.ok(assertProductWorkspaceInvariant(funded));
 });
+
+const settleSony = (state, overrides = {}) =>
+  reduceProductWorkspace(state, {
+    type: "pool/settle",
+    activityId: "activity-settle-sony",
+    at: T3,
+    membershipId: "membership-sony",
+    buyerId: BUYER_ID,
+    evidence: "rain-sandbox",
+    unitPriceCents: 37_765,
+    capturedCents: 37_765,
+    merchantName: "Signal Supply Co.",
+    rainTransactionId: "11111111-2222-3333-4444-555555555555",
+    rainCardLast4: "4242",
+    ...overrides,
+  });
+
+test("settling captures the deal price and releases the exact difference", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(syncRailTreasury(createSeededProductWorkspace({ now: T0 })))),
+  );
+  const settled = settleSony(joined);
+  const balance = settled.balances[BUYER_ID];
+
+  assert.equal(balance.reservedCents, 0);
+  assert.equal(balance.capturedCents, 37_765);
+  assert.equal(balance.availableCents, SONY_MSRP_CENTS - 37_765);
+  assert.equal(
+    balance.availableCents + balance.reservedCents + balance.capturedCents,
+    balance.totalDepositedCents,
+  );
+
+  const membership = settled.memberships["membership-sony"];
+  assert.equal(membership.status, "settled");
+  assert.equal(membership.settlement.releasedCents, SONY_MSRP_CENTS - 37_765);
+  assert.equal(membership.settlement.evidence, "rain-sandbox");
+  assert.equal(settled.pools[SONY_POOL_ID].status, "ordered");
+  assert.equal(settled.activity.at(-1).kind, "pool.settled");
+  assert.ok(assertProductWorkspaceInvariant(settled));
+});
+
+test("a capture larger than the reservation is refused", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(syncRailTreasury(createSeededProductWorkspace({ now: T0 })))),
+  );
+
+  assert.throws(
+    () => settleSony(joined, { capturedCents: SONY_MSRP_CENTS + 1 }),
+    (error) => error?.code === "CAPTURE_EXCEEDS_RESERVATION",
+  );
+  assert.equal(joined.balances[BUYER_ID].reservedCents, SONY_MSRP_CENTS);
+  assert.ok(assertProductWorkspaceInvariant(joined));
+});
+
+test("a commitment settles once and cannot settle or leave afterwards", () => {
+  const settled = settleSony(
+    joinSonyPool(
+      createSonyIntent(deposit(syncRailTreasury(createSeededProductWorkspace({ now: T0 })))),
+    ),
+  );
+
+  assert.throws(
+    () => settleSony(settled, { activityId: "activity-settle-again" }),
+    (error) => error?.code === "MEMBERSHIP_NOT_ACTIVE",
+  );
+  assert.throws(
+    () =>
+      reduceProductWorkspace(settled, {
+        type: "pool/leave",
+        activityId: "activity-leave-after-settle",
+        at: T3,
+        membershipId: "membership-sony",
+        buyerId: BUYER_ID,
+      }),
+    (error) => error?.code === "MEMBERSHIP_NOT_ACTIVE",
+  );
+  assert.ok(assertProductWorkspaceInvariant(settled));
+});

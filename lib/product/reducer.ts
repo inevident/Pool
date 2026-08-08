@@ -493,6 +493,118 @@ function leaveProductPool(
 }
 
 /**
+ * Applies a cleared market to one buyer's commitment.
+ *
+ * The capture is consumed from the reservation and the exact remainder returns
+ * to available balance. Capture may never exceed the reservation, so a bad or
+ * tampered settlement response cannot spend more than the buyer committed.
+ */
+function settleProductPool(
+  workspace: ProductWorkspace,
+  action: Extract<ProductWorkspaceAction, { type: "pool/settle" }>,
+): ProductWorkspace {
+  requirePositiveMoney(action.capturedCents, "Capture");
+  requirePositiveMoney(action.unitPriceCents, "Winning unit price");
+  const balance = requireBuyerBalance(workspace, action.buyerId);
+  const membership = workspace.memberships[action.membershipId];
+  if (!membership) {
+    throw new ProductDomainError(
+      "MEMBERSHIP_NOT_FOUND",
+      `Membership ${action.membershipId} does not exist.`,
+    );
+  }
+  if (membership.buyerId !== action.buyerId) {
+    throw new ProductDomainError(
+      "MEMBERSHIP_NOT_FOUND",
+      "The membership does not belong to this buyer.",
+    );
+  }
+  if (membership.status !== "active") {
+    throw new ProductDomainError(
+      "MEMBERSHIP_NOT_ACTIVE",
+      "Only an active pool commitment can settle.",
+    );
+  }
+  if (action.capturedCents > membership.reservedCents) {
+    throw new ProductDomainError(
+      "CAPTURE_EXCEEDS_RESERVATION",
+      `A capture of ${action.capturedCents} cents exceeds the ${membership.reservedCents}-cent reservation.`,
+    );
+  }
+  if (balance.reservedCents < membership.reservedCents) {
+    throw new ProductDomainError(
+      "INSUFFICIENT_AVAILABLE_BALANCE",
+      "The account reservation no longer reconciles to this membership.",
+    );
+  }
+  const pool = workspace.pools[membership.poolId];
+  if (!pool) {
+    throw new ProductDomainError(
+      "POOL_NOT_FOUND",
+      `Pool ${membership.poolId} does not exist.`,
+    );
+  }
+  const product = workspace.products[pool.productId];
+  if (!product) {
+    throw new ProductDomainError(
+      "PRODUCT_NOT_FOUND",
+      `Product ${pool.productId} does not exist.`,
+    );
+  }
+
+  const releasedCents = membership.reservedCents - action.capturedCents;
+  const settlement = {
+    evidence: action.evidence,
+    unitPriceCents: action.unitPriceCents,
+    capturedCents: action.capturedCents,
+    releasedCents,
+    merchantName: action.merchantName,
+    settledAt: action.at,
+    ...(action.rainTransactionId
+      ? { rainTransactionId: action.rainTransactionId }
+      : {}),
+    ...(action.rainCardLast4 ? { rainCardLast4: action.rainCardLast4 } : {}),
+  };
+  const event = appendActivity(workspace, {
+    id: action.activityId,
+    at: action.at,
+    actorId: action.buyerId,
+    kind: "pool.settled",
+    summary: `${product.name} order cleared with ${action.merchantName}; the MSRP-to-deal difference was released.`,
+    metadata: {
+      membershipId: membership.id,
+      poolId: pool.id,
+      evidence: action.evidence,
+      unitPriceCents: action.unitPriceCents,
+      capturedCents: action.capturedCents,
+      releasedCents,
+    },
+  });
+
+  return {
+    ...workspace,
+    ...event,
+    balances: {
+      ...workspace.balances,
+      [action.buyerId]: {
+        ...balance,
+        reservedCents: balance.reservedCents - membership.reservedCents,
+        capturedCents: balance.capturedCents + action.capturedCents,
+        availableCents: balance.availableCents + releasedCents,
+      },
+    },
+    memberships: {
+      ...workspace.memberships,
+      [membership.id]: { ...membership, status: "settled", settlement },
+    },
+    pools: {
+      ...workspace.pools,
+      [pool.id]: { ...pool, status: "ordered" },
+    },
+  };
+}
+
+/**
  * Pure product-state transition function. It performs no clock, network, storage,
  * wallet, or payment I/O; callers supply every ID and timestamp explicitly.
  */
@@ -511,6 +623,8 @@ export function reduceProductWorkspace(
       return joinProductPool(workspace, action);
     case "pool/leave":
       return leaveProductPool(workspace, action);
+    case "pool/settle":
+      return settleProductPool(workspace, action);
   }
 }
 
@@ -526,7 +640,8 @@ export function assertProductWorkspaceInvariant(workspace: ProductWorkspace) {
     throw new Error("Workspace credits exceed the rail spending power.");
   }
   for (const balance of Object.values(workspace.balances)) {
-    const reconciled = balance.availableCents + balance.reservedCents;
+    const reconciled =
+      balance.availableCents + balance.reservedCents + balance.capturedCents;
     if (reconciled !== balance.totalDepositedCents) {
       throw new Error(`Buyer ${balance.buyerId} sandbox balance does not reconcile.`);
     }
