@@ -3,7 +3,6 @@ import {
   calculateOfferTotal,
   evaluateOfferPolicies,
   fingerprintOfferTerms,
-  HERO_CLOCK_STARTED_AT,
   HERO_DEMO,
   HERO_INTENTS,
   HERO_MERCHANTS,
@@ -28,13 +27,25 @@ export const merchantBidRequestSchema = z
 
 export type MerchantBidRequest = z.infer<typeof merchantBidRequestSchema>;
 
+export interface MerchantBidEvaluationOptions {
+  /**
+   * The HTTP runtime supplies this value from its own clock. The deterministic
+   * default keeps direct policy rehearsals and fixtures repeatable.
+   */
+  readonly issuedAt?: string;
+  readonly validUntil?: string;
+}
+
 function addDays(isoDate: string, days: number) {
   const date = new Date(isoDate);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-export function evaluateMerchantBid(rawInput: unknown) {
+export function evaluateMerchantBidWithOffer(
+  rawInput: unknown,
+  options: MerchantBidEvaluationOptions = {},
+) {
   const input = merchantBidRequestSchema.parse(rawInput);
   const merchant = HERO_MERCHANTS.find((candidate) => candidate.id === input.merchantId);
   if (!merchant) throw new Error("Registered merchant was not found.");
@@ -44,21 +55,31 @@ export function evaluateMerchantBid(rawInput: unknown) {
   );
   if (!baseOffer) throw new Error("Merchant has no offer template for this RFP.");
 
-  const rfpMatches = input.rfpVersion === HERO_DEMO.coalition.version;
-  const issuedAt = HERO_CLOCK_STARTED_AT;
+  const rfpMatches = input.rfpVersion === HERO_DEMO.fundedCoalition.version;
+  const issuedAt = options.issuedAt ?? "2026-08-08T17:14:00.000Z";
+  const validUntil = options.validUntil ?? "2026-08-08T17:30:00.000Z";
+  const issuedAtMs = Date.parse(issuedAt);
+  const validUntilMs = Date.parse(validUntil);
+  if (
+    !Number.isFinite(issuedAtMs) ||
+    !Number.isFinite(validUntilMs) ||
+    validUntilMs <= issuedAtMs
+  ) {
+    throw new Error("Bid issue and expiry times must form a valid server window.");
+  }
   const bid: MerchantOffer = {
     ...baseOffer,
-    id: `judge-bid:${input.merchantId}:${input.rfpVersion}:${input.unitPriceCents}`,
+    id: `judge-bid:${input.merchantId}:${input.rfpVersion}:${input.unitPriceCents}:${input.deliveryDays}:${input.warrantyMonths}`,
     revision: baseOffer.revision + 1,
     supersedesOfferId: baseOffer.id,
-    quantity: HERO_DEMO.coalition.totalQuantity,
+    quantity: HERO_DEMO.fundedCoalition.totalQuantity,
     unitPriceCents: input.unitPriceCents,
     shippingCents: 0,
-    totalCents: input.unitPriceCents * HERO_DEMO.coalition.totalQuantity,
+    totalCents: input.unitPriceCents * HERO_DEMO.fundedCoalition.totalQuantity,
     deliveryDate: addDays(issuedAt, input.deliveryDays),
     warrantyMonths: input.warrantyMonths,
     issuedAt,
-    validUntil: "2026-08-08T17:30:00.000Z",
+    validUntil,
     status: "active",
   };
 
@@ -68,11 +89,11 @@ export function evaluateMerchantBid(rawInput: unknown) {
 
   const policy = evaluateOfferPolicies({
     offer: bid,
-    coalition: HERO_DEMO.coalition,
+    coalition: HERO_DEMO.fundedCoalition,
     intents: HERO_INTENTS,
     products: HERO_PRODUCTS,
     merchants: HERO_MERCHANTS,
-    now: "2026-08-08T17:14:00.000Z",
+    now: issuedAt,
     expectedOfferId: bid.id,
     paymentRailCapCents: HERO_PAYMENT_RAIL_CAP_CENTS,
   });
@@ -95,7 +116,7 @@ export function evaluateMerchantBid(rawInput: unknown) {
       actor: "POOL market engine",
       status: rfpMatches ? "passed" : "blocked",
       detail: rfpMatches
-        ? `Bid references frozen RFP version ${HERO_DEMO.coalition.version}; quantity is server-pinned to ${HERO_DEMO.coalition.totalQuantity}.`
+        ? `Bid references frozen RFP version ${HERO_DEMO.fundedCoalition.version}; quantity is server-pinned to ${HERO_DEMO.fundedCoalition.totalQuantity}.`
         : "Bid references a stale RFP version and cannot enter the auction.",
     },
     {
@@ -116,17 +137,17 @@ export function evaluateMerchantBid(rawInput: unknown) {
     },
   ];
 
-  return {
+  const result = {
     status: passed ? (admittedPrices[0] === bid.unitPriceCents ? "leading" : "admitted") : "rejected",
     merchant: {
       id: merchant.id,
       displayName: merchant.displayName,
     },
     rfp: {
-      poolId: HERO_DEMO.coalition.id,
-      version: HERO_DEMO.coalition.version,
+      poolId: HERO_DEMO.fundedCoalition.id,
+      version: HERO_DEMO.fundedCoalition.version,
       productSku: HERO_PRODUCT.sku,
-      committedQuantity: HERO_DEMO.coalition.totalQuantity,
+      committedQuantity: HERO_DEMO.fundedCoalition.totalQuantity,
     },
     bid: {
       id: bid.id,
@@ -135,12 +156,12 @@ export function evaluateMerchantBid(rawInput: unknown) {
       totalCents: bid.totalCents,
       deliveryDate: bid.deliveryDate,
       warrantyMonths: bid.warrantyMonths,
+      issuedAt: bid.issuedAt,
+      validUntil: bid.validUntil,
       rankIfAdmitted: passed ? admittedPrices.indexOf(bid.unitPriceCents) + 1 : null,
     },
     policy: {
       passed,
-      privateBuyerChecksPassed: policy.buyerResults.filter((result) => result.passed).length,
-      privateBuyerCheckCount: policy.buyerResults.length,
       checks: [
         {
           code: "RFP_VERSION",
@@ -148,19 +169,32 @@ export function evaluateMerchantBid(rawInput: unknown) {
           passed: rfpMatches,
           detail: rfpMatches ? "Current commitment referenced." : "Stale commitment rejected.",
         },
-        ...policy.globalChecks,
-        ...policy.buyerResults.flatMap((buyer) =>
-          buyer.checks.map((check) => ({
-            code: check.code,
-            label: check.label,
-            passed: check.passed,
-            detail: check.detail,
-          })),
-        ),
+        {
+          code: "COMMITTED_QUANTITY",
+          label: "Committed quantity",
+          passed: bid.quantity === HERO_DEMO.fundedCoalition.totalQuantity,
+          detail: `The server pinned this offer to all ${HERO_DEMO.fundedCoalition.totalQuantity} committed units.`,
+        },
+        {
+          code: "PRIVATE_CLEARING",
+          label: "Aggregate private clearing",
+          passed: policy.passed,
+          detail: policy.passed
+            ? "All private buyer and seller policies cleared as one aggregate decision."
+            : "The offer did not clear the private market policy. No buyer, rule, ceiling, or seller price was disclosed.",
+        },
       ],
-      deniedReasons: policy.deniedReasons,
     },
     financialAuthorization: "not_requested" as const,
     trace,
   };
+
+  return { offer: bid, result };
+}
+
+export function evaluateMerchantBid(
+  rawInput: unknown,
+  options: MerchantBidEvaluationOptions = {},
+) {
+  return evaluateMerchantBidWithOffer(rawInput, options).result;
 }

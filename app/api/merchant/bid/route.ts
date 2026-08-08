@@ -1,16 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { assertRateLimit, assertSameOriginJsonAction, noStoreHeaders, readLimitedJson, RequestBoundaryError } from "../../../../lib/agent/http";
-import { evaluateMerchantBid, merchantBidRequestSchema } from "../../../../lib/agent/merchant";
+import { merchantBidRequestSchema } from "../../../../lib/agent/merchant";
+import {
+  evaluateMerchantBidRuntime,
+  MerchantBidRuntimeError,
+} from "../../../../lib/agent/merchant-runtime";
+import { MonadRegistryError } from "../../../../lib/monad/server";
+import { canExecuteLiveDemo } from "../../../../lib/security/demo-access";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     assertSameOriginJsonAction(request, "evaluate-merchant-bid");
     assertRateLimit(request, "merchant-bid", { maxRequests: 20 });
     const payload = merchantBidRequestSchema.parse(await readLimitedJson(request));
-    return NextResponse.json(evaluateMerchantBid(payload), { headers: noStoreHeaders });
+    const result = await evaluateMerchantBidRuntime(payload, {
+      chainWriteAuthorized: canExecuteLiveDemo(request),
+    });
+    return NextResponse.json(result, { headers: noStoreHeaders });
   } catch (error) {
     if (error instanceof RequestBoundaryError) {
       return NextResponse.json(
@@ -26,6 +35,27 @@ export async function POST(request: Request) {
           message: "Bid terms failed strict validation.",
         },
         { status: 400, headers: noStoreHeaders },
+      );
+    }
+    if (error instanceof MerchantBidRuntimeError) {
+      return NextResponse.json(
+        {
+          status: "unavailable",
+          code: error.code,
+          message: error.publicMessage,
+        },
+        { status: error.status, headers: noStoreHeaders },
+      );
+    }
+    if (error instanceof MonadRegistryError) {
+      return NextResponse.json(
+        {
+          status: "unavailable",
+          code: error.code,
+          message:
+            "Monad could not prove today's finalized funding commitment or finalize the offer. The bid was not admitted.",
+        },
+        { status: 502, headers: noStoreHeaders },
       );
     }
     return NextResponse.json(
