@@ -38,6 +38,8 @@ The prominent Sony WH-1000XM6 pool reflects the product’s intended use: the bu
 
 See [`PRODUCT.md`](./PRODUCT.md) for the product promise, end-to-end journey, current deliverables, trust boundaries, and production launch gaps.
 
+New engineers and coding agents should begin with [`handoff.md`](./handoff.md), the comprehensive product, hackathon, architecture, security, operations, deployment, and roadmap handoff.
+
 ## Commitment model
 
 POOL uses full prefunding to make every participant credible demand:
