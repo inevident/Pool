@@ -50,6 +50,48 @@ const worker = {
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
     headers.set("Cross-Origin-Opener-Policy", "same-origin");
+    headers.set("Cross-Origin-Resource-Policy", "same-origin");
+
+    if (url.protocol === "https:") {
+      headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+
+    const contentType = headers.get("content-type") ?? "";
+    if (contentType.toLowerCase().startsWith("text/html")) {
+      const nonce = crypto.randomUUID().replaceAll("-", "");
+      const html = await response.text();
+      const securedHtml = html.replace(
+        /<script(?![^>]*\bnonce=)/gi,
+        `<script nonce="${nonce}"`,
+      );
+      headers.set(
+        "Content-Security-Policy",
+        [
+          "default-src 'self'",
+          `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob:",
+          "font-src 'self' data:",
+          "connect-src 'self'",
+          "worker-src 'self' blob:",
+          "manifest-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+          "upgrade-insecure-requests",
+        ].join("; "),
+      );
+      headers.delete("Content-Length");
+      headers.delete("Content-Encoding");
+      headers.delete("ETag");
+
+      return new Response(securedHtml, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
 
     return new Response(response.body, {
       status: response.status,

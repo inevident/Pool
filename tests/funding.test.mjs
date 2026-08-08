@@ -159,7 +159,7 @@ test("leaving before cutoff releases MSRP exactly once", () => {
   assert.equal(left.ledger.accounts["buyer-test"].availableCents, 47_900);
 });
 
-test("offer acceptance freezes the reservation and blocks buyer withdrawal", () => {
+test("the pre-RFP cutoff freezes the reservation and blocks buyer withdrawal", () => {
   const joined = joinPool(joinInput, ledgerWithDeposit());
   const frozen = freezeReservation(
     {
@@ -253,6 +253,15 @@ test("funding snapshots reconcile to the market agreement and authorization", ()
   assert.equal(HERO_FUNDING.msrpUnitCents, HERO_DEMO.product.baselineUnitPriceCents);
   assert.equal(HERO_FUNDING.dealUnitCents, HERO_DEMO.outcome.pooledUnitPriceCents);
   assert.equal(HERO_FUNDING.summary.totalCapturedCents, authorization.totalAmountCents);
+  const committedAt = HERO_DEMO.fundedCoalition.stateHistory.find(
+    (transition) => transition.to === "committed",
+  )?.at;
+  const marketOpenedAt = HERO_DEMO.lifecycle.stateHistory.find(
+    (transition) => transition.to === "market_open",
+  )?.at;
+  assert.ok(committedAt);
+  assert.ok(marketOpenedAt);
+  assert.ok(Date.parse(committedAt) < Date.parse(marketOpenedAt));
   for (const reservation of HERO_FUNDING.frozenReservations) {
     const charge = authorization.charges.find(
       (candidate) => candidate.buyerId === reservation.buyerId,
@@ -261,6 +270,7 @@ test("funding snapshots reconcile to the market agreement and authorization", ()
     assert.equal(reservation.intentId, charge.intentId);
     assert.equal(reservation.quantity, charge.quantity);
     assert.equal(reservation.state, "frozen");
+    assert.ok(Date.parse(reservation.frozenAt) <= Date.parse(committedAt));
     assert.ok(charge.amountCents <= reservation.reservedCents);
   }
 });

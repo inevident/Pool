@@ -138,11 +138,10 @@ The repository ships a testnet-only Hardhat target; there is intentionally no ma
 ```bash
 npm run monad:compile
 npm run test:contracts
-npx hardhat keystore set MONAD_PRIVATE_KEY
 npm run monad:deploy:testnet
 ```
 
-After deployment, set `MONAD_REGISTRY_ADDRESS` and provide `MONAD_PRIVATE_KEY` only as a server-side secret for the protected demo runtime. The configured key must control the registry's finalized `operator()` address; POOL verifies that relationship before any Rain side effect. `/api/monad/status` reports either finalized testnet state or an explicit `not-onchain` local proof—it never invents a transaction or address.
+The deploy command loads the ignored `.env.local`, so add a fresh, funded, testnet-only `MONAD_PRIVATE_KEY` there first. After deployment, set `MONAD_REGISTRY_ADDRESS` beside it and provide both values only as server-side secrets for the protected hosted demo. The configured key must control the registry's finalized `operator()` address; POOL verifies that relationship before any Rain side effect. `/api/monad/status` reports either finalized testnet state or an explicit `not-onchain` local proof—it never invents a transaction or address.
 
 ## Financial safety decisions
 

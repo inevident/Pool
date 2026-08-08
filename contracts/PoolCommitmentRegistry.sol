@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 /// @title PoolCommitmentRegistry
 /// @notice Anchors a fully funded buying coalition before sellers may bid, then
-///         binds the eventual Rain settlement to one of those sealed bids.
+///         binds the eventual Rain settlement attestation to one registered offer hash.
 /// @dev Prices and buyer mandates stay private. Only collision-resistant hashes,
 ///      aggregate units, and the maximum reserved amount are published.
 contract PoolCommitmentRegistry {
@@ -165,7 +165,7 @@ contract PoolCommitmentRegistry {
         );
     }
 
-    /// @notice Registers only the digest of an authenticated seller's sealed offer.
+    /// @notice Registers the integrity commitment for an offer POOL validated offchain.
     function registerMerchantOffer(
         bytes32 commitmentId,
         bytes32 offerHash
@@ -183,7 +183,7 @@ contract PoolCommitmentRegistry {
         emit MerchantOfferRegistered(commitmentId, offerHash, uint64(block.timestamp));
     }
 
-    /// @notice Attests the final Rain transaction set against the winning sealed offer.
+    /// @notice Records the operator's final Rain-settlement digest against the winning offer.
     function attestRainSettlement(
         bytes32 commitmentId,
         bytes32 acceptedOfferHash,

@@ -15,6 +15,7 @@ import {
   monadExplorerAddressUrl,
 } from "./registry.ts";
 import { getRuntimeMonadPreparation } from "./runtime.ts";
+import { requireFinalizedHeroMarketOnMonad } from "./workflow.ts";
 
 const isoFromSeconds = (seconds: bigint) =>
   new Date(Number(seconds) * 1_000).toISOString();
@@ -28,9 +29,9 @@ const baseStatus = () => ({
     resetFromGenesisAt: MONAD_TESTNET_RESET_AT,
   },
   purpose: {
-    beforeBidding: "Anchor the frozen MSRP-backed coalition and public RFP terms.",
-    duringBidding: "Register sealed offer hashes without publishing merchant prices.",
-    afterRain: "Attest the exact Rain transaction set against the accepted offer.",
+    beforeBidding: "Timestamp POOL's frozen-reservation root and public RFP terms.",
+    duringBidding: "Register offer commitments without posting merchant prices in plaintext.",
+    afterRain: "Record POOL's digest of the Rain transaction set against the accepted offer.",
   },
   localProof: {
     poolId: HERO_MONAD_COMMITMENT.poolId,
@@ -61,7 +62,7 @@ export async function getMonadStatus() {
       registryExplorerUrl: null,
       commitmentId: null,
       message:
-        "Contract and causal hashes are verified locally. Deploy to Monad Testnet to publish explorer proof.",
+        "Contract tests pass and causal hashes are derived locally. Deploy to Monad Testnet to publish an explorer record.",
     };
   }
 
@@ -84,10 +85,23 @@ export async function getMonadStatus() {
     );
   }
 
-  // Runtime state improves same-isolate presentation only. Financial routes
-  // reconstruct today's proof from finalized chain state instead.
-  const commitmentId =
-    getConfiguredCommitmentId() ?? getRuntimeMonadPreparation()?.commitmentId;
+  // An explicit ID can pin a historical demo. Otherwise, derive today's ID
+  // from the stable bid window and reconstruct it from finalized chain state.
+  // Process memory is presentation metadata only, never proof authority.
+  let commitmentId = getConfiguredCommitmentId();
+  if (!commitmentId) {
+    try {
+      const preparation = await requireFinalizedHeroMarketOnMonad();
+      commitmentId = preparation.commitmentId;
+    } catch (error) {
+      if (
+        !(error instanceof MonadRegistryError) ||
+        error.code !== "MONAD_PREPARATION_REQUIRED"
+      ) {
+        throw error;
+      }
+    }
+  }
   if (!commitmentId) {
     return {
       ...base,
@@ -98,7 +112,7 @@ export async function getMonadStatus() {
       registryExplorerUrl: monadExplorerAddressUrl(registryAddress),
       commitmentId: null,
       message:
-        "Registry bytecode is finalized on Monad Testnet; no demo commitment ID is configured yet.",
+        "Registry bytecode is finalized on Monad Testnet; today's demo commitment has not been prepared yet.",
     };
   }
 
@@ -166,7 +180,7 @@ export async function getMonadStatus() {
       settledAt: settled ? isoFromSeconds(commitment.settledAt) : null,
     },
     message: settled
-      ? "Finalized Monad state binds the funded coalition, winning sealed offer, and Rain settlement."
-      : "Finalized Monad state proves the funded coalition existed before the registered offer.",
+      ? "Finalized Monad state binds POOL's funding-root, winning-offer, and Rain-settlement attestations."
+      : "Finalized Monad state timestamps POOL's funding-root before the registered offer commitment.",
   };
 }

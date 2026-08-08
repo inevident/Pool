@@ -6,6 +6,8 @@
  * All money is represented as integer cents.
  */
 
+import { createHash } from "node:crypto";
+
 export type Currency = "USD";
 export type IsoDateTime = string;
 export type IsoDate = string;
@@ -16,6 +18,7 @@ export type DisplayFormFactor = "flat-panel" | "ultrawide";
 export type PoolState =
   | "collecting"
   | "matched"
+  | "committed"
   | "market_open"
   | "negotiating"
   | "policy_review"
@@ -444,6 +447,8 @@ export interface HeroDemo {
   readonly publicIncompatibleIntent: PublicBuyingIntent;
   readonly discovery: CoalitionDiscovery;
   readonly coalition: BuyingCoalition;
+  /** Snapshot after funded membership is frozen, before any seller receives the RFP. */
+  readonly fundedCoalition: BuyingCoalition;
   readonly lifecycle: BuyingCoalition;
   readonly merchants: readonly PublicMerchant[];
   readonly negotiation: NegotiationResult;
@@ -487,6 +492,9 @@ const toTime = (value: IsoDateTime, label: string): number => {
 
 const addMinutes = (value: IsoDateTime, minutes: number): IsoDateTime =>
   new Date(toTime(value, "date") + minutes * 60_000).toISOString();
+
+const addSeconds = (value: IsoDateTime, seconds: number): IsoDateTime =>
+  new Date(toTime(value, "date") + seconds * 1_000).toISOString();
 
 const addDaysAsDate = (value: IsoDateTime, days: number): IsoDate =>
   new Date(toTime(value, "date") + days * 86_400_000).toISOString().slice(0, 10);
@@ -713,7 +721,8 @@ export const discoverCoalition = (
 
 const ALLOWED_POOL_TRANSITIONS: Readonly<Record<PoolState, readonly PoolState[]>> = {
   collecting: ["matched", "blocked"],
-  matched: ["market_open", "blocked"],
+  matched: ["committed", "blocked"],
+  committed: ["market_open", "blocked"],
   market_open: ["negotiating", "blocked"],
   negotiating: ["policy_review", "blocked"],
   policy_review: ["authorized", "blocked"],
@@ -884,6 +893,12 @@ export interface RunNegotiationInput {
 
 export const runNegotiation = (input: RunNegotiationInput): NegotiationResult => {
   const { coalition, product, merchants, startedAt } = input;
+  if (coalition.state !== "market_open" && coalition.state !== "negotiating") {
+    throw new MarketInvariantError(
+      "MARKET_NOT_OPEN",
+      "Seller negotiation cannot begin until funded membership is committed and the market is opened",
+    );
+  }
   if (coalition.productSku !== product.sku) {
     throw new MarketInvariantError("PRODUCT_POOL_MISMATCH", "Negotiation product does not match the coalition");
   }
@@ -1297,12 +1312,7 @@ export const evaluateOfferPolicies = (input: PolicyEvaluationInput): PolicyEvalu
 };
 
 const stableHash = (input: string): string => {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return createHash("sha256").update(input, "utf8").digest("hex");
 };
 
 const canonicalOfferTerms = (offer: MerchantOffer): string =>
@@ -1324,7 +1334,7 @@ const canonicalOfferTerms = (offer: MerchantOffer): string =>
     offer.validUntil,
   ].join("|");
 
-/** Deterministic integrity fingerprint; production persistence should also authenticate the stored agreement. */
+/** Cryptographic integrity fingerprint; durable storage should additionally authenticate access to the agreement. */
 export const fingerprintOfferTerms = (offer: MerchantOffer): string =>
   "offer-v1-" + stableHash(canonicalOfferTerms(offer));
 
@@ -1865,8 +1875,14 @@ export const buildHeroDemo = (): HeroDemo => {
     },
   );
   const coalition = mustHaveCoalition(discovery);
-  const marketOpen = transitionPoolState(
+  const fundedCoalition = transitionPoolState(
     coalition,
+    "committed",
+    addSeconds(HERO_CLOCK_STARTED_AT, 30),
+    "All member MSRP reservations frozen before seller discovery; commitment ready to anchor",
+  );
+  const marketOpen = transitionPoolState(
+    fundedCoalition,
     "market_open",
     atMinute(HERO_CLOCK_STARTED_AT, 1),
     "Three seller agents invited to compete",
@@ -1997,6 +2013,7 @@ export const buildHeroDemo = (): HeroDemo => {
     publicIncompatibleIntent: toPublicIntent(HERO_INCOMPATIBLE_INTENT),
     discovery,
     coalition,
+    fundedCoalition,
     lifecycle,
     merchants: HERO_MERCHANTS.map(toPublicMerchant),
     negotiation,

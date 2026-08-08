@@ -52,6 +52,14 @@ test("applies a secure browser header baseline", async () => {
     "strict-origin-when-cross-origin",
   );
   assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");
+  const csp = response.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /script-src 'self' 'nonce-[a-f0-9]+' 'strict-dynamic'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  const html = await response.text();
+  assert.doesNotMatch(html, /<script(?![^>]*\bnonce=)/i);
 });
 
 test("removes every disposable starter surface", async () => {

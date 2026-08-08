@@ -12,6 +12,8 @@ npm run dev
 
 Use the local build for a clearly labeled Rain-only development fallback. For the competition path, set `MONAD_LIVE_REQUIRED=true`; preflight then requires a valid Monad Testnet registry, a signer matching its finalized `operator()`, and the protected Rain setup. Keep a second tab on the public preview as a no-secrets rehearsal fallback. Never expose the Rain or Monad signing credentials in the browser, terminal, slides, or repository.
 
+For a first testnet deployment, put a fresh funded testnet-only `MONAD_PRIVATE_KEY` in the ignored `.env.local`, run `npm run monad:deploy:testnet`, then add the emitted registry address as `MONAD_REGISTRY_ADDRESS`. The deploy command and app runtime intentionally read the same local secret file.
+
 ## 2:30 narrative
 
 **0:00 — Problem and wedge**

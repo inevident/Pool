@@ -14,7 +14,7 @@
     "test": "npm run build && node --test tests/*.test.mjs && npm run test:contracts",
     "test:contracts": "hardhat test nodejs",
     "monad:compile": "hardhat compile",
-    "monad:deploy:testnet": "hardhat ignition deploy ignition/modules/PoolCommitmentRegistry.ts --network monadTestnet",
+    "monad:deploy:testnet": "node --env-file-if-exists=.env.local ./node_modules/hardhat/dist/src/cli.js ignition deploy ignition/modules/PoolCommitmentRegistry.ts --network monadTestnet",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

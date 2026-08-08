@@ -414,14 +414,16 @@ function evaluateBuyerPolicy(intent: ExtractedBuyerIntent) {
 export async function runBuyerIntentAgent(
   rawIntent: string,
   options: {
-    apiKey?: string;
+    apiKey?: string | null;
     model?: string;
     fetchImpl?: typeof fetch;
     timeoutMs?: number;
   } = {},
 ): Promise<BuyerIntentRun> {
   const text = buyerIntentRequestSchema.parse({ intent: rawIntent }).intent;
-  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY?.trim();
+  const apiKey = options.apiKey === null
+    ? undefined
+    : options.apiKey ?? process.env.OPENAI_API_KEY?.trim();
   const configuredModel = options.model ?? process.env.OPENAI_MODEL?.trim() ?? DEFAULT_MODEL;
   let extracted: ExtractedBuyerIntent;
   let mode: AgentRuntimeMode = "deterministic_fallback";

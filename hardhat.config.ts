@@ -3,7 +3,8 @@ import { configVariable, defineConfig } from "hardhat/config";
 
 /**
  * Testnet-only by construction. We intentionally provide no Monad mainnet target.
- * Store MONAD_PRIVATE_KEY with `npx hardhat keystore set MONAD_PRIVATE_KEY`.
+ * The npm deploy target loads MONAD_PRIVATE_KEY from the ignored `.env.local`;
+ * direct Hardhat usage may instead use its encrypted keystore.
  */
 export default defineConfig({
   plugins: [hardhatToolboxViemPlugin],

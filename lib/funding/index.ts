@@ -380,7 +380,7 @@ export function freezeReservation(
   if (current.state !== "active") {
     throw new FundingInvariantError(
       "RESERVATION_NOT_ACTIVE",
-      "Only an active reservation can cross the commitment cutoff.",
+      "Only an active reservation can cross the pre-RFP commitment cutoff.",
     );
   }
   const reservation: FundsReservation = {
@@ -408,7 +408,7 @@ export function leavePool(
   if (current.state !== "active") {
     throw new FundingInvariantError(
       "COMMITMENT_CUTOFF_PASSED",
-      "Leaving is allowed only before the accepted-offer commitment cutoff.",
+      "Leaving is allowed only before the funded coalition is frozen and exposed to sellers.",
     );
   }
   const currentAccount = getAccount(ledger, current.buyerId);
@@ -570,7 +570,7 @@ export function buildHeroFundingDemo() {
       {
         reservationId: reservationId(HERO_POOL_ID, buyer.intentId),
         idempotencyKey: `hero-${buyer.buyerId}-freeze`,
-        now: "2026-08-08T17:12:00.000Z",
+        now: "2026-08-08T16:59:30.000Z",
       },
       frozenLedger,
     ).ledger;

@@ -18,10 +18,7 @@ import {
 
 const BID_VALIDITY_MS = 15 * 60 * 1_000;
 
-type MonadWriteConfiguration = ReturnType<typeof getMonadWriteConfiguration> & {
-  /** Tests and deployments can explicitly fail closed even before all secrets exist. */
-  readonly required?: boolean;
-};
+type MonadWriteConfiguration = ReturnType<typeof getMonadWriteConfiguration>;
 
 type FinalizedHeroMarket = Awaited<
   ReturnType<typeof requireFinalizedHeroMarketOnMonad>
@@ -38,17 +35,8 @@ export interface MerchantBidMonadAdapter {
   }) => Promise<MonadWriteResult>;
 }
 
-const monadWasExplicitlyRequested = () =>
-  process.env.MONAD_BID_GATE_REQUIRED?.trim().toLowerCase() === "true" ||
-  Boolean(process.env.MONAD_REGISTRY_ADDRESS?.trim()) ||
-  Boolean(process.env.MONAD_COMMITMENT_ID?.trim()) ||
-  Boolean(process.env.MONAD_PRIVATE_KEY?.trim());
-
 const defaultAdapter: MerchantBidMonadAdapter = {
-  getConfiguration: () => ({
-    ...getMonadWriteConfiguration(),
-    required: monadWasExplicitlyRequested(),
-  }),
+  getConfiguration: getMonadWriteConfiguration,
   requireFinalizedMarket: requireFinalizedHeroMarketOnMonad,
   registerOffer: registerMerchantOfferOnMonad,
 };
@@ -138,13 +126,11 @@ export async function evaluateMerchantBidRuntime(
 ) {
   const adapter = options.adapter ?? defaultAdapter;
   const configuration = adapter.getConfiguration();
-  const partiallyConfigured =
-    configuration.required === true ||
-    configuration.registryConfigured ||
-    configuration.operatorConfigured;
+  const configurationBlocksLocalFallback =
+    configuration.required || configuration.state !== "not-configured";
 
   if (!configuration.ready) {
-    if (partiallyConfigured) {
+    if (configurationBlocksLocalFallback) {
       throw new MerchantBidRuntimeError(
         "MONAD_CONFIGURATION_INCOMPLETE",
         503,

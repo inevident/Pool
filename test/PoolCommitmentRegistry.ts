@@ -35,7 +35,7 @@ describe("PoolCommitmentRegistry", async () => {
     return { registry, args, commitmentId };
   }
 
-  it("anchors funded terms before allowing a sealed merchant offer", async () => {
+  it("anchors the funding-root claim before allowing an offer commitment", async () => {
     const { registry, args, commitmentId } = await fixture();
 
     await viem.assertions.emitWithArgs(

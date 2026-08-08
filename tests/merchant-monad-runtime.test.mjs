@@ -33,9 +33,12 @@ function configuredAdapter(calls, options = {}) {
     getConfiguration() {
       return {
         ready: true,
+        state: "ready",
+        rainOnlyAllowed: false,
         registryConfigured: true,
         operatorConfigured: true,
         required: true,
+        issues: [],
         network: "Monad Testnet",
         chainId: 10_143,
       };
@@ -150,9 +153,17 @@ test("partial or explicitly required Monad configuration fails closed", async ()
     getConfiguration() {
       return {
         ready: false,
+        state: "partial",
+        rainOnlyAllowed: false,
         registryConfigured: true,
         operatorConfigured: false,
         required: true,
+        issues: [
+          {
+            code: "PARTIAL_MONAD_CONFIGURATION",
+            message: "Monad configuration is partial.",
+          },
+        ],
         network: "Monad Testnet",
         chainId: 10_143,
       };
@@ -174,14 +185,54 @@ test("partial or explicitly required Monad configuration fails closed", async ()
   );
 });
 
+test("malformed Monad configuration cannot silently become a local bid", async () => {
+  const adapter = {
+    getConfiguration() {
+      return {
+        ready: false,
+        state: "invalid",
+        rainOnlyAllowed: false,
+        registryConfigured: false,
+        operatorConfigured: false,
+        required: false,
+        issues: [
+          {
+            code: "INVALID_RPC_URL",
+            message: "The configured RPC URL is invalid.",
+          },
+        ],
+        network: "Monad Testnet",
+        chainId: 10_143,
+      };
+    },
+    async requireFinalizedMarket() {
+      assert.fail("malformed configuration must fail before RPC access");
+    },
+    async registerOffer() {
+      assert.fail("malformed configuration must never write");
+    },
+  };
+
+  await assert.rejects(
+    evaluateMerchantBidRuntime(request, {
+      chainWriteAuthorized: true,
+      adapter,
+    }),
+    (error) => error?.code === "MONAD_CONFIGURATION_INCOMPLETE",
+  );
+});
+
 test("an unconfigured environment stays a clearly labeled no-write fallback", async () => {
   const adapter = {
     getConfiguration() {
       return {
         ready: false,
+        state: "not-configured",
+        rainOnlyAllowed: true,
         registryConfigured: false,
         operatorConfigured: false,
         required: false,
+        issues: [],
         network: "Monad Testnet",
         chainId: 10_143,
       };

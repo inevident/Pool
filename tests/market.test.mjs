@@ -13,6 +13,7 @@ import {
   createSettlementLedger,
   formatMoney,
   processSettlement,
+  runNegotiation,
   transitionPoolState,
   validateMerchantEconomics,
 } from "../lib/market/index.ts";
@@ -74,6 +75,20 @@ test("merchant economics are coherent and quantity-tier competition reaches $389
     const item = merchant.inventory.find((candidate) => candidate.productSku === offer.productSku);
     assert.ok(offer.unitPriceCents >= item.pricing.floorUnitPriceCents);
   }
+});
+
+test("seller agents cannot see or negotiate against demand before funded commitment", () => {
+  assert.equal(HERO_DEMO.fundedCoalition.state, "committed");
+  assert.throws(
+    () =>
+      runNegotiation({
+        coalition: HERO_DEMO.coalition,
+        product: HERO_DEMO.product,
+        merchants: HERO_MERCHANTS,
+        startedAt: "2026-08-08T17:00:10.000Z",
+      }),
+    (error) => error?.code === "MARKET_NOT_OPEN",
+  );
 });
 
 test("the final offer passes every private mandate and fits the Rain sandbox cap", () => {
@@ -180,6 +195,6 @@ test("buyer allocations reconcile exactly and illegal lifecycle jumps fail close
   assert.equal(HERO_DEMO.lifecycle.state, "dissolved");
   assert.deepEqual(
     HERO_DEMO.lifecycle.stateHistory.map((transition) => transition.to),
-    ["matched", "market_open", "negotiating", "policy_review", "authorized", "settling", "settled", "dissolved"],
+    ["matched", "committed", "market_open", "negotiating", "policy_review", "authorized", "settling", "settled", "dissolved"],
   );
 });

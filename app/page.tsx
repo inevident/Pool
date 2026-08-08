@@ -674,19 +674,13 @@ export default function Home() {
           { label: "clear_mandates", detail: "Price, delivery, warranty, and inventory checked", status: "complete" },
         ]),
       });
-    } catch {
-      const accepted = unitPrice <= DEAL_UNIT && deliveryDays <= 10;
+    } catch (error) {
       setBidResult({
-        kind: "complete",
-        mode: "local rehearsal",
-        title: `${accepted ? "policy pass" : "counter required"} · ${money.format(unitPrice)}/unit`,
-        detail: accepted
-          ? "This rehearsal offer fits the public demo policy. It does not alter or settle the recorded Rain scenario."
-          : "This rehearsal offer misses the $389 clearing target or delivery window. Private buyer ceilings remain sealed.",
-        trace: [
-          { label: "verify_commitment", detail: "Pre-bid freeze ordering checked locally", status: "complete" },
-          { label: "clear_offer", detail: accepted ? "Public demo constraints pass" : "Offer requires a counter", status: accepted ? "complete" : "blocked" },
-        ],
+        kind: "failed",
+        mode: "runtime unavailable",
+        detail: error instanceof Error
+          ? error.message
+          : "The merchant runtime could not verify this bid. Nothing was admitted or written on-chain.",
       });
     }
   }
@@ -1165,7 +1159,7 @@ export default function Home() {
             that money remains theirs, but cannot be withdrawn or used elsewhere. A buyer may leave while the pool recruits;
             before the RFP opens, membership and reservations freeze until settlement, cancellation, or reconciliation.
           </p>
-          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL freezes</strong><ArrowRight size={14} /><span>Monad timestamps</span><ArrowRight size={14} /><strong>sellers bid</strong><ArrowRight size={14} /><strong>Rain executes</strong></div>
+          <div className="authority-rule"><CircleDollarSign size={17} /><span>deposit MSRP</span><ArrowRight size={14} /><strong>POOL freezes</strong><ArrowRight size={14} /><span>{monadCommitmentIsOnchain ? "Monad timestamps" : "commitment derived"}</span><ArrowRight size={14} /><strong>sellers bid</strong><ArrowRight size={14} /><strong>Rain executes</strong></div>
           <div className="custody-boundary"><ShieldCheck size={15} /><span><strong>Clear boundary:</strong> POOL balance and reservation are the product ledger. Rain is used only at execution; Rain is not presented as the custodial deposit account.</span></div>
         </div>
 
