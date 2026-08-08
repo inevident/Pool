@@ -22,6 +22,24 @@ import {
   readLimitedJson,
   RequestBoundaryError,
 } from "../../../../lib/agent/http";
+import {
+  hashConsumerOffer,
+  hashProductPoolId,
+} from "../../../../lib/monad/product-commitment";
+import { hashRainSettlement } from "../../../../lib/monad/commitment";
+import {
+  attestRainSettlementOnMonad,
+  createMonadPublicClient,
+  getMonadRegistryAddress,
+  getMonadWriteConfiguration,
+  MonadRegistryError,
+  registerMerchantOfferOnMonad,
+} from "../../../../lib/monad/server";
+import {
+  monadExplorerTransactionUrl,
+  POOL_COMMITMENT_REGISTRY_ABI,
+} from "../../../../lib/monad/registry";
+import type { Hex } from "viem";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +53,46 @@ const requestSchema = z
     poolId: z.string().min(1).max(64),
     quantity: z.number().int().min(1).max(20),
     settlementId: z.string().uuid(),
+    /** Finalized commitment from POST /api/pool/commit, when Monad is in use. */
+    commitmentId: z
+      .string()
+      .regex(/^0x[0-9a-fA-F]{64}$/)
+      .optional(),
     confirmation: z.literal("settle-pool-order"),
   })
   .strict();
+
+/**
+ * Re-reads the finalized on-chain commitment.
+ *
+ * Process memory is never trusted: a cold start, a redeploy, or a second worker
+ * must reach the same conclusion by reading the chain, which is what makes the
+ * pre-bid gate meaningful rather than decorative.
+ */
+async function readFinalizedCommitment(commitmentId: Hex) {
+  const address = getMonadRegistryAddress();
+  if (!address) {
+    throw new MonadRegistryError(
+      "REGISTRY_NOT_CONFIGURED",
+      "Monad registry address is not configured.",
+    );
+  }
+  const publicClient = createMonadPublicClient();
+  const commitment = await publicClient.readContract({
+    address,
+    abi: POOL_COMMITMENT_REGISTRY_ABI,
+    functionName: "getCommitment",
+    args: [commitmentId],
+    blockTag: "finalized",
+  });
+  if (commitment.committedAt <= BigInt(0)) {
+    throw new MonadRegistryError(
+      "COMMITMENT_NOT_FINALIZED",
+      "The coalition commitment is not finalized on Monad.",
+    );
+  }
+  return commitment;
+}
 
 function isTrustedSettlementRequest(request: NextRequest) {
   if (request.headers.get("x-pool-demo-action") !== "settle-pool-order") {
@@ -107,6 +162,102 @@ export async function POST(request: NextRequest) {
 
   // Aggregate demand = the pool's seeded funded units plus this buyer's units.
   const aggregateUnits = pool.committedUnitCount + input.quantity;
+
+  // --- Pre-bid gate -------------------------------------------------------
+  // When Monad is in use, no offer may be constructed until the funding
+  // commitment is finalized on-chain. Offers are then stamped strictly after
+  // the finalized commitment timestamp, so the ordering claim is verifiable
+  // from chain state rather than asserted by POOL.
+  const monadConfiguration = getMonadWriteConfiguration();
+  let monadGate:
+    | {
+        commitmentId: Hex;
+        termsHash: Hex;
+        acceptedOfferHash: Hex | null;
+        offerIssuedAt: string;
+      }
+    | null = null;
+
+  if (monadConfiguration.ready) {
+    if (!input.commitmentId) {
+      return NextResponse.json(
+        {
+          status: "rejected",
+          code: "commitment_required",
+          message:
+            "Monad is configured: funded demand must be committed on-chain before sellers can bid.",
+        },
+        { status: 409, headers: noStoreHeaders },
+      );
+    }
+    try {
+      const commitmentId = input.commitmentId as Hex;
+      const onChain = await readFinalizedCommitment(commitmentId);
+      const expectedPoolIdHash = hashProductPoolId(pool.id);
+      const reservedForPool = product.msrpUnitCents * aggregateUnits;
+
+      if (
+        onChain.poolIdHash.toLowerCase() !== expectedPoolIdHash.toLowerCase() ||
+        onChain.unitCount !== aggregateUnits ||
+        onChain.reservedCents !== BigInt(reservedForPool)
+      ) {
+        return NextResponse.json(
+          {
+            status: "rejected",
+            code: "commitment_mismatch",
+            message:
+              "The finalized commitment does not describe this pool's funded demand. Rain was not called.",
+          },
+          { status: 409, headers: noStoreHeaders },
+        );
+      }
+      if (onChain.bidClosesAt <= BigInt(Math.floor(Date.now() / 1_000))) {
+        return NextResponse.json(
+          {
+            status: "rejected",
+            code: "bid_window_closed",
+            message: "The committed bid window has closed. Re-commit the coalition.",
+          },
+          { status: 409, headers: noStoreHeaders },
+        );
+      }
+
+      monadGate = {
+        commitmentId,
+        termsHash: onChain.termsHash,
+        acceptedOfferHash: null,
+        // Strictly after the finalized commitment.
+        offerIssuedAt: new Date(
+          (Number(onChain.committedAt) + 1) * 1_000,
+        ).toISOString(),
+      };
+    } catch (error) {
+      return NextResponse.json(
+        {
+          status: "rejected",
+          code:
+            error instanceof MonadRegistryError ? error.code : "monad_gate_failed",
+          message:
+            error instanceof MonadRegistryError
+              ? error.message
+              : "The Monad pre-bid gate could not be verified. Rain was not called.",
+        },
+        { status: 409, headers: noStoreHeaders },
+      );
+    }
+  } else if (monadConfiguration.required) {
+    return NextResponse.json(
+      {
+        status: "rejected",
+        code: "monad_required",
+        message:
+          "MONAD_LIVE_REQUIRED is set but Monad is not ready. Settlement is blocked.",
+        issues: monadConfiguration.issues,
+      },
+      { status: 503, headers: noStoreHeaders },
+    );
+  }
+
   const clearing = clearConsumerMarket({
     productId: product.id,
     aggregateUnits,
@@ -164,6 +315,56 @@ export async function POST(request: NextRequest) {
     offers: clearing.offers.map(publicOffer),
     winner: publicOffer(winner),
   };
+
+  // Register the sealed winning offer against the finalized commitment. This
+  // happens before Rain so the chain records which offer POOL intended to
+  // execute, not one chosen after seeing the payment result.
+  let offerRegistration: {
+    offerHash: Hex;
+    replayed: boolean;
+    transactionHash: string | null;
+    explorerUrl: string | null;
+  } | null = null;
+
+  if (monadGate) {
+    try {
+      const offerHash = hashConsumerOffer({
+        termsHash: monadGate.termsHash,
+        offer: winner,
+        quantity: input.quantity,
+        totalCents: capturedCents,
+        issuedAt: monadGate.offerIssuedAt,
+      });
+      const registered = await registerMerchantOfferOnMonad({
+        commitmentId: monadGate.commitmentId,
+        offerHash,
+      });
+      monadGate.acceptedOfferHash = offerHash;
+      offerRegistration = {
+        offerHash,
+        replayed: registered.replayed,
+        transactionHash: registered.transaction?.hash ?? null,
+        explorerUrl: registered.transaction
+          ? monadExplorerTransactionUrl(registered.transaction.hash)
+          : null,
+      };
+    } catch (error) {
+      return NextResponse.json(
+        {
+          status: "rejected",
+          code:
+            error instanceof MonadRegistryError
+              ? error.code
+              : "offer_registration_failed",
+          message:
+            error instanceof MonadRegistryError
+              ? error.message
+              : "The winning offer could not be registered on Monad. Rain was not called.",
+        },
+        { status: 502, headers: noStoreHeaders },
+      );
+    }
+  }
 
   const liveEnabled =
     process.env.RAIN_LIVE_EXECUTION_ENABLED === "true" && isRainConfigured();
@@ -247,11 +448,72 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Bind the exact Rain transaction set to the registered winning offer.
+    // Rain is already final at this point, so an attestation failure is
+    // reported as pending and retried idempotently — it never unwinds a
+    // completed payment.
+    let monadAttestation:
+      | {
+          status: "attested" | "attestation_pending";
+          commitmentId: string;
+          rainSettlementHash?: string;
+          replayed?: boolean;
+          transactionHash?: string | null;
+          explorerUrl?: string | null;
+          code?: string;
+          message?: string;
+        }
+      | null = null;
+
+    if (monadGate?.acceptedOfferHash) {
+      try {
+        const rainSettlementHash = hashRainSettlement({
+          commitmentId: monadGate.commitmentId,
+          acceptedOfferHash: monadGate.acceptedOfferHash,
+          rainTransactionIds: [settlement.transaction.transactionId],
+        });
+        const attested = await attestRainSettlementOnMonad({
+          commitmentId: monadGate.commitmentId,
+          acceptedOfferHash: monadGate.acceptedOfferHash,
+          rainSettlementHash,
+          capturedCents: BigInt(capturedCents),
+        });
+        monadAttestation = {
+          status: "attested",
+          commitmentId: monadGate.commitmentId,
+          rainSettlementHash,
+          replayed: attested.replayed,
+          transactionHash: attested.transaction?.hash ?? null,
+          explorerUrl: attested.transaction
+            ? monadExplorerTransactionUrl(attested.transaction.hash)
+            : null,
+        };
+      } catch (error) {
+        monadAttestation = {
+          status: "attestation_pending",
+          commitmentId: monadGate.commitmentId,
+          code:
+            error instanceof MonadRegistryError ? error.code : "attestation_failed",
+          message:
+            "Rain settled successfully. The Monad attestation did not finalize and can be retried; no on-chain settlement claim is made yet.",
+        };
+      }
+    }
+
     return NextResponse.json(
       {
         status: "cleared",
         evidence: "rain-sandbox" as const,
         ...marketEvidence,
+        monad: monadGate
+          ? {
+              network: "Monad Testnet",
+              chainId: 10_143,
+              commitmentId: monadGate.commitmentId,
+              offerRegistration,
+              attestation: monadAttestation,
+            }
+          : null,
         rain: {
           cardId: issued.card.id,
           cardLast4: issued.card.last4,

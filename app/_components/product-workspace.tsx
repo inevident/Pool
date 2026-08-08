@@ -2148,6 +2148,28 @@ type PublicOffer = {
   warrantyMonths: number;
 };
 
+type CommitResponse =
+  | {
+      status: "committed";
+      network: string;
+      chainId: number;
+      commitmentId: string;
+      fundingRoot: string;
+      termsHash: string;
+      unitCount: number;
+      reservedCents: number;
+      bidClosesAt: string;
+      committedAt: string;
+      replayed: boolean;
+      transactionHash: string | null;
+      explorerUrl: string | null;
+      message: string;
+    }
+  | {
+      status: "not_configured" | "blocked" | "failed" | "rejected" | "rate_limited";
+      message: string;
+    };
+
 type SettleResponse =
   | {
       status: "cleared";
@@ -2164,6 +2186,26 @@ type SettleResponse =
       offers: PublicOffer[];
       winner: PublicOffer;
       message: string;
+      monad?: {
+        network: string;
+        chainId: number;
+        commitmentId: string;
+        offerRegistration: {
+          offerHash: string;
+          replayed: boolean;
+          transactionHash: string | null;
+          explorerUrl: string | null;
+        } | null;
+        attestation: {
+          status: "attested" | "attestation_pending";
+          commitmentId: string;
+          rainSettlementHash?: string;
+          replayed?: boolean;
+          transactionHash?: string | null;
+          explorerUrl?: string | null;
+          message?: string;
+        } | null;
+      } | null;
       rain?: {
         cardId: string;
         cardLast4: string;
@@ -2212,6 +2254,8 @@ function SettleForm({
   const pool = membership ? workspace.pools[membership.poolId] : undefined;
   const product = pool ? workspace.products[pool.productId] : undefined;
   const [running, setRunning] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
+  const [commitment, setCommitment] = useState<CommitResponse | null>(null);
   const [result, setResult] = useState<SettleResponse | null>(null);
 
   if (!membership || !pool || !product) {
@@ -2230,7 +2274,43 @@ function SettleForm({
   async function run() {
     setRunning(true);
     setResult(null);
+    setCommitment(null);
     try {
+      // Phase 1: commit funded demand on-chain. Sellers cannot bid until this
+      // finalizes, which is what makes the ordering claim verifiable.
+      setStage("Freezing coalition and committing funded demand to Monad…");
+      let commitmentId: string | undefined;
+      const commitResponse = await fetch("/api/pool/commit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pool-demo-action": "commit-funded-demand",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          poolId: activePool.id,
+          quantity: activeMembership.quantity,
+          confirmation: "commit-funded-demand",
+        }),
+      });
+      const commitBody = (await commitResponse.json()) as CommitResponse;
+      setCommitment(commitBody);
+      if (commitBody.status === "committed") {
+        commitmentId = commitBody.commitmentId;
+      } else if (commitBody.status === "blocked" || commitBody.status === "failed") {
+        setResult({
+          status: "failed",
+          message: commitBody.message,
+          reservationState: "still_reserved",
+        });
+        return;
+      }
+
+      setStage(
+        commitmentId
+          ? "Demand finalized on-chain. Opening the sealed merchant market…"
+          : "Opening the sealed merchant market…",
+      );
       const response = await fetch("/api/pool/settle", {
         method: "POST",
         headers: {
@@ -2242,6 +2322,7 @@ function SettleForm({
           poolId: activePool.id,
           quantity: activeMembership.quantity,
           settlementId: crypto.randomUUID(),
+          ...(commitmentId ? { commitmentId } : {}),
           confirmation: "settle-pool-order",
         }),
       });
@@ -2278,6 +2359,7 @@ function SettleForm({
     } catch (error) {
       showError(error);
     } finally {
+      setStage(null);
       setRunning(false);
     }
   }
@@ -2292,6 +2374,12 @@ function SettleForm({
   return (
     <>
       <div className={styles.modalBody}>
+        {running && stage ? (
+          <div className={styles.ruleBox} role="status" aria-live="polite">
+            <Zap size={15} />
+            <span>{stage}</span>
+          </div>
+        ) : null}
         {!result ? (
           <>
             <p className={styles.modalIntro}>
@@ -2397,7 +2485,77 @@ function SettleForm({
                 </span>
               </div>
             )}
+
+            {cleared.monad ? (
+              <div className={styles.ruleBox}>
+                <ShieldCheck size={15} />
+                <span>
+                  <strong>Monad Testnet proved the ordering.</strong> Funded demand was
+                  committed and finalized <em>before</em> any merchant could bid
+                  (commitment {shortId(cleared.monad.commitmentId)}), the winning sealed
+                  offer was then registered against it, and the Rain transaction set was
+                  bound to that exact offer afterwards. Buyer maximums and merchant floors
+                  stayed off-chain behind hashes.
+                  {cleared.monad.attestation?.status === "attestation_pending"
+                    ? " The settlement attestation has not finalized yet, so no on-chain settlement claim is made."
+                    : ""}
+                  {cleared.monad.offerRegistration?.explorerUrl ? (
+                    <>
+                      {" "}
+                      <a
+                        href={cleared.monad.offerRegistration.explorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View offer registration
+                      </a>
+                    </>
+                  ) : null}
+                  {cleared.monad.attestation?.explorerUrl ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={cleared.monad.attestation.explorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View settlement attestation
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </div>
+            ) : commitment?.status === "not_configured" ? (
+              <div className={styles.ruleBox}>
+                <Info size={15} />
+                <span>
+                  <strong>No on-chain claim.</strong> Monad is not configured in this
+                  environment, so the market ran without a commitment transaction. POOL
+                  does not assert an ordering proof it cannot show.
+                </span>
+              </div>
+            ) : null}
           </>
+        ) : null}
+
+        {commitment?.status === "committed" ? (
+          <div className={styles.ruleBox}>
+            <ShieldCheck size={15} />
+            <span>
+              <strong>Pre-bid commitment finalized.</strong> {commitment.unitCount} funded
+              units ({cents(commitment.reservedCents)}) were committed to Monad Testnet at{" "}
+              {commitment.committedAt}
+              {commitment.replayed
+                ? " (existing commitment verified, no duplicate write)"
+                : ""}
+              .{" "}
+              {commitment.explorerUrl ? (
+                <a href={commitment.explorerUrl} target="_blank" rel="noopener noreferrer">
+                  View commitment transaction
+                </a>
+              ) : null}
+            </span>
+          </div>
         ) : null}
 
         {declined ? (

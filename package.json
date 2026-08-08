@@ -15,7 +15,8 @@
     "test:contracts": "hardhat test nodejs",
     "monad:compile": "hardhat compile",
     "monad:deploy:testnet": "node --env-file-if-exists=.env.local ./node_modules/hardhat/dist/src/cli.js ignition deploy ignition/modules/PoolCommitmentRegistry.ts --network monadTestnet",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "monad:setup": "node --env-file-if-exists=.env.local scripts/monad-setup.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.30.0",

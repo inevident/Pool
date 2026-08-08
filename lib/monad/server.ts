@@ -601,8 +601,22 @@ export async function verifyFinalizedCoalitionPreparationOnMonad(
   };
 }
 
+/**
+ * The exact fields a coalition commitment write needs. Both the fixed hero
+ * proof and a live product pool satisfy this structurally, so one audited write
+ * path serves both rather than being duplicated per scenario.
+ */
+export interface CoalitionCommitmentWrite {
+  readonly poolIdHash: Hex;
+  readonly termsHash: Hex;
+  readonly fundingRoot: Hex;
+  readonly unitCount: number;
+  readonly reservedCents: bigint;
+  readonly bidClosesAt: bigint;
+}
+
 export async function commitCoalitionOnMonad(
-  commitment: PreparedCoalitionCommitment,
+  commitment: CoalitionCommitmentWrite,
 ): Promise<MonadCommitResult> {
   const address = requireRegistryAddress();
   const publicClient = createMonadPublicClient();
