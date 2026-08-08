@@ -5,6 +5,7 @@ import {
   type ProductActivityKind,
   type ProductActivityMetadata,
   type ProductBuyingIntent,
+  type ProductTreasury,
   type ProductWorkspace,
   type ProductWorkspaceAction,
   type SandboxBalance,
@@ -32,6 +33,15 @@ const requirePositiveMoney = (value: number, label: string) => {
     throw new ProductDomainError(
       "INVALID_MONEY",
       `${label} must be a positive integer number of cents.`,
+    );
+  }
+};
+
+const requireNonNegativeMoney = (value: number, label: string) => {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new ProductDomainError(
+      "INVALID_MONEY",
+      `${label} must be a non-negative integer number of cents.`,
     );
   }
 };
@@ -94,12 +104,75 @@ const requireBuyerBalance = (workspace: ProductWorkspace, buyerId: string) => {
   return balance;
 };
 
+/** Total already credited across every buyer in the workspace. */
+const totalDepositedCents = (workspace: ProductWorkspace) =>
+  Object.values(workspace.balances).reduce(
+    (sum, balance) => sum + balance.totalDepositedCents,
+    0,
+  );
+
+function syncTreasury(
+  workspace: ProductWorkspace,
+  action: Extract<ProductWorkspaceAction, { type: "treasury/sync" }>,
+): ProductWorkspace {
+  requireNonNegativeMoney(action.spendingPowerCents, "Spending power");
+  requireNonNegativeMoney(action.creditLimitCents, "Credit limit");
+  requireNonNegativeMoney(action.postedChargesCents, "Posted charges");
+  requireNonNegativeMoney(action.pendingChargesCents, "Pending charges");
+
+  // A ceiling below what buyers already hold would make the workspace
+  // unreconcilable, so refuse rather than silently stranding reservations.
+  const committed = totalDepositedCents(workspace);
+  if (action.spendingPowerCents < committed) {
+    throw new ProductDomainError(
+      "TREASURY_LIMIT_EXCEEDED",
+      `The rail can authorize ${action.spendingPowerCents} cents but ${committed} cents are already credited.`,
+    );
+  }
+
+  const treasury: ProductTreasury = {
+    source: action.source,
+    currency: "USD",
+    spendingPowerCents: action.spendingPowerCents,
+    creditLimitCents: action.creditLimitCents,
+    postedChargesCents: action.postedChargesCents,
+    pendingChargesCents: action.pendingChargesCents,
+    syncedAt: action.at,
+  };
+  const event = appendActivity(workspace, {
+    id: action.activityId,
+    at: action.at,
+    actorId: "system",
+    kind: "treasury.synced",
+    summary:
+      action.source === "rain-sandbox"
+        ? "Spend ceiling synced from the live Rain sandbox."
+        : "Spend ceiling set from the labeled offline fixture.",
+    metadata: {
+      source: action.source,
+      spendingPowerCents: action.spendingPowerCents,
+      creditLimitCents: action.creditLimitCents,
+    },
+  });
+  return { ...workspace, ...event, treasury };
+}
+
 function depositSandboxFunds(
   workspace: ProductWorkspace,
   action: Extract<ProductWorkspaceAction, { type: "sandbox/deposit" }>,
 ): ProductWorkspace {
   requirePositiveMoney(action.amountCents, "Deposit");
   const current = requireBuyerBalance(workspace, action.buyerId);
+
+  // Credits are bounded by what the payment rail can actually authorize.
+  const projected = totalDepositedCents(workspace) + action.amountCents;
+  if (projected > workspace.treasury.spendingPowerCents) {
+    throw new ProductDomainError(
+      "TREASURY_LIMIT_EXCEEDED",
+      `Crediting ${action.amountCents} cents would exceed the ${workspace.treasury.spendingPowerCents}-cent rail spending power.`,
+    );
+  }
+
   const balance: SandboxBalance = {
     ...current,
     totalDepositedCents: current.totalDepositedCents + action.amountCents,
@@ -111,7 +184,11 @@ function depositSandboxFunds(
     actorId: action.buyerId,
     kind: "sandbox.deposit_recorded",
     summary: "Sandbox funds became available for group-buy commitments.",
-    metadata: { amountCents: action.amountCents, currency: "USD" },
+    metadata: {
+      amountCents: action.amountCents,
+      currency: "USD",
+      treasurySource: workspace.treasury.source,
+    },
   });
   return {
     ...workspace,
@@ -424,6 +501,8 @@ export function reduceProductWorkspace(
   action: ProductWorkspaceAction,
 ): ProductWorkspace {
   switch (action.type) {
+    case "treasury/sync":
+      return syncTreasury(workspace, action);
     case "sandbox/deposit":
       return depositSandboxFunds(workspace, action);
     case "intent/create":
@@ -436,6 +515,16 @@ export function reduceProductWorkspace(
 }
 
 export function assertProductWorkspaceInvariant(workspace: ProductWorkspace) {
+  const treasury = workspace.treasury;
+  if (
+    !Number.isSafeInteger(treasury.spendingPowerCents) ||
+    treasury.spendingPowerCents < 0
+  ) {
+    throw new Error("Workspace treasury spending power is not a valid amount.");
+  }
+  if (totalDepositedCents(workspace) > treasury.spendingPowerCents) {
+    throw new Error("Workspace credits exceed the rail spending power.");
+  }
   for (const balance of Object.values(workspace.balances)) {
     const reconciled = balance.availableCents + balance.reservedCents;
     if (reconciled !== balance.totalDepositedCents) {

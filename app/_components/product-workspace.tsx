@@ -32,10 +32,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
 
@@ -115,6 +117,50 @@ function compactCents(value: number) {
   return compactMoney.format(value / 100);
 }
 
+/**
+ * Re-renders on an interval so time-sensitive affordances (notably the exit
+ * cutoff) stop being offered on a tab that has been left open. Returns 0 until
+ * mounted so server and client markup agree.
+ */
+function useNow(intervalMs = 30_000) {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const id = window.setInterval(onStoreChange, intervalMs);
+      return () => window.clearInterval(id);
+    },
+    [intervalMs],
+  );
+  // The snapshot is bucketed to the tick so repeated reads within one interval
+  // are referentially stable, which useSyncExternalStore requires.
+  const getSnapshot = useCallback(
+    () => Math.floor(Date.now() / intervalMs) * intervalMs,
+    [intervalMs],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, () => 0);
+}
+
+/**
+ * A commitment may only be released while the pool is still forming and the
+ * published cutoff has not passed. This mirrors the `pool/leave` domain rule so
+ * the UI never offers an action the reducer will reject.
+ */
+function canLeavePool(pool: ProductPool, now: number) {
+  if (pool.status !== "forming") return false;
+  if (now === 0) return true;
+  return now < Date.parse(pool.cutoffAt);
+}
+
+/**
+ * Local-time greeting. Callers must only use this after hydration, because the
+ * server and the visitor's browser can sit in different time zones.
+ */
+function greetingFor(date: Date) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 function createId(prefix: string) {
   const suffix =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -134,6 +180,8 @@ function isCompatibleWorkspace(value: unknown): value is ProductWorkspace {
     !candidate.products ||
     !candidate.pools ||
     !candidate.balances ||
+    !candidate.treasury ||
+    typeof candidate.treasury.spendingPowerCents !== "number" ||
     !candidate.intents ||
     !candidate.memberships ||
     !Array.isArray(candidate.activity)
@@ -297,6 +345,54 @@ export default function ProductWorkspaceApp({
       // The workspace remains functional for this browser session when storage is blocked.
     }
   }, [hydrated, workspace]);
+
+  // Replace the offline fixture ceiling with the team's real Rain sandbox
+  // spending power. A failed or locked read leaves the labeled local ceiling in
+  // place rather than inventing a number.
+  useEffect(() => {
+    if (!hydrated) return;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const response = await fetch("/api/rain/balance", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const body = (await response.json()) as {
+          source: "rain-sandbox" | "local";
+          spendingPowerCents: number | null;
+          creditLimitCents: number | null;
+          postedChargesCents: number | null;
+          pendingChargesCents: number | null;
+        };
+        if (body.source !== "rain-sandbox") return;
+        if (!Number.isSafeInteger(body.spendingPowerCents)) return;
+
+        setWorkspace((current) => {
+          if (current.treasury.source === "rain-sandbox") return current;
+          try {
+            return reduceProductWorkspace(current, {
+              type: "treasury/sync",
+              source: "rain-sandbox",
+              spendingPowerCents: body.spendingPowerCents ?? 0,
+              creditLimitCents: body.creditLimitCents ?? 0,
+              postedChargesCents: body.postedChargesCents ?? 0,
+              pendingChargesCents: body.pendingChargesCents ?? 0,
+              activityId: createId("activity-treasury"),
+              at: new Date().toISOString(),
+            });
+          } catch {
+            // A ceiling below existing credits is rejected by the domain; the
+            // workspace keeps its current, still-reconciling treasury.
+            return current;
+          }
+        });
+      } catch {
+        // Offline or blocked: the labeled local ceiling stands.
+      }
+    })();
+    return () => controller.abort();
+  }, [hydrated]);
 
   useEffect(() => {
     if (!toast) return;
@@ -596,7 +692,10 @@ function DashboardView({
       <header className={styles.pageHeader}>
         <div>
           <span className={styles.pageEyebrow}>Buyer workspace</span>
-          <h1>Good afternoon, Alex.</h1>
+          <h1>
+            {hydrated ? greetingFor(new Date()) : "Welcome back"},{" "}
+            {workspace.owner.displayName.split(" ")[0]}.
+          </h1>
         </div>
         <div className={styles.headerActions}>
           <button
@@ -989,6 +1088,7 @@ function CommitmentList({
   memberships,
   setModal,
 }: SharedViewProps & { memberships: PoolMembership[] }) {
+  const now = useNow();
   return (
     <div className={styles.commitmentList}>
       {memberships.map((membership) => {
@@ -1018,7 +1118,7 @@ function CommitmentList({
             </div>
             <div className={styles.rowAction}>
               <Link href={poolHref(pool)}>Details</Link>
-              {pool.status === "forming" ? (
+              {canLeavePool(pool, now) ? (
                 <button type="button" onClick={() => setModal({ kind: "leave", membershipId: membership.id })}>
                   Leave
                 </button>
@@ -1103,11 +1203,53 @@ function WalletView({ workspace, balance, setModal }: SharedViewProps & {
         </div>
       </section>
 
+      <section className={styles.walletHero} aria-label="Payment rail capacity">
+        <div className={styles.walletMain}>
+          <span>
+            {workspace.treasury.source === "rain-sandbox"
+              ? "Rain sandbox spending power"
+              : "Offline ceiling (Rain unavailable)"}
+          </span>
+          <strong>{cents(workspace.treasury.spendingPowerCents)}</strong>
+          <small>
+            {workspace.treasury.source === "rain-sandbox"
+              ? `Live from GET /issuing/balances${
+                  workspace.treasury.syncedAt
+                    ? ` · read ${shortDate.format(new Date(workspace.treasury.syncedAt))}`
+                    : ""
+                }`
+              : "Labeled local fixture · not a Rain figure"}
+          </small>
+        </div>
+        <div className={styles.walletMetric}>
+          <span>Rail credit limit</span>
+          <strong>{cents(workspace.treasury.creditLimitCents)}</strong>
+          <small>Total sandbox capacity</small>
+        </div>
+        <div className={styles.walletMetric}>
+          <span>Already charged</span>
+          <strong>{cents(workspace.treasury.postedChargesCents)}</strong>
+          <small>Settled on the rail</small>
+        </div>
+      </section>
+
       <div className={styles.walletDisclosure}>
         <Info size={15} />
         <span>
-          <strong>Product sandbox:</strong> “Add funds” creates local test credits. No ACH,
-          card, wire, crypto, Rain, or Monad transaction occurs on this surface.
+          {workspace.treasury.source === "rain-sandbox" ? (
+            <>
+              <strong>Rail-bounded sandbox:</strong> credits on this surface cannot exceed
+              Rain’s live sandbox spending power, read directly from the provider. Reading
+              that ceiling is the only Rain call the product workspace makes — no card,
+              ACH, wire, crypto, or Monad transaction occurs here, and no real money moves.
+            </>
+          ) : (
+            <>
+              <strong>Product sandbox:</strong> Rain is unreachable or locked, so “Add funds”
+              is bounded by a labeled local ceiling. No ACH, card, wire, crypto, Rain, or
+              Monad transaction occurs on this surface.
+            </>
+          )}
         </span>
       </div>
 
@@ -1281,6 +1423,8 @@ function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps 
 }
 
 function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poolId?: string }) {
+  // Called before the early return so hook order stays stable across renders.
+  const now = useNow();
   const pool = poolId ? workspace.pools[poolId] : undefined;
   if (!pool) {
     return (
@@ -1312,7 +1456,12 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
           </div>
           <div className={styles.poolDetailAction}>
             {membership ? (
-              <button className={styles.dangerButton} type="button" onClick={() => setModal({ kind: "leave", membershipId: membership.id })}>
+              <button
+                className={styles.dangerButton}
+                type="button"
+                disabled={!canLeavePool(pool, now)}
+                onClick={() => setModal({ kind: "leave", membershipId: membership.id })}
+              >
                 Release commitment
               </button>
             ) : (
@@ -1320,7 +1469,13 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
                 Reserve {cents(product.msrpUnitCents)} & join
               </button>
             )}
-            <small>{membership ? "Available only before the published cutoff." : `${cents(balance.availableCents)} currently available.`}</small>
+            <small>
+              {membership
+                ? canLeavePool(pool, now)
+                  ? "Available only before the published cutoff."
+                  : "The cutoff has passed; this reservation stays locked until the pool resolves."
+                : `${cents(balance.availableCents)} currently available.`}
+            </small>
           </div>
         </div>
         <div className={styles.poolFacts}>
@@ -1556,6 +1711,13 @@ function FundForm({
   const [amount, setAmount] = useState(
     suggestedCents ? (suggestedCents / 100).toFixed(2) : "500.00",
   );
+  const treasury = workspace.treasury;
+  const creditedCents = Object.values(workspace.balances).reduce(
+    (sum, entry) => sum + entry.totalDepositedCents,
+    0,
+  );
+  const headroomCents = Math.max(0, treasury.spendingPowerCents - creditedCents);
+  const fromRain = treasury.source === "rain-sandbox";
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1580,8 +1742,11 @@ function FundForm({
     <form onSubmit={submit}>
       <div className={styles.modalBody}>
         <p className={styles.modalIntro}>
-          Create browser-local test credits to exercise POOL’s funding and reservation
-          rules. This does not move real money.
+          Credit this workspace to exercise POOL’s funding and reservation rules.
+          {fromRain
+            ? " Credits are capped by the payment rail’s real remaining spending power."
+            : " Rain is unavailable, so a labeled offline ceiling applies."}
+          {" "}This does not move real money.
         </p>
         <div className={styles.field}>
           <label htmlFor="fund-amount">Amount in test USD</label>
@@ -1589,22 +1754,42 @@ function FundForm({
             id="fund-amount"
             type="number"
             min="0.01"
-            max="100000"
+            max={(headroomCents / 100).toFixed(2)}
             step="0.01"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             required
           />
-          <div className={styles.fieldHint}>Positive amounts only. Stored locally in integer cents.</div>
+          <div className={styles.fieldHint}>
+            {cents(headroomCents)} still creditable ·{" "}
+            {fromRain
+              ? "live Rain sandbox spending power"
+              : "labeled local ceiling"}
+          </div>
         </div>
         <div className={styles.exampleRow}>
-          {["250.00", "500.00", "1000.00", "2500.00"].map((preset) => (
+          {["250.00", "500.00", "1000.00", "2500.00"]
+            .filter((preset) => Math.round(Number(preset) * 100) <= headroomCents)
+            .map((preset) => (
             <button key={preset} type="button" onClick={() => setAmount(preset)}>{money.format(Number(preset))}</button>
           ))}
+          {headroomCents > 0 && (
+            <button
+              type="button"
+              onClick={() => setAmount((headroomCents / 100).toFixed(2))}
+            >
+              Max {money.format(headroomCents / 100)}
+            </button>
+          )}
         </div>
         <div className={styles.ruleBox}>
           <ShieldCheck size={15} />
-          <span><strong>Sandbox only.</strong> No on-ramp, bank account, card, stablecoin, Rain request, or Monad write occurs.</span>
+          <span>
+            <strong>Sandbox only.</strong>{" "}
+            {fromRain
+              ? `Bounded by Rain's live ${cents(treasury.spendingPowerCents)} sandbox spending power. Reading that ceiling is the only Rain call; no card, on-ramp, or Monad write occurs here.`
+              : "No on-ramp, bank account, card, stablecoin, Rain request, or Monad write occurs."}
+          </span>
         </div>
       </div>
       <footer className={styles.modalFooter}>

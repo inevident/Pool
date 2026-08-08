@@ -1,4 +1,4 @@
-export const PRODUCT_WORKSPACE_SCHEMA_VERSION = 1 as const;
+export const PRODUCT_WORKSPACE_SCHEMA_VERSION = 2 as const;
 export const PRODUCT_SEED_VERSION = "2026.08.08" as const;
 
 export type Cents = number;
@@ -55,6 +55,32 @@ export interface SandboxBalance {
   readonly reservedCents: Cents;
 }
 
+/**
+ * Where the workspace's spend ceiling comes from.
+ *
+ * `rain-sandbox` means the ceiling was read from the live Rain sandbox
+ * (`GET /issuing/balances`) and is a real provider number. `local` means Rain
+ * was unreachable, unconfigured, or locked, and the ceiling is a labeled
+ * offline fixture. The distinction must stay visible in the UI.
+ */
+export type TreasurySource = "rain-sandbox" | "local";
+
+/**
+ * The workspace's funding ceiling. POOL may never let total deposits exceed
+ * `spendingPowerCents`, because that is the amount the payment rail can
+ * actually authorize. This is a rail-level capacity figure, not custody of
+ * buyer money.
+ */
+export interface ProductTreasury {
+  readonly source: TreasurySource;
+  readonly currency: Currency;
+  readonly spendingPowerCents: Cents;
+  readonly creditLimitCents: Cents;
+  readonly postedChargesCents: Cents;
+  readonly pendingChargesCents: Cents;
+  readonly syncedAt: IsoDateTime | null;
+}
+
 export type BuyingIntentStatus = "open" | "joined" | "withdrawn" | "expired";
 
 export interface ProductBuyingIntent {
@@ -84,6 +110,7 @@ export interface PoolMembership {
 
 export type ProductActivityKind =
   | "workspace.seeded"
+  | "treasury.synced"
   | "sandbox.deposit_recorded"
   | "intent.created"
   | "pool.joined"
@@ -111,6 +138,7 @@ export interface ProductWorkspace {
   readonly revision: number;
   readonly createdAt: IsoDateTime;
   readonly owner: BuyerProfile;
+  readonly treasury: ProductTreasury;
   readonly products: Readonly<Record<string, ProductListing>>;
   readonly pools: Readonly<Record<string, ProductPool>>;
   readonly balances: Readonly<Record<string, SandboxBalance>>;
@@ -125,6 +153,14 @@ interface ProductActionEnvelope {
 }
 
 export type ProductWorkspaceAction =
+  | (ProductActionEnvelope & {
+      readonly type: "treasury/sync";
+      readonly source: TreasurySource;
+      readonly spendingPowerCents: Cents;
+      readonly creditLimitCents: Cents;
+      readonly postedChargesCents: Cents;
+      readonly pendingChargesCents: Cents;
+    })
   | (ProductActionEnvelope & {
       readonly type: "sandbox/deposit";
       readonly buyerId: string;
@@ -172,7 +208,8 @@ export type ProductDomainErrorCode =
   | "POOL_NOT_FORMING"
   | "POOL_CUTOFF_PASSED"
   | "INSUFFICIENT_AVAILABLE_BALANCE"
-  | "MEMBERSHIP_NOT_ACTIVE";
+  | "MEMBERSHIP_NOT_ACTIVE"
+  | "TREASURY_LIMIT_EXCEEDED";
 
 export class ProductDomainError extends Error {
   readonly code: ProductDomainErrorCode;

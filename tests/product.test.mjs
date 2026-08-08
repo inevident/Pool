@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   assertProductWorkspaceInvariant,
   createSeededProductWorkspace,
+  LOCAL_TREASURY_FIXTURE_CENTS,
   PRODUCT_SEED_VERSION,
   PRODUCT_WORKSPACE_SCHEMA_VERSION,
   reduceProductWorkspace,
@@ -16,6 +17,21 @@ const BUYER_ID = "buyer-demo";
 const SONY_PRODUCT_ID = "product-sony-wh1000xm6";
 const SONY_POOL_ID = "pool-sony-xm6-august";
 const SONY_MSRP_CENTS = 44_999;
+
+// The live sandbox figures observed from Rain's GET /issuing/balances.
+const RAIL_SPENDING_POWER_CENTS = 1_533_200;
+
+const syncRailTreasury = (state) =>
+  reduceProductWorkspace(state, {
+    type: "treasury/sync",
+    activityId: "activity-treasury-sync",
+    at: T1,
+    source: "rain-sandbox",
+    spendingPowerCents: RAIL_SPENDING_POWER_CENTS,
+    creditLimitCents: 2_000_000,
+    postedChargesCents: 466_800,
+    pendingChargesCents: 0,
+  });
 
 const deposit = (state, amountCents = SONY_MSRP_CENTS) =>
   reduceProductWorkspace(state, {
@@ -233,4 +249,78 @@ test("non-forming pools never accept new commitments", () => {
     () => joinSonyPool(locked),
     (error) => error?.code === "POOL_NOT_FORMING",
   );
+});
+
+test("a fresh workspace starts on the labeled offline ceiling", () => {
+  const state = createSeededProductWorkspace({ now: T0 });
+  assert.equal(state.treasury.source, "local");
+  assert.equal(state.treasury.syncedAt, null);
+  assert.equal(state.treasury.spendingPowerCents, LOCAL_TREASURY_FIXTURE_CENTS);
+  assert.ok(assertProductWorkspaceInvariant(state));
+});
+
+test("syncing the rail ceiling records its provenance", () => {
+  const synced = syncRailTreasury(createSeededProductWorkspace({ now: T0 }));
+
+  assert.equal(synced.treasury.source, "rain-sandbox");
+  assert.equal(synced.treasury.spendingPowerCents, RAIL_SPENDING_POWER_CENTS);
+  assert.equal(synced.treasury.postedChargesCents, 466_800);
+  assert.equal(synced.treasury.syncedAt, T1);
+  assert.equal(synced.activity.at(-1).kind, "treasury.synced");
+  assert.equal(synced.activity.at(-1).metadata.source, "rain-sandbox");
+  assert.ok(assertProductWorkspaceInvariant(synced));
+});
+
+test("credits cannot exceed the rail's real spending power", () => {
+  const synced = syncRailTreasury(createSeededProductWorkspace({ now: T0 }));
+
+  const atCeiling = reduceProductWorkspace(synced, {
+    type: "sandbox/deposit",
+    activityId: "activity-deposit-ceiling",
+    at: T2,
+    buyerId: BUYER_ID,
+    amountCents: RAIL_SPENDING_POWER_CENTS,
+  });
+  assert.equal(
+    atCeiling.balances[BUYER_ID].availableCents,
+    RAIL_SPENDING_POWER_CENTS,
+  );
+
+  // One cent past the live ceiling must fail closed.
+  assert.throws(
+    () =>
+      reduceProductWorkspace(atCeiling, {
+        type: "sandbox/deposit",
+        activityId: "activity-deposit-over",
+        at: T3,
+        buyerId: BUYER_ID,
+        amountCents: 1,
+      }),
+    (error) => error?.code === "TREASURY_LIMIT_EXCEEDED",
+  );
+  assert.ok(assertProductWorkspaceInvariant(atCeiling));
+});
+
+test("a ceiling below existing credits is rejected, not silently applied", () => {
+  const funded = deposit(
+    syncRailTreasury(createSeededProductWorkspace({ now: T0 })),
+    100_000,
+  );
+
+  assert.throws(
+    () =>
+      reduceProductWorkspace(funded, {
+        type: "treasury/sync",
+        activityId: "activity-treasury-shrink",
+        at: T3,
+        source: "rain-sandbox",
+        spendingPowerCents: 99_999,
+        creditLimitCents: 2_000_000,
+        postedChargesCents: 1_900_001,
+        pendingChargesCents: 0,
+      }),
+    (error) => error?.code === "TREASURY_LIMIT_EXCEEDED",
+  );
+  assert.equal(funded.treasury.spendingPowerCents, RAIL_SPENDING_POWER_CENTS);
+  assert.ok(assertProductWorkspaceInvariant(funded));
 });

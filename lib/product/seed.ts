@@ -11,6 +11,16 @@ import {
 const DAY_MS = 86_400_000;
 export const DEFAULT_PRODUCT_SEED_TIME = "2026-08-08T16:00:00.000Z";
 
+/**
+ * Offline spend ceiling used before the live Rain sandbox balance is read.
+ *
+ * It is a labeled fixture, not a Rain figure. It sits above the largest single
+ * commitment the seeded catalog allows (20 × $999.00) so offline development
+ * behaves normally, and it is replaced by the real `spendingPower` as soon as
+ * `treasury/sync` lands.
+ */
+export const LOCAL_TREASURY_FIXTURE_CENTS = 2_500_000;
+
 const isoAfterDays = (at: string, days: number) =>
   new Date(new Date(at).getTime() + days * DAY_MS).toISOString();
 
@@ -156,6 +166,15 @@ export function createSeededProductWorkspace(
     revision: 0,
     createdAt,
     owner,
+    treasury: {
+      source: "local",
+      currency: "USD",
+      spendingPowerCents: LOCAL_TREASURY_FIXTURE_CENTS,
+      creditLimitCents: LOCAL_TREASURY_FIXTURE_CENTS,
+      postedChargesCents: 0,
+      pendingChargesCents: 0,
+      syncedAt: null,
+    },
     products: toRecord(seededProducts),
     pools: toRecord(pools),
     balances: {

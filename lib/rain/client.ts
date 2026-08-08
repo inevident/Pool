@@ -27,10 +27,22 @@ const simulatedTransactionSchema = z.object({
     .optional(),
 });
 
+// GET /issuing/balances is the sandbox's real spend ceiling. Every value is an
+// integer number of cents; `spendingPower` is what the team may still authorize.
+const issuingBalancesSchema = z.object({
+  creditLimit: z.number().int().nonnegative(),
+  pendingCharges: z.number().int().nonnegative(),
+  postedCharges: z.number().int().nonnegative(),
+  balanceDue: z.number().int(),
+  spendingPower: z.number().int(),
+  currency: z.string(),
+});
+
 export type RainScopedCard = z.infer<typeof scopedCardSchema>;
 export type RainSimulatedTransaction = z.infer<
   typeof simulatedTransactionSchema
 >;
+export type RainIssuingBalances = z.infer<typeof issuingBalancesSchema>;
 
 interface RainConfig {
   apiBaseUrl: string;
@@ -230,6 +242,18 @@ export async function verifyRainConnection() {
     throw new RainApiError("Rain returned an unexpected status response", 502);
   }
   return { connected: true as const, environment: "sandbox" as const };
+}
+
+/**
+ * Reads the team's real Rain sandbox spend ceiling.
+ *
+ * This is the authoritative source for how much POOL may still commit: it is a
+ * live provider number, not an invented local credit. It remains a team-level
+ * rail figure rather than a per-buyer custody balance.
+ */
+export async function getRainIssuingBalances() {
+  const result = await rainRequest("/issuing/balances");
+  return issuingBalancesSchema.parse(result.body);
 }
 
 /** Adds team-level Rain sandbox rail liquidity; this is never a buyer balance. */

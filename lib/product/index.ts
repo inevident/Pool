@@ -1,4 +1,8 @@
-export { createSeededProductWorkspace, DEFAULT_PRODUCT_SEED_TIME } from "./seed.ts";
+export {
+  createSeededProductWorkspace,
+  DEFAULT_PRODUCT_SEED_TIME,
+  LOCAL_TREASURY_FIXTURE_CENTS,
+} from "./seed.ts";
 export {
   assertProductWorkspaceInvariant,
   reduceProductWorkspace,
