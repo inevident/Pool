@@ -21,15 +21,27 @@
       "commit": "88d75b5",
       "committedAt": "2026-08-09T07:50:08-04:00",
       "subject": "docs: record verified overnight deployment",
-      "role": "The commit whose deployment and documentation state was recorded."
+      "role": "The previously deployed commit. Superseded: the live deployment now serves 712328b, recorded under `deployment` above."
     },
     "sourceBranch": "overnight"
   },
   "deployment": {
-    "previewUrl": "https://pool-overnight-yeayea.vercel.app",
-    "aliasKind": "stable_preview_alias",
-    "gitIntegrationConnected": false,
-    "note": "Deploys are manual, so a push does not imply the alias moved. Vercel deployment identifiers are deliberately omitted: they are not recoverable from this repository, and this manifest records only facts it can source."
+    "deploymentId": "dpl_4PhChmBuomnxaJ665zetzqCwgyjv",
+    "promotedFrom": "dpl_D5BLR3q5CC1Yx4JsdFGxC4caMnqb",
+    "target": "production",
+    "state": "READY",
+    "region": "iad1",
+    "deployedCommit": "712328bc8abe14c3e55c7dd4f6889d1a62033186",
+    "deploymentUrl": "https://pool-agentic-market-preview-20260808-8s3diz5c6-yeayea.vercel.app",
+    "createdAt": "2026-08-09T13:02:52.223Z",
+    "readyAt": "2026-08-09T13:03:31.021Z",
+    "aliases": [
+      "https://pool-overnight-yeayea.vercel.app",
+      "https://pool-agentic-market-preview-2026080.vercel.app",
+      "https://pool-agentic-market-preview-20260808-yeayea.vercel.app"
+    ],
+    "gitIntegrationAutoDeploys": false,
+    "note": "Records the deployment that was live when this manifest was written. Because the manifest is itself served by a deployment, a later release that publishes this file will be served from a newer deployment than the one named here -- that is expected, not a mismatch. Deployed explicitly from the Vercel CLI; a push to origin does not move these aliases on its own. The deployed commit 712328b is newer than every commit in the lineage below, so the live runtime postdates the proof record it publishes. Vercel project and organization identifiers remain omitted."
   },
   "digests": {
     "algorithm": "sha256",
@@ -84,11 +96,12 @@
   "proves": [
     "Which source commit produced the published evidence record, and that two later commits did not.",
     "That the named evidence and deck files hash to the recorded SHA-256 digests at this commit.",
-    "That the published record names the listed Rain sandbox settlement IDs and finalized Monad Testnet transactions."
+    "That the published record names the listed Rain sandbox settlement IDs and finalized Monad Testnet transactions.",
+    "Which Vercel deployment was live when this manifest was written, and which commit it was built from."
   ],
   "doesNotProve": [
     "real-money custody, deposits, escrow, or production payment processing",
-    "that the recorded Preview alias currently serves this commit, since deploys are manual",
+    "that the recorded aliases still serve this deployment, since any later deploy or alias change supersedes this record",
     "merchant traction, buyer identity, inventory, fulfillment, returns, or a production order",
     "that Monad independently verified Rain or the simulated buyer ledger",
     "that this manifest was signed, notarized, or independently audited"
