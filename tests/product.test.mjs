@@ -108,8 +108,28 @@ test("the versioned workspace seeds a product marketplace led by the Sony XM6 po
   assert.equal(state.schemaVersion, PRODUCT_WORKSPACE_SCHEMA_VERSION);
   assert.equal(state.seedVersion, PRODUCT_SEED_VERSION);
   assert.equal(state.revision, 0);
-  assert.equal(Object.keys(state.products).length, 5);
-  assert.equal(Object.keys(state.pools).length, 5);
+  // The imported sample catalog extends the market, so assert the invariant
+  // rather than a count: every product has exactly one pool, and the
+  // hand-seeded entries the agent and evidence bind to are all still present.
+  assert.equal(
+    Object.keys(state.products).length,
+    Object.keys(state.pools).length,
+  );
+  for (const id of [
+    SONY_PRODUCT_ID,
+    "product-steam-deck-oled-512",
+    "product-macbook-air-m4-13",
+    "product-dyson-airwrap-id",
+    "product-monitor-27-4k-usbc",
+  ]) {
+    assert.ok(state.products[id], `${id} missing from the seeded catalog`);
+  }
+  for (const pool of Object.values(state.pools)) {
+    assert.ok(
+      state.products[pool.productId],
+      `pool ${pool.id} references an unseeded product`,
+    );
+  }
   assert.equal(state.products[SONY_PRODUCT_ID].name, "WH-1000XM6 Wireless Headphones");
   assert.equal(state.products[SONY_PRODUCT_ID].msrpUnitCents, SONY_MSRP_CENTS);
   assert.equal(state.pools[SONY_POOL_ID].committedUnitCount, 34);

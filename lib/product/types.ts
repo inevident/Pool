@@ -1,5 +1,5 @@
 export const PRODUCT_WORKSPACE_SCHEMA_VERSION = 5 as const;
-export const PRODUCT_SEED_VERSION = "2026.08.09-evidence-bridge" as const;
+export const PRODUCT_SEED_VERSION = "2026.08.09-catalog-import" as const;
 export const PRODUCT_POOL_BID_WINDOW_MS = 60 * 60 * 1_000;
 
 export type Cents = number;

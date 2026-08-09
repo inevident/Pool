@@ -81,6 +81,31 @@ export function tokenize(text: string): readonly string[] {
     .filter((token) => token.length >= 2 && token.length <= 20);
 }
 
+/**
+ * Product-line qualifiers that recur across many unrelated products. They stay
+ * in the signature because they help rank a match, but on their own they are
+ * far too weak to establish one: "Apple Vision Pro" shares only "pro" with
+ * "iPhone 13 Pro", which is a brand collision rather than the same product.
+ */
+const GENERIC_MODEL_TOKENS = new Set([
+  "pro",
+  "max",
+  "plus",
+  "mini",
+  "air",
+  "ultra",
+  "lite",
+  "series",
+  "edition",
+  "gen",
+  "generation",
+  "smart",
+  "portable",
+  "premium",
+  "classic",
+  "standard",
+]);
+
 const distinctiveTokens = (text: string): readonly string[] =>
   tokenize(text).filter((token) => !STOPWORDS.has(token));
 
@@ -103,20 +128,24 @@ const signatureFor = (name: string, brand: string, slug: string): ProductSignatu
 /**
  * Score a page against a single product.
  *
- * A page needs at least two distinctive model tokens, or the brand plus one
- * model token, to count as a match. That keeps "Apple AirPods" from resolving to
- * a MacBook just because both are Apple.
+ * A page needs at least two identifying model tokens, or the brand plus one, to
+ * count as a match. Identifying means the token is not a generic product-line
+ * qualifier, so "Apple AirPods" cannot resolve to a MacBook on the shared brand
+ * and "Apple Vision Pro" cannot resolve to an iPhone 13 Pro on the shared "pro".
+ * Generic hits still contribute to the score, they just cannot create a match.
  */
 function scoreProduct(
   queryTokens: ReadonlySet<string>,
   signature: ProductSignature,
 ): { readonly score: number; readonly matched: boolean } {
   const modelHits = signature.modelTokens.filter((token) => queryTokens.has(token));
+  const identifyingHits = modelHits.filter((token) => !GENERIC_MODEL_TOKENS.has(token));
   const brandHit = signature.brandTokens.some((token) => queryTokens.has(token));
   const denominator = Math.max(1, signature.modelTokens.length);
   const coverage = modelHits.length / denominator;
   const score = Math.min(1, coverage + (brandHit ? 0.15 : 0));
-  const matched = modelHits.length >= 2 || (brandHit && modelHits.length >= 1);
+  const matched =
+    identifyingHits.length >= 2 || (brandHit && identifyingHits.length >= 1);
   return { score: matched ? score : 0, matched };
 }
 

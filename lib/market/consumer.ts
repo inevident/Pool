@@ -11,6 +11,7 @@
  * judge can replay it. Merchant floors and opening quotes are private inputs:
  * they must never appear in an API response or a UI trace.
  */
+import { IMPORTED_CATALOG } from "../product/catalog-imported.ts";
 
 export const ELECTRONICS_MCC = "5732";
 export const APPLIANCE_MCC = "5722";
@@ -110,6 +111,12 @@ const ECONOMICS: Readonly<
     "merchant-northstar": { openingUnitCents: 44_688, floorUnitCents: 42_000 },
     "merchant-signal": { openingUnitCents: 40_521, floorUnitCents: 37_900 },
   },
+  // Imported sample catalog. Without an entry here `consumerOffersFor` returns
+  // no offers and the pool could never clear, so each imported product carries
+  // deterministic private economics generated alongside it.
+  ...Object.fromEntries(
+    IMPORTED_CATALOG.map((entry) => [entry.id, entry.economics]),
+  ),
 };
 
 export function merchantCategoryCodeFor(category: string) {

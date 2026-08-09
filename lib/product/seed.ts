@@ -1,3 +1,4 @@
+import { IMPORTED_CATALOG } from "./catalog-imported.ts";
 import {
   PRODUCT_SEED_VERSION,
   PRODUCT_WORKSPACE_SCHEMA_VERSION,
@@ -96,6 +97,29 @@ const seededProducts: readonly ProductListing[] = [
   },
 ] as const;
 
+/**
+ * Imported sample catalog, appended after the hand-seeded entries.
+ *
+ * The five hand-seeded products keep their exact ids, ordering, and pools:
+ * the buyer agent's catalog enum, the technical fixture, and the published
+ * evidence all bind to them, so imported entries only ever extend the market.
+ */
+const importedProducts: readonly ProductListing[] = IMPORTED_CATALOG.map(
+  (entry) => ({
+    id: entry.id,
+    slug: entry.slug,
+    name: entry.name,
+    brand: entry.brand,
+    category: entry.category,
+    imageUrl: "/og.png",
+    msrpUnitCents: entry.msrpUnitCents,
+    currency: "USD",
+    description: entry.description,
+  }),
+);
+
+export const IMPORTED_POOL_ID_PREFIX = "pool-imported-";
+
 export interface CreateSeededProductWorkspaceInput {
   readonly workspaceId?: string;
   readonly workspaceName?: string;
@@ -175,6 +199,18 @@ export function createSeededProductWorkspace(
       estimatedUnitPriceCents: 38_900,
       createdAt,
     },
+    // Imported sample market. Every pool shares the same fixed 14-day window
+    // and the same 10-unit viability floor as the hand-seeded pools.
+    ...IMPORTED_CATALOG.map((entry) => ({
+      id: `${IMPORTED_POOL_ID_PREFIX}${entry.slug}`,
+      productId: entry.id,
+      status: "forming" as const,
+      cutoffAt: isoAfterDays(createdAt, PRODUCT_POOL_COMMITMENT_WINDOW_DAYS),
+      minimumCommittedUnitCount: 10,
+      committedUnitCount: entry.committedUnitCount,
+      estimatedUnitPriceCents: entry.estimatedUnitPriceCents,
+      createdAt,
+    })),
   ] as const;
 
   const seededActivity = Object.freeze<ProductActivityEntry>({
@@ -207,7 +243,7 @@ export function createSeededProductWorkspace(
       pendingChargesCents: 0,
       syncedAt: null,
     },
-    products: toRecord(seededProducts),
+    products: toRecord([...seededProducts, ...importedProducts]),
     pools: toRecord(pools),
     balances: {
       [owner.id]: {

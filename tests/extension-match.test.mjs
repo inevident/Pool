@@ -48,10 +48,11 @@ test("an unrelated product does not produce a false match", () => {
 });
 
 test("a same-brand different-product page does not resolve to the wrong SKU", () => {
-  // Apple AirPods must not match the Apple MacBook just because both are Apple.
+  // Vision Pro is not in POOL's catalog. Sharing the Apple brand with several
+  // listed products must not be enough to produce a match on its own.
   const result = matchCatalogProduct({
-    title: "AirPods Pro 2 - Apple",
-    url: "https://www.apple.com/airpods-pro",
+    title: "Apple Vision Pro",
+    url: "https://www.apple.com/apple-vision-pro",
   });
 
   assert.equal(result.matched, false);
@@ -70,10 +71,26 @@ test("matching is deterministic", () => {
 
 test("the public catalog exposes every seeded product without private economics", () => {
   const catalog = publicCatalog();
-  assert.equal(catalog.length, 5);
+  // The catalog grows with each import, so assert the invariants rather than a
+  // count: every hand-seeded product survives, and no private seller economics
+  // ever reach the public projection.
+  assert.ok(catalog.length >= 5);
+  for (const id of [
+    "product-sony-wh1000xm6",
+    "product-steam-deck-oled-512",
+    "product-macbook-air-m4-13",
+    "product-dyson-airwrap-id",
+    "product-monitor-27-4k-usbc",
+  ]) {
+    assert.ok(
+      catalog.some((product) => product.id === id),
+      `${id} missing from the public catalog`,
+    );
+  }
   const serialized = JSON.stringify(catalog);
   assert.ok(!serialized.includes("floor"));
   assert.ok(!serialized.includes("opening"));
+  assert.ok(!serialized.includes("maxDiscountBps"));
 });
 
 test("a matched pool exposes the viability floor, never an enrollment target", () => {
