@@ -54,6 +54,8 @@ See [`PRODUCT.md`](./PRODUCT.md) for the product promise, end-to-end journey, cu
 
 New engineers and coding agents should begin with [`handoff.md`](./handoff.md), the comprehensive product, hackathon, architecture, security, operations, deployment, and roadmap handoff.
 
+Five-speaker script and Screen Studio recording guide: [`PRESENT.md`](./PRESENT.md).
+
 Presenters should use the editable [`POOL_PITCH.pptx`](./POOL_PITCH.pptx) deck with [`PITCH.md`](./PITCH.md) for the verbatim 90-second talk track, then [`DEMO.md`](./DEMO.md) for the exact operator flow and fallbacks.
 
 The current source-bound record is the [Rain + Monad evidence capture](./public/evidence/rain-monad-testnet-2026-08-09.png) with its [sanitized JSON](./public/evidence/rain-monad-testnet-2026-08-09.json), generated from `overnight@246d81a` and published in the verified `overnight` Preview. It records the same three Rain sandbox settlements as same-day idempotent replays, the exact MCC `7995` decline, and finalized Monad Testnet ordering on chain `10143`: registry [`0xE1b7…b217`](https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217), one finalized coalition commitment, six finalized offer registrations, and a finalized post-Rain attestation. No real money moved, and Monad did not independently verify Rain or the simulated ledger. The earlier Rain-only capture remains an archived record of its own local-only state.
