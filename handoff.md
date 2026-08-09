@@ -3,8 +3,8 @@
 - **Last materially verified:** 2026-08-09, America/New_York
 - **Repository:** [inevident/Pool](https://github.com/inevident/Pool)
 - **Default branch:** `main`
-- **Last verified public deployment baseline:** `main@9b12002`
-- **Active improvement branch:** `overnight@246d81a` (source execution commit; not yet redeployed or verified at a new Vercel URL)
+- **Verified public Preview:** [pool-overnight-yeayea.vercel.app](https://pool-overnight-yeayea.vercel.app)
+- **Active improvement branch:** `overnight` (proof source `246d81a`; release runtime `8b1cee8`)
 - **Primary product route:** `/`
 - **Technical proof route:** `/demo`
 
@@ -77,15 +77,15 @@ The repository is not a production financial product. It does not currently prov
 - production order routing, fulfillment, shipment, returns, refunds, or disputes;
 - production Rain issuance or production buyer identities;
 - a mainnet Monad deployment or an independent oracle proving offchain funds;
-- a deployed build of the current `overnight` branch.
+- automatic deployment from GitHub; Vercel Git integration is still disconnected.
 
 Do not blur these boundaries. Product credibility depends on being exact about them.
 
 ### Current external blockers and warnings
 
-1. **`overnight` is not verified as deployed.** The last checked public Vercel Production alias served `main@9b12002`; do not present it as evidence for this branch until a new deployment URL and commit are checked directly.
-2. **Vercel Git integration is not connected.** A Git push does not imply a deployment. Link or deploy explicitly, then verify the resulting Production alias in an incognito session.
-3. **Preview has only `OPENAI_API_KEY`.** No Rain or Monad configuration is present in the Vercel Preview environment, so it must remain rehearsal/unavailable for those rails. Do not infer other environment values or Production settings without a fresh check.
+1. **`overnight` is publicly deployed as a Preview.** The stable alias is `https://pool-overnight-yeayea.vercel.app`; desktop and 390px mobile canaries verified the buyer, seller, evidence, and demo surfaces. It is not the historical Production alias.
+2. **Vercel Git integration is not connected.** A Git push does not imply a deployment. Deploy explicitly, repoint the stable Preview alias, and verify the result after every release.
+3. **Preview is intentionally provider-offline.** No Rain or Monad execution configuration is present, so runtime actions remain deterministic/rehearsal-only. The finalized historical proof is a sanitized static record at `/evidence`, not evidence that the hosted Preview repeated provider writes.
 4. **The Monad Testnet proof is finalized; future-write gas is not asserted.** Registry [`0xE1b7…b217`](https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217) deployed on chain `10143`, the coalition commitment finalized before six offer registrations, and the post-Rain attestation finalized at block `52198437`. The prior underfunded-signer snapshot is obsolete. Re-run `npm run demo:preflight` before any new write; never record or share the private key.
 5. **Treat credentials shared in chat or images as exposed.** Never copy them into this document, a commit, a log, a screenshot, a client bundle, or a ticket. Rotate or re-provision before use.
 6. **Hosted CI state is not asserted here.** Run the local gate and inspect the current GitHub Actions run directly before citing CI in a submission.
@@ -176,10 +176,10 @@ This is an internal estimate, not a guarantee of judging outcome:
 | Monad relevance | Finalized Testnet registry, commitment, six offer registrations, and post-Rain attestation with explorer evidence | Operator-attested chronology is not custody, independent Rain verification, or proof of offchain seller visibility |
 | Financial reasoning | Strong invariants, integer cents, idempotency, freeze/reconcile behavior | Buyer workspace is still browser-local |
 | Product quality | Strong repeat-use sandbox and clear information architecture | No auth, durable backend, real supply, or fulfillment |
-| Demo resilience | Strong deterministic replay, public evidence registry, first-frame proof summary, and honest fallback | `overnight@246d81a` still needs a verified deployment and timed run |
+| Demo resilience | Strong deterministic replay, public evidence registry, verified public Preview, first-frame proof summary, and honest fallback | Repeat the timed run on the actual judge network |
 | Technical inspection | Strong test coverage and explicit trust boundaries | Hosted CI must be checked at the exact submitted commit before it is cited |
 
-The last verified public `main@9b12002` baseline was accessible, but it is not evidence for unshipped `overnight@246d81a` changes. Readiness must be scored against the exact deployed commit. The current branch contains a source-bound, sanitized Rain sandbox + finalized Monad Testnet record and exposes it through `/evidence`; the record is still operator-attested and does not prove real money, custody, independent Rain verification, or merchant demand. Maximum sponsor credibility still requires a verified deployment of the exact presented branch and two timed rehearsals; code paths alone are not transaction evidence.
+The stable public `overnight` Preview now exposes the buyer product, seller pilot, evidence registry, and technical replay. It contains a source-bound, sanitized Rain sandbox + finalized Monad Testnet record at `/evidence`; the record is still operator-attested and does not prove real money, custody, independent Rain verification, or merchant demand. Readiness must still be scored against the exact submitted branch and the bounded proof itself; a working URL does not turn code paths into transaction evidence.
 
 ### What judges should remember
 
@@ -1280,10 +1280,10 @@ No secret value belongs in this document. Record only the verified capability st
 | Environment | Rain | OpenAI | Monad | Deployment/access |
 | --- | --- | --- | --- | --- |
 | Local ignored `.env.local` | Run `npm run demo:preflight`; do not infer current credentials from the published record | Run preflight; deterministic fallback remains available | Published source-bound record finalized on chain `10143`; current operator configuration and gas must be rechecked before another write | Loopback development only |
-| Vercel Preview | Not configured; rehearsal/unavailable only | `OPENAI_API_KEY` is the only currently recorded Preview variable | Not configured; local evidence only | No `overnight` deployment had been verified at this snapshot |
+| Vercel Preview | Not configured; rehearsal/unavailable only | Public product parsing is deterministic; a server key remains spend-gated | Not configured for runtime writes; finalized static record published at `/evidence` | Stable alias `https://pool-overnight-yeayea.vercel.app`, manually deployed and canary-verified |
 | Public Vercel Production alias | Do not infer environment from page access | Do not infer environment from page access | Do not infer environment from page access | Last verified public baseline served `main@9b12002` |
 
-Vercel Git integration is not connected, so branch pushes do not create or update deployments automatically. Re-run the environment inventory after the next explicit deployment and update this table from observed settings and UI evidence, never from assumptions.
+Vercel Git integration is not connected, so branch pushes do not create or update deployments automatically. Re-run the environment inventory after each explicit deployment and update this table from observed settings and UI evidence, never from assumptions.
 
 ---
 
@@ -1433,26 +1433,27 @@ Recent application baseline commits, newest first:
 
 Facts verified on 2026-08-09:
 
-- The last verified stable public Production alias was
-  `https://pool-agentic-market-preview-20260808-yeayea.vercel.app` and returns
-  the current `main@9b12002` baseline without a Vercel access gate.
-- `https://pool-agentic-market-preview-20260808-yeayea.vercel.app/demo` is the
-  corresponding technical-proof route for that same baseline.
+- The verified stable public Preview alias is
+  `https://pool-overnight-yeayea.vercel.app`; `/`, `/merchant`, `/evidence`,
+  and `/demo` were canary-verified at desktop and 390px mobile widths.
+- The historical Production alias still serves the older `main@9b12002`
+  baseline and must not be substituted for the `overnight` submission URL.
 - Vercel Git integration is **not connected** to `inevident/Pool`; a Git push
   does not create a deployment. A 2026-08-09 CLI connection attempt failed
   because the signed-in Vercel account has no GitHub Login Connection. That
   OAuth/account link must be added by the account owner before `vercel git
   connect https://github.com/inevident/Pool.git` can succeed.
-- No `overnight@246d81a` deployment has been verified. Do not use the public
-  `main` alias or its `/demo` route as evidence for current branch behavior.
-- The Vercel Preview environment currently contains only `OPENAI_API_KEY`.
-  Rain and Monad must therefore appear as rehearsal, local evidence, or
-  unavailable there.
-- No claim is made here about uninspected Production environment values, the
-  latest hosted build result, or a future deployment URL.
+- The `overnight` Preview was deployed manually, then assigned the stable alias
+  above. Git pushes alone still do nothing.
+- The Vercel Preview has no Rain or Monad execution configuration. Runtime
+  actions therefore appear as rehearsal/unavailable; the finalized `/evidence`
+  record is static, sanitized historical proof.
+- Vercel Preview Feedback is disabled so Vercel's injected toolbar does not
+  conflict with the application's strict Content Security Policy during judging.
+- No claim is made here about uninspected Production environment values.
 - `vercel.json` selects the Next.js framework and `npm run build:next`.
 
-Deployment handoff for `overnight@246d81a` and any subsequent documentation-only commit:
+Deployment handoff for `overnight`:
 
 1. Run the full local gate and record the exact commit SHA.
 2. Explicitly link or deploy through the intended Vercel owner/project; do not
@@ -1557,9 +1558,8 @@ Demand density, repeated buyer mandates, merchant participation, transaction out
 
 ### P0: demo-critical external gaps
 
-- No `overnight@246d81a` deployment has been verified; the last checked public alias served `main@9b12002`.
 - Vercel Git integration is not connected, so deployment must be explicit.
-- Vercel Preview has only `OPENAI_API_KEY`; it cannot provide Rain or Monad evidence.
+- Vercel Preview has no Rain or Monad execution configuration; it publishes the finalized static evidence record without claiming a fresh provider run.
 - Rain key needs rotation/re-provisioning because it was shared in a conversation image.
 - The source-bound fixed-fixture Rain + Monad record exists, but its Rain records were same-day idempotent replays; any future provider run must use rotated credentials and freshly verify connectivity.
 - Monad Testnet registry/operator/commitment/six-offer/attestation explorer evidence is finalized for `overnight@246d81a`. Re-run preflight and check current testnet gas before any additional write; no current balance is asserted.
