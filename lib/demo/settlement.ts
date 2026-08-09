@@ -79,6 +79,12 @@ export function getDemoFundingState(
  * drifts from the accepted, fingerprinted market-engine agreement.
  */
 export function demoSettlementBoundaryIsValid() {
+  const commitmentTransition = HERO_DEMO.fundedCoalition.stateHistory.find(
+    (transition) => transition.to === "committed",
+  );
+  const marketOpenTransition = HERO_DEMO.lifecycle.stateHistory.find(
+    (transition) => transition.to === "market_open",
+  );
   return Boolean(
     HERO_DEMO.policy.passed &&
       HERO_DEMO.authorization.approved &&
@@ -102,6 +108,10 @@ export function demoSettlementBoundaryIsValid() {
       HERO_FUNDING.summary.totalCapturedCents === settlementTotalInCents &&
       HERO_FUNDING.summary.totalReleasedCents ===
         HERO_DEMO.outcome.totalSavingsCents &&
+      HERO_DEMO.fundedCoalition.state === "committed" &&
+      commitmentTransition &&
+      marketOpenTransition &&
+      Date.parse(commitmentTransition.at) < Date.parse(marketOpenTransition.at) &&
       marketAuthorization.charges.length === settlementAllocations.length &&
       HERO_FUNDING.frozenReservations.length === settlementAllocations.length &&
       settlementAllocations.every((allocation) => {
@@ -124,6 +134,8 @@ export function demoSettlementBoundaryIsValid() {
           reservation.reservedCents ===
             allocation.quantity * HERO_DEMO.product.baselineUnitPriceCents &&
           reservation.state === "frozen" &&
+          reservation.frozenAt &&
+          Date.parse(reservation.frozenAt) <= Date.parse(commitmentTransition.at) &&
           allocation.amountInCents <= reservation.reservedCents
         );
       }),

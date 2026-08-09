@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.playwright-cli/
 
 # next.js
 /.next/
@@ -39,6 +40,9 @@ yarn-error.log*
 next-env.d.ts
 *.tsbuildinfo
 /dist/
+/artifacts/
+/cache/
+/ignition/deployments/
 /.wrangler/
 /outputs/
 /work/

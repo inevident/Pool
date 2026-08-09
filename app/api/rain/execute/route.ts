@@ -18,13 +18,26 @@ import {
   reverseAuthorization,
   settleAuthorization,
 } from "../../../../lib/rain/client";
+import { canExecuteLiveDemo } from "../../../../lib/security/demo-access";
+import {
+  getMonadRainGate,
+  getMonadWriteConfiguration,
+  MonadRegistryError,
+} from "../../../../lib/monad/server";
+import {
+  attestSettledRainTransactionsOnMonad,
+  monadTransactionForJson,
+  requireFinalizedHeroMarketOnMonad,
+} from "../../../../lib/monad/workflow";
 
 export const dynamic = "force-dynamic";
 
-const requestSchema = z.object({
-  scenarioVersion: z.literal(DEMO_SCENARIO_VERSION),
-  confirmation: z.literal("execute-rain-sandbox"),
-});
+const requestSchema = z
+  .object({
+    scenarioVersion: z.literal(DEMO_SCENARIO_VERSION),
+    confirmation: z.literal("execute-rain-sandbox"),
+  })
+  .strict();
 
 let lastExecutionAt = 0;
 
@@ -81,7 +94,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const now = Date.now();
+  if (!canExecuteLiveDemo(request)) {
+    return NextResponse.json(
+      { status: "rejected", message: "Live demo access is locked." },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  const executionStartedAt = new Date();
+  const now = executionStartedAt.getTime();
   if (now - lastExecutionAt < 8_000) {
     return NextResponse.json(
       {
@@ -89,6 +110,14 @@ export async function POST(request: NextRequest) {
         message: "A settlement run is already in progress.",
       },
       { status: 429 },
+    );
+  }
+
+  const requestLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(requestLength) && requestLength > 4_096) {
+    return NextResponse.json(
+      { status: "rejected", message: "Invalid demo execution payload." },
+      { status: 413, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -119,8 +148,41 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const monadConfiguration = getMonadWriteConfiguration();
+  const monadGate = getMonadRainGate(monadConfiguration);
+  if (!monadGate.allowed) {
+    return NextResponse.json(
+      {
+        status: "rejected",
+        code: monadGate.code.toLowerCase(),
+        message: monadGate.message,
+      },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  if (monadConfiguration.ready) {
+    try {
+      // This verification reads finalized chain state. It does not trust a
+      // previous request's memory, so cold starts cannot bypass the pre-bid gate.
+      await requireFinalizedHeroMarketOnMonad({ now: executionStartedAt });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          status: "rejected",
+          code:
+            error instanceof MonadRegistryError
+              ? error.code.toLowerCase()
+              : "monad_preparation_verification_failed",
+          message:
+            "Finalized Monad state does not match today's funding-root and offer commitments. Rain was not called.",
+        },
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+  }
+
   lastExecutionAt = now;
-  const { runKey, expiration } = utcRunWindow();
+  const { runKey, expiration } = utcRunWindow(executionStartedAt);
   const cards: Array<{
     buyerId: string;
     buyerName: string;
@@ -236,6 +298,68 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    let monad:
+      | {
+          status: "attested";
+          network: "Monad Testnet";
+          commitmentId: string;
+          acceptedOfferHash: string;
+          rainSettlementHash: string;
+          rainTransactionCount: number;
+          replayed: boolean;
+          transaction: ReturnType<typeof monadTransactionForJson>;
+        }
+      | {
+          status: "attestation_pending";
+          network: "Monad Testnet";
+          code: string;
+          message: string;
+        }
+      | {
+          status: "not_configured";
+          network: "Monad Testnet";
+          mode: "local-proof";
+          message: string;
+        };
+    if (monadConfiguration.ready) {
+      try {
+        const attestation = await attestSettledRainTransactionsOnMonad({
+          rainTransactionIds: settled.map((entry) => entry.transactionId),
+          capturedCents: settlementTotalInCents,
+          now: executionStartedAt,
+        });
+        monad = {
+          status: "attested",
+          network: "Monad Testnet",
+          commitmentId: attestation.commitmentId,
+          acceptedOfferHash: attestation.acceptedOfferHash,
+          rainSettlementHash: attestation.rainSettlementHash,
+          rainTransactionCount: attestation.rainTransactionCount,
+          replayed: attestation.replayed,
+          transaction: monadTransactionForJson(attestation.transaction),
+        };
+      } catch (error) {
+        monad = {
+          status: "attestation_pending",
+          network: "Monad Testnet",
+          code:
+            error instanceof MonadRegistryError
+              ? error.code
+              : "MONAD_ATTESTATION_FAILED",
+          message:
+            "Rain settled successfully; the idempotent Monad attestation remains safe to retry.",
+        };
+      }
+    } else {
+      monad = {
+        status: "not_configured",
+        network: "Monad Testnet",
+        mode: "local-proof",
+        message:
+          "Development-only Rain integration completed without a Monad transaction; no on-chain claim is made.",
+      };
+    }
+
     return NextResponse.json(
       {
         status: "settled",
@@ -245,6 +369,7 @@ export async function POST(request: NextRequest) {
         runKey,
         sharedSandboxCardholder: true,
         funding: getDemoFundingState("settled", settlementTotalInCents),
+        monad,
         guardrail: {
           status: probe.transaction.status,
           reason: probe.transaction.declinedReason ?? "blocked_mcc",
