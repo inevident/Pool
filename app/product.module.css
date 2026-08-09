@@ -476,6 +476,14 @@
 .quickIntentControl input::placeholder { color: #70766e; }
 .quickIntentControl button { min-height: 44px; background: var(--product-lime); border-color: var(--product-lime); color: var(--product-dark) !important; box-shadow: none; }
 
+.agentBoundary {
+  display: block;
+  margin-top: 7px;
+  color: #747a72;
+  font: 650 7px/1.4 var(--font-geist-mono);
+  letter-spacing: .02em;
+}
+
 .exampleRow {
   position: relative;
   z-index: 1;
@@ -497,6 +505,180 @@
 }
 
 .exampleRow button:hover { color: #fff; border-color: rgba(201, 255, 87, .3); }
+
+.agentReceiptSlot {
+  position: relative;
+  z-index: 2;
+  max-width: 680px;
+}
+
+.agentError {
+  margin-top: 13px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid rgba(255, 113, 109, .32);
+  border-radius: 9px;
+  background: rgba(165, 60, 56, .12);
+  color: #ffaaa5;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.agentError svg { flex: 0 0 auto; }
+
+.agentReceipt {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(201, 255, 87, .25);
+  border-radius: 11px;
+  background: rgba(6, 8, 6, .78);
+  color: #f5f3e9;
+  box-shadow: 0 16px 35px rgba(0, 0, 0, .16);
+}
+
+.agentReceiptBlocked { border-color: rgba(255, 170, 165, .3); }
+
+.agentReceiptHeader {
+  min-height: 42px;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+
+.agentReceiptHeader > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--product-lime);
+  font: 720 7px/1 var(--font-geist-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.agentReceiptHeader > div { text-align: right; }
+.agentReceiptHeader strong,
+.agentReceiptHeader small { display: block; }
+.agentReceiptHeader strong { color: #f7f5ec; font-size: 9px; }
+.agentReceiptHeader small { margin-top: 3px; color: #858b82; font-size: 7px; }
+
+.agentSource {
+  margin: 0;
+  padding: 10px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  color: #aeb3aa;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.agentFlow {
+  margin: 0;
+  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  list-style: none;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.agentFlow li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #9da29a;
+}
+
+.agentFlow li > span {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(201, 255, 87, .28);
+  border-radius: 50%;
+  color: var(--product-lime);
+  font: 720 7px/1 var(--font-geist-mono);
+}
+
+.agentFlow li[data-status="blocked"] > span {
+  border-color: rgba(255, 170, 165, .35);
+  color: #ffaaa5;
+}
+
+.agentFlow small {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font: 650 6.5px/1.25 var(--font-geist-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentMandateGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.agentMandateGrid > div {
+  min-width: 0;
+  padding: 10px 11px;
+  border-right: 1px solid rgba(255, 255, 255, .07);
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.agentMandateGrid > div:nth-child(2n) { border-right: 0; }
+.agentMandateGrid span,
+.agentMandateGrid strong,
+.agentMandateGrid small { display: block; }
+.agentMandateGrid span { color: #777d75; font: 680 6.5px/1 var(--font-geist-mono); letter-spacing: .04em; text-transform: uppercase; }
+.agentMandateGrid strong { margin-top: 6px; overflow: hidden; color: #f1efe7; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.agentMandateGrid small { margin-top: 3px; overflow: hidden; color: #8c9289; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+
+.agentClarifications {
+  margin: 0;
+  padding: 10px 12px 10px 26px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  color: #ffaaa5;
+  font-size: 7px;
+  line-height: 1.55;
+}
+
+.agentReceiptFooter {
+  min-height: 42px;
+  padding: 8px 10px 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agentReceiptFooter > span {
+  color: #80867e;
+  font: 620 6.5px/1.4 var(--font-geist-mono);
+}
+
+.agentReceiptFooter > span strong { color: var(--product-lime); }
+
+.agentReceiptFooter button {
+  min-height: 34px;
+  padding: 0 10px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--product-lime);
+  border-radius: 7px;
+  background: var(--product-lime);
+  color: var(--product-dark);
+  font-size: 8px;
+  font-weight: 750;
+}
 
 .balancePanel {
   display: flex;
@@ -1390,6 +1572,9 @@
   .intentCard h2 { font-size: 41px; }
   .quickIntentControl { grid-template-columns: 1fr; }
   .quickIntentControl input { min-height: 44px; }
+  .agentFlow { grid-template-columns: 1fr 1fr; row-gap: 9px; }
+  .agentReceiptFooter { align-items: stretch; flex-direction: column; }
+  .agentReceiptFooter button { width: 100%; min-height: 44px; }
   .exampleRow button,
   .cardAction,
   .quietButton,

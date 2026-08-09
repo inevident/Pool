@@ -61,6 +61,7 @@ import {
   type ProductPool,
   type ProductWorkspace,
 } from "@/lib/product";
+import type { ProductIntentRun } from "@/lib/agent/product-intent";
 import { minimumConsumerDeliveryDays } from "@/lib/market/consumer";
 
 import styles from "../product.module.css";
@@ -80,7 +81,12 @@ type ProductWorkspaceProps = {
 
 type ModalState =
   | { kind: "fund"; suggestedCents?: number }
-  | { kind: "intent"; productId?: string; quickText?: string }
+  | {
+      kind: "intent";
+      productId?: string;
+      quickText?: string;
+      decisionReceipt?: ProductIntentRun;
+    }
   | { kind: "join"; poolId: string }
   | { kind: "leave"; membershipId: string }
   | { kind: "settle"; membershipId: string }
@@ -286,6 +292,23 @@ function isCompatibleWorkspace(value: unknown): value is ProductWorkspace {
   }
 }
 
+function isProductIntentRun(value: unknown): value is ProductIntentRun {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<ProductIntentRun>;
+  return (
+    (candidate.status === "ready_for_review" ||
+      candidate.status === "needs_clarification" ||
+      candidate.status === "blocked") &&
+    (candidate.mode === "openai_responses" ||
+      candidate.mode === "deterministic_fallback") &&
+    typeof candidate.traceId === "string" &&
+    typeof candidate.rawIntent === "string" &&
+    Boolean(candidate.extraction) &&
+    Boolean(candidate.decision) &&
+    Array.isArray(candidate.trace)
+  );
+}
+
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
@@ -393,6 +416,11 @@ export default function ProductWorkspaceApp({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [quickIntent, setQuickIntent] = useState("");
+  const [productAgentRun, setProductAgentRun] =
+    useState<ProductIntentRun | null>(null);
+  const [productAgentError, setProductAgentError] = useState<string | null>(null);
+  const [productAgentLoading, setProductAgentLoading] = useState(false);
+  const productAgentRequestRef = useRef<AbortController | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -498,12 +526,15 @@ export default function ProductWorkspaceApp({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [modal]);
 
+  useEffect(
+    () => () => {
+      productAgentRequestRef.current?.abort();
+    },
+    [],
+  );
+
   const balance = workspace.balances[workspace.owner.id];
   const pools = useMemo(() => Object.values(workspace.pools), [workspace.pools]);
-  const products = useMemo(
-    () => Object.values(workspace.products),
-    [workspace.products],
-  );
   const activeMemberships = useMemo(
     () =>
       Object.values(workspace.memberships).filter(
@@ -535,29 +566,66 @@ export default function ProductWorkspaceApp({
     );
   }
 
+  async function interpretProductIntent(rawIntent: string) {
+    const intent = rawIntent.trim();
+    setQuickIntent(intent);
+    setProductAgentError(null);
+    setProductAgentRun(null);
+    productAgentRequestRef.current?.abort();
+    const controller = new AbortController();
+    productAgentRequestRef.current = controller;
+    setProductAgentLoading(true);
+
+    try {
+      const response = await fetch("/api/agent/product-intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pool-agent-action": "interpret-product-intent",
+        },
+        cache: "no-store",
+        body: JSON.stringify({ intent }),
+        signal: controller.signal,
+      });
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          body &&
+          typeof body === "object" &&
+          "message" in body &&
+          typeof body.message === "string"
+            ? body.message
+            : "The buyer intent agent could not interpret this request.";
+        throw new Error(message);
+      }
+      if (!isProductIntentRun(body)) {
+        throw new Error("The buyer intent agent returned an invalid decision receipt.");
+      }
+      setProductAgentRun(body);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setProductAgentError(
+        error instanceof Error
+          ? error.message
+          : "The buyer intent agent could not interpret this request.",
+      );
+    } finally {
+      if (productAgentRequestRef.current === controller) {
+        productAgentRequestRef.current = null;
+        setProductAgentLoading(false);
+      }
+    }
+  }
+
+  function updateQuickIntent(value: string) {
+    setQuickIntent(value);
+    setProductAgentRun(null);
+    setProductAgentError(null);
+  }
+
   function openQuickIntent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalized = quickIntent.trim().toLowerCase();
-    let productId = products[0]?.id;
-    if (normalized.includes("steam") || normalized.includes("game")) {
-      productId = "product-steam-deck-oled-512";
-    } else if (
-      normalized.includes("mac") ||
-      normalized.includes("laptop") ||
-      normalized.includes("computer")
-    ) {
-      productId = "product-macbook-air-m4-13";
-    } else if (normalized.includes("dyson") || normalized.includes("airwrap")) {
-      productId = "product-dyson-airwrap-id";
-    } else if (
-      normalized.includes("sony") ||
-      normalized.includes("xm6") ||
-      normalized.includes("headphone") ||
-      normalized.includes("audio")
-    ) {
-      productId = "product-sony-wh1000xm6";
-    }
-    setModal({ kind: "intent", productId, quickText: quickIntent.trim() });
+    void interpretProductIntent(quickIntent);
   }
 
   function resetWorkspace() {
@@ -666,8 +734,12 @@ export default function ProductWorkspaceApp({
             potentialSavings={potentialSavings}
             hydrated={hydrated}
             quickIntent={quickIntent}
-            setQuickIntent={setQuickIntent}
+            setQuickIntent={updateQuickIntent}
             openQuickIntent={openQuickIntent}
+            interpretProductIntent={interpretProductIntent}
+            productAgentRun={productAgentRun}
+            productAgentError={productAgentError}
+            productAgentLoading={productAgentLoading}
             setModal={setModal}
           />
         ) : null}
@@ -763,6 +835,10 @@ function DashboardView({
   quickIntent,
   setQuickIntent,
   openQuickIntent,
+  interpretProductIntent,
+  productAgentRun,
+  productAgentError,
+  productAgentLoading,
   setModal,
 }: SharedViewProps & {
   balance: ProductWorkspace["balances"][string];
@@ -774,6 +850,10 @@ function DashboardView({
   quickIntent: string;
   setQuickIntent: (value: string) => void;
   openQuickIntent: (event: FormEvent<HTMLFormElement>) => void;
+  interpretProductIntent: (intent: string) => Promise<void>;
+  productAgentRun: ProductIntentRun | null;
+  productAgentError: string | null;
+  productAgentLoading: boolean;
 }) {
   const recentActivity = [...workspace.activity].reverse().slice(0, 5);
   const intents = Object.values(workspace.intents).slice(-4).reverse();
@@ -821,28 +901,80 @@ function DashboardView({
                 id="quick-intent"
                 value={quickIntent}
                 onChange={(event) => setQuickIntent(event.target.value)}
-                placeholder="e.g. Sony XM6 headphones under $390, can wait 10 days"
+                placeholder="e.g. 1 Sony XM6 under $400; I can wait 30 days"
+                minLength={12}
+                maxLength={500}
+                aria-describedby="quick-intent-boundary"
+                required
               />
-              <button type="submit" className={styles.primaryButton}>
-                Structure intent <ArrowRight size={14} />
+              <button
+                type="submit"
+                className={styles.primaryButton}
+                disabled={productAgentLoading}
+              >
+                {productAgentLoading ? "Interpreting…" : "Run buyer agent"}{" "}
+                <ArrowRight size={14} />
               </button>
             </div>
+            <small id="quick-intent-boundary" className={styles.agentBoundary}>
+              Interpretation only · no account lookup, reservation, or money movement
+            </small>
           </form>
           <div className={styles.exampleRow} aria-label="Example purchases">
-            {["Sony XM6 headphones", "Steam Deck OLED", "MacBook Air M4"].map(
-              (example) => (
+            {[
+              {
+                label: "Sony XM6",
+                intent: "I want 1 Sony XM6 under $400 and can wait 30 days.",
+              },
+              {
+                label: "Steam Deck OLED",
+                intent: "I want 1 Steam Deck OLED under $520 and can wait 30 days.",
+              },
+              {
+                label: "MacBook Air M4",
+                intent: "I want 1 MacBook Air M4 under $950 and can wait 30 days.",
+              },
+              {
+                label: "Dyson Airwrap",
+                intent: "I want 1 Dyson Airwrap under $550 and can wait 30 days.",
+              },
+            ].map((example) => (
                 <button
-                  key={example}
+                  key={example.label}
                   type="button"
                   onClick={() => {
-                    setQuickIntent(example);
-                    setModal({ kind: "intent", quickText: example });
+                    setQuickIntent(example.intent);
+                    void interpretProductIntent(example.intent);
                   }}
                 >
-                  {example}
+                  {example.label}
                 </button>
-              ),
-            )}
+              ))}
+          </div>
+          <div className={styles.agentReceiptSlot} aria-live="polite">
+            {productAgentError ? (
+              <div className={styles.agentError} role="alert">
+                <Info size={14} />
+                <span>{productAgentError}</span>
+              </div>
+            ) : null}
+            {productAgentRun ? (
+              <ProductAgentReceipt
+                run={productAgentRun}
+                onReview={
+                  productAgentRun.status === "ready_for_review" &&
+                  productAgentRun.match
+                    ? () =>
+                        setModal({
+                          kind: "intent",
+                          productId: productAgentRun.match!.productId,
+                          quickText: productAgentRun.rawIntent,
+                          decisionReceipt: productAgentRun,
+                        })
+                    : undefined
+                }
+              />
+            ) : null}
           </div>
         </div>
 
@@ -973,6 +1105,134 @@ function DashboardView({
         <ActivityLedger activity={recentActivity} />
       </section>
     </>
+  );
+}
+
+const agentStageLabels: Record<
+  ProductIntentRun["trace"][number]["stage"],
+  string
+> = {
+  natural_language: "Natural language",
+  catalog_match: "Catalog match",
+  mandate_checks: "Mandate checks",
+  review: "Review",
+};
+
+function ProductAgentReceipt({
+  run,
+  onReview,
+}: {
+  run: ProductIntentRun;
+  onReview?: () => void;
+}) {
+  const passedChecks = run.decision.checks.filter((check) => check.passed).length;
+  const receiptStatus =
+    run.status === "ready_for_review"
+      ? "Ready for review"
+      : run.status === "blocked"
+        ? "Blocked safely"
+        : "Needs clarification";
+
+  return (
+    <section
+      className={classNames(
+        styles.agentReceipt,
+        run.status !== "ready_for_review" && styles.agentReceiptBlocked,
+      )}
+      aria-label="Buyer intent agent decision receipt"
+    >
+      <header className={styles.agentReceiptHeader}>
+        <span>
+          <Sparkles size={13} /> Decision receipt
+        </span>
+        <div>
+          <strong>{receiptStatus}</strong>
+          <small>
+            {run.mode === "openai_responses"
+              ? "Protected AI extraction"
+              : "Deterministic catalog parser"}
+          </small>
+        </div>
+      </header>
+
+      <p className={styles.agentSource}>“{run.rawIntent}”</p>
+
+      <ol className={styles.agentFlow}>
+        {run.trace.map((step) => (
+          <li key={step.stage} data-status={step.status} title={step.detail}>
+            <span>{step.status === "blocked" ? "!" : step.status === "pending" ? "4" : "✓"}</span>
+            <small>{agentStageLabels[step.stage]}</small>
+          </li>
+        ))}
+      </ol>
+
+      <div className={styles.agentMandateGrid}>
+        <div>
+          <span>Catalog match</span>
+          <strong>
+            {run.match
+              ? `${run.match.productBrand} ${run.match.productName}`
+              : "No single match"}
+          </strong>
+          <small>{run.match ? run.match.poolId : "Clarify the product"}</small>
+        </div>
+        <div>
+          <span>Private mandate</span>
+          <strong>
+            {run.extraction.quantity ?? "—"} unit
+            {run.extraction.quantity === 1 ? "" : "s"} ·{" "}
+            {run.extraction.maxUnitPriceCents === null
+              ? "no max"
+              : `${cents(run.extraction.maxUnitPriceCents)} max`}
+          </strong>
+          <small>
+            {run.extraction.patienceDays === null
+              ? "Wait window missing"
+              : `${run.extraction.patienceDays}-day patience window`}
+          </small>
+        </div>
+        <div>
+          <span>Mandate checks</span>
+          <strong>
+            {passedChecks}/{run.decision.checks.length} passed
+          </strong>
+          <small>
+            {run.match
+              ? `${cents(run.match.estimatedUnitPriceCents)} estimated pool price`
+              : "No pool economics evaluated"}
+          </small>
+        </div>
+        <div>
+          <span>MSRP coverage if joined later</span>
+          <strong>
+            {run.decision.requiredMsrpCoverageCents === null
+              ? "Not calculable"
+              : cents(run.decision.requiredMsrpCoverageCents)}
+          </strong>
+          <small>Not requested during interpretation</small>
+        </div>
+      </div>
+
+      {run.decision.clarifications.length ? (
+        <ul className={styles.agentClarifications}>
+          {run.decision.clarifications.map((clarification) => (
+            <li key={clarification}>{clarification}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <footer className={styles.agentReceiptFooter}>
+        <span>
+          financialAuthorization: <strong>not_requested</strong> · interpretation
+          moved <strong>$0</strong>
+        </span>
+        {onReview ? (
+          <button type="button" onClick={onReview}>
+            Review mandate <ArrowRight size={12} />
+          </button>
+        ) : null}
+      </footer>
+    </section>
   );
 }
 
@@ -2043,6 +2303,7 @@ function ProductModal({
             workspace={workspace}
             initialProductId={modal.productId}
             quickText={modal.quickText}
+            decisionReceipt={modal.decisionReceipt}
             setWorkspace={setWorkspace}
             setModal={setModal}
             setToast={setToast}
@@ -2214,11 +2475,16 @@ function IntentForm({
   workspace,
   initialProductId,
   quickText,
+  decisionReceipt,
   setWorkspace,
   setModal,
   setToast,
   showError,
-}: ModalFormProps & { initialProductId?: string; quickText?: string }) {
+}: ModalFormProps & {
+  initialProductId?: string;
+  quickText?: string;
+  decisionReceipt?: ProductIntentRun;
+}) {
   const products = Object.values(workspace.products);
   const inferredProductId = useMemo(() => {
     if (initialProductId) return initialProductId;
@@ -2229,12 +2495,23 @@ function IntentForm({
     return "product-sony-wh1000xm6";
   }, [initialProductId, quickText]);
   const [productId, setProductId] = useState(inferredProductId);
-  const [quantity, setQuantity] = useState("1");
+  const [quantity, setQuantity] = useState(
+    decisionReceipt?.extraction.quantity
+      ? String(decisionReceipt.extraction.quantity)
+      : "1",
+  );
   const [targetPrice, setTargetPrice] = useState(() => {
+    if (decisionReceipt?.extraction.maxUnitPriceCents) {
+      return (decisionReceipt.extraction.maxUnitPriceCents / 100).toFixed(2);
+    }
     const pool = Object.values(workspace.pools).find((candidate) => candidate.productId === inferredProductId);
     return ((pool?.estimatedUnitPriceCents ?? workspace.products[inferredProductId]?.msrpUnitCents ?? 1) / 100).toFixed(2);
   });
-  const [waitDays, setWaitDays] = useState("30");
+  const [waitDays, setWaitDays] = useState(
+    decisionReceipt?.extraction.patienceDays
+      ? String(decisionReceipt.extraction.patienceDays)
+      : "30",
+  );
   const renderNow = useNow();
   const selectedProduct = workspace.products[productId];
   const matchingPool = Object.values(workspace.pools).find((pool) => pool.productId === productId);
@@ -2290,10 +2567,15 @@ function IntentForm({
     <form onSubmit={submit}>
       <div className={styles.modalBody}>
         <p className={styles.modalIntro}>
-          Confirm the structured mandate POOL will use for matching. This stays in your
-          local product sandbox until you join a pool.
+          {decisionReceipt
+            ? "Confirm the structured mandate POOL will use for matching. The receipt below did not save anything or request funds; only your explicit Save creates a browser-local intent, and joining remains a later action."
+            : "Enter the mandate POOL will use for matching. Only your explicit Save creates a browser-local intent; joining a pool and reserving test funds remain later actions."}
         </p>
-        {quickText ? <div className={styles.ruleBox}><Sparkles size={15} /><span>Interpreted from: “{quickText}”</span></div> : null}
+        {decisionReceipt ? (
+          <ProductAgentReceipt run={decisionReceipt} />
+        ) : quickText ? (
+          <div className={styles.ruleBox}><Sparkles size={15} /><span>Interpreted from: “{quickText}”</span></div>
+        ) : null}
         <div className={styles.fieldGrid} style={{ marginTop: quickText ? 14 : 0 }}>
           <div className={classNames(styles.field, styles.fieldFull)}>
             <label htmlFor="intent-product">Matched product</label>
@@ -2311,12 +2593,17 @@ function IntentForm({
           </div>
           <div className={classNames(styles.field, styles.fieldFull)}>
             <label htmlFor="intent-window">How long can you wait?</label>
-            <select id="intent-window" value={waitDays} onChange={(event) => setWaitDays(event.target.value)}>
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
-              <option value="60">60 days</option>
-            </select>
+            <input
+              id="intent-window"
+              type="number"
+              min="1"
+              max="365"
+              step="1"
+              value={waitDays}
+              onChange={(event) => setWaitDays(event.target.value)}
+              required
+            />
+            <div className={styles.fieldHint}>Days from now · review and edit before saving</div>
           </div>
         </div>
         {matchingPool ? (
