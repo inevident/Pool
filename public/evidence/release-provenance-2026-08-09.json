@@ -26,15 +26,19 @@
     "sourceBranch": "overnight"
   },
   "deployment": {
-    "deploymentId": "dpl_4PhChmBuomnxaJ665zetzqCwgyjv",
-    "promotedFrom": "dpl_D5BLR3q5CC1Yx4JsdFGxC4caMnqb",
+    "deploymentId": "dpl_75cuPBWREfmT2KtJBUoNcPErtPYi",
     "target": "production",
     "state": "READY",
     "region": "iad1",
-    "deployedCommit": "712328bc8abe14c3e55c7dd4f6889d1a62033186",
-    "deploymentUrl": "https://pool-agentic-market-preview-20260808-8s3diz5c6-yeayea.vercel.app",
-    "createdAt": "2026-08-09T13:02:52.223Z",
-    "readyAt": "2026-08-09T13:03:31.021Z",
+    "deployedCommit": "96d07f67414e95eb694eebd3d8bf862a3909f0df",
+    "deploymentUrl": "https://pool-agentic-market-preview-20260808-h6hhpbpj6-yeayea.vercel.app",
+    "providerExecution": {
+      "rainSandboxConfigured": true,
+      "rainLiveExecutionEnabled": true,
+      "monadGateSatisfied": true,
+      "anonymousVisitorState": "RAIN_PROVIDER_ACCESS_LOCKED",
+      "note": "Provider actions require a server-minted demo session; they fail closed for every anonymous visitor."
+    },
     "aliases": [
       "https://pool-overnight-yeayea.vercel.app",
       "https://pool-agentic-market-preview-2026080.vercel.app",
