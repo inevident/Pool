@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-08-09",
+  "scenarioVersion": "monitor-pool-v1",
+  "provider": "Rain",
+  "environment": "sandbox",
+  "realMoneyMoved": false,
+  "runKey": "pool-monitor-pool-v1-20260809",
+  "fundingBoundary": {
+    "ledger": "POOL",
+    "simulated": true,
+    "reservedCents": 574800,
+    "capturedCents": 466800,
+    "releasedCents": 108000
+  },
+  "payments": [
+    {
+      "buyerId": "buyer-harbor",
+      "amountInCents": 116700,
+      "transactionId": "ddcdfd2c-9846-4b46-b0d4-60b86510a8c3",
+      "status": "settled"
+    },
+    {
+      "buyerId": "buyer-kernel",
+      "amountInCents": 194500,
+      "transactionId": "e98eea91-ca5e-43c0-896c-dd9e20da5c35",
+      "status": "settled"
+    },
+    {
+      "buyerId": "buyer-patchwork",
+      "amountInCents": 155600,
+      "transactionId": "e2a24bda-512a-4460-8665-cb618df345d3",
+      "status": "settled"
+    }
+  ],
+  "guardrail": {
+    "merchantCategoryCode": "7995",
+    "transactionId": "9b59b3b8-447b-4f85-bd97-a5090088d6b6",
+    "status": "declined",
+    "reason": "scoped_card_mcc_not_allowed"
+  },
+  "monad": {
+    "status": "not_configured",
+    "mode": "local-proof",
+    "testnetTransactionClaimed": false
+  },
+  "redactions": [
+    "card identifiers",
+    "card last-four values",
+    "all credentials"
+  ]
+}

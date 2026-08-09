@@ -3,7 +3,10 @@ import test from "node:test";
 import {
   assertProductWorkspaceInvariant,
   createSeededProductWorkspace,
+  hasProductPoolMetMinimum,
   LOCAL_TREASURY_FIXTURE_CENTS,
+  PRODUCT_POOL_BID_WINDOW_MS,
+  PRODUCT_POOL_COMMITMENT_WINDOW_DAYS,
   PRODUCT_SEED_VERSION,
   PRODUCT_WORKSPACE_SCHEMA_VERSION,
   reduceProductWorkspace,
@@ -52,7 +55,7 @@ const createSonyIntent = (state, overrides = {}) =>
     productId: SONY_PRODUCT_ID,
     quantity: 1,
     targetUnitPriceCents: 37_900,
-    expiresAt: "2026-08-14T16:00:00.000Z",
+    expiresAt: "2026-09-08T16:00:00.000Z",
     ...overrides,
   });
 
@@ -68,6 +71,18 @@ const joinSonyPool = (state, overrides = {}) =>
     ...overrides,
   });
 
+const releaseSonyAfterOutcome = (state, overrides = {}) =>
+  reduceProductWorkspace(state, {
+    type: "pool/release_after_outcome",
+    activityId: "activity-release-sony-outcome",
+    at: "2026-08-22T16:00:00.000Z",
+    membershipId: "membership-sony",
+    buyerId: BUYER_ID,
+    reason: "no_acceptable_offer",
+    operationId: "pool-settle-operation-sony",
+    ...overrides,
+  });
+
 test("the versioned workspace seeds a product marketplace led by the Sony XM6 pool", () => {
   const state = createSeededProductWorkspace({ now: T0 });
 
@@ -79,8 +94,59 @@ test("the versioned workspace seeds a product marketplace led by the Sony XM6 po
   assert.equal(state.products[SONY_PRODUCT_ID].name, "WH-1000XM6 Wireless Headphones");
   assert.equal(state.products[SONY_PRODUCT_ID].msrpUnitCents, SONY_MSRP_CENTS);
   assert.equal(state.pools[SONY_POOL_ID].committedUnitCount, 34);
+  assert.equal(state.pools[SONY_POOL_ID].minimumCommittedUnitCount, 10);
+  assert.equal(
+    state.pools[SONY_POOL_ID].cutoffAt,
+    "2026-08-22T16:00:00.000Z",
+  );
+  assert.equal(PRODUCT_POOL_COMMITMENT_WINDOW_DAYS, 14);
+  for (const pool of Object.values(state.pools)) {
+    assert.equal(pool.minimumCommittedUnitCount, 10);
+    assert.equal("targetMemberCount" in pool, false);
+    assert.equal(
+      Date.parse(pool.cutoffAt) - Date.parse(pool.createdAt),
+      PRODUCT_POOL_COMMITMENT_WINDOW_DAYS * 86_400_000,
+    );
+  }
   assert.equal(state.pools[SONY_POOL_ID].status, "forming");
   assert.equal(assertProductWorkspaceInvariant(state), true);
+});
+
+test("the pool minimum is a viability floor, never a target or enrollment cap", () => {
+  const original = createSeededProductWorkspace({ now: T0 });
+  const minimum = original.pools[SONY_POOL_ID].minimumCommittedUnitCount;
+  const atMinimum = {
+    ...original,
+    pools: {
+      ...original.pools,
+      [SONY_POOL_ID]: {
+        ...original.pools[SONY_POOL_ID],
+        committedUnitCount: minimum,
+      },
+    },
+  };
+
+  assert.equal(hasProductPoolMetMinimum(atMinimum.pools[SONY_POOL_ID]), true);
+
+  const funded = deposit(atMinimum, SONY_MSRP_CENTS * 2);
+  const intended = createSonyIntent(funded, { quantity: 2 });
+  const joined = joinSonyPool(intended);
+
+  assert.equal(joined.pools[SONY_POOL_ID].committedUnitCount, minimum + 2);
+  assert.equal(
+    joined.pools[SONY_POOL_ID].committedUnitCount >
+      joined.pools[SONY_POOL_ID].minimumCommittedUnitCount,
+    true,
+  );
+  assert.equal(hasProductPoolMetMinimum(joined.pools[SONY_POOL_ID]), true);
+  assert.equal(joined.pools[SONY_POOL_ID].status, "forming");
+
+  const belowMinimum = {
+    ...joined.pools[SONY_POOL_ID],
+    committedUnitCount: minimum - 1,
+  };
+  assert.equal(hasProductPoolMetMinimum(belowMinimum), false);
+  assert.equal(assertProductWorkspaceInvariant(joined), true);
 });
 
 test("a sandbox deposit increases available funds without mutating the prior revision", () => {
@@ -110,7 +176,7 @@ test("creating an intent captures product, quantity, target, and expiration", ()
     quantity: 1,
     targetUnitPriceCents: 37_900,
     createdAt: T2,
-    expiresAt: "2026-08-14T16:00:00.000Z",
+    expiresAt: "2026-09-08T16:00:00.000Z",
     status: "open",
   });
   assert.equal(intended.activity.at(-1).kind, "intent.created");
@@ -144,6 +210,33 @@ test("joining fails closed when even one cent short of full MSRP coverage", () =
   );
   assert.equal(intended.balances[BUYER_ID].reservedCents, 0);
   assert.deepEqual(intended.memberships, {});
+});
+
+test("joining rejects pools outside the saved price or deadline mandate", () => {
+  const funded = deposit(createSeededProductWorkspace({ now: T0 }), 60_000);
+  const overMaximum = createSonyIntent(funded, {
+    targetUnitPriceCents: 37_899,
+  });
+  assert.throws(
+    () => joinSonyPool(overMaximum),
+    (error) => error?.code === "INTENT_PRICE_INCOMPATIBLE",
+  );
+
+  const deadlineBeforeFastestDelivery = createSonyIntent(funded, {
+    activityId: "activity-intent-short-deadline",
+    intentId: "intent-short-deadline",
+    // The merchant market has closed, but even the fastest five-day offer
+    // cannot arrive by this mandate deadline.
+    expiresAt: "2026-08-26T16:30:00.000Z",
+  });
+  assert.throws(
+    () =>
+      joinSonyPool(deadlineBeforeFastestDelivery, {
+        activityId: "activity-join-short-deadline",
+        intentId: "intent-short-deadline",
+      }),
+    (error) => error?.code === "INTENT_DEADLINE_INCOMPATIBLE",
+  );
 });
 
 test("an intent or buyer cannot create a duplicate active pool commitment", () => {
@@ -211,10 +304,10 @@ test("leaving before cutoff releases exactly the original MSRP reservation", () 
 test("cutoff is a hard boundary for both joins and reservation releases", () => {
   const intended = createSonyIntent(
     deposit(createSeededProductWorkspace({ now: T0 })),
-    { expiresAt: "2026-08-20T16:00:00.000Z" },
+    { expiresAt: "2026-09-08T16:00:00.000Z" },
   );
   assert.throws(
-    () => joinSonyPool(intended, { at: "2026-08-15T16:00:00.000Z" }),
+    () => joinSonyPool(intended, { at: "2026-08-22T16:00:00.000Z" }),
     (error) => error?.code === "POOL_CUTOFF_PASSED",
   );
 
@@ -224,11 +317,183 @@ test("cutoff is a hard boundary for both joins and reservation releases", () => 
       reduceProductWorkspace(joined, {
         type: "pool/leave",
         activityId: "activity-leave-after-cutoff",
-        at: "2026-08-15T16:00:00.000Z",
+        at: "2026-08-22T16:00:00.000Z",
         membershipId: "membership-sony",
         buyerId: BUYER_ID,
       }),
     (error) => error?.code === "POOL_CUTOFF_PASSED",
+  );
+  assert.equal(joined.balances[BUYER_ID].reservedCents, SONY_MSRP_CENTS);
+});
+
+test("a below-minimum outcome releases the full reservation exactly once after cutoff", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(createSeededProductWorkspace({ now: T0 }), 60_000)),
+  );
+  const belowMinimum = {
+    ...joined,
+    pools: {
+      ...joined.pools,
+      [SONY_POOL_ID]: {
+        ...joined.pools[SONY_POOL_ID],
+        committedUnitCount:
+          joined.pools[SONY_POOL_ID].minimumCommittedUnitCount - 1,
+      },
+    },
+  };
+  const releaseAction = {
+    type: "pool/release_after_outcome",
+    activityId: "activity-release-below-minimum",
+    at: belowMinimum.pools[SONY_POOL_ID].cutoffAt,
+    membershipId: "membership-sony",
+    buyerId: BUYER_ID,
+    reason: "minimum_not_met",
+    operationId: "pool-settle-operation-below-minimum",
+  };
+  const released = reduceProductWorkspace(belowMinimum, releaseAction);
+
+  assert.equal(released.balances[BUYER_ID].availableCents, 60_000);
+  assert.equal(released.balances[BUYER_ID].reservedCents, 0);
+  assert.equal(released.memberships["membership-sony"].status, "released");
+  assert.deepEqual(released.memberships["membership-sony"].release, {
+    reason: "minimum_not_met",
+    operationId: "pool-settle-operation-below-minimum",
+    releasedCents: SONY_MSRP_CENTS,
+    releasedAt: belowMinimum.pools[SONY_POOL_ID].cutoffAt,
+  });
+  assert.equal(released.intents["intent-sony"].status, "expired");
+  assert.equal(released.pools[SONY_POOL_ID].status, "cancelled");
+  assert.equal(released.activity.at(-1).kind, "pool.reservation_released");
+  assert.equal(assertProductWorkspaceInvariant(released), true);
+
+  // Exact retries are idempotent and cannot create another credit or activity.
+  assert.equal(reduceProductWorkspace(released, releaseAction), released);
+  assert.throws(
+    () =>
+      releaseSonyAfterOutcome(released, {
+        activityId: "activity-release-different-outcome",
+        operationId: "different-market-operation",
+      }),
+    (error) => error?.code === "MEMBERSHIP_NOT_ACTIVE",
+  );
+});
+
+test("a no-acceptable-offer outcome releases only after cutoff", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(createSeededProductWorkspace({ now: T0 }), 60_000)),
+  );
+
+  assert.throws(
+    () =>
+      releaseSonyAfterOutcome(joined, {
+        at: "2026-08-22T15:59:59.999Z",
+      }),
+    (error) => error?.code === "POOL_CUTOFF_NOT_REACHED",
+  );
+
+  const released = releaseSonyAfterOutcome(joined);
+  assert.equal(released.balances[BUYER_ID].reservedCents, 0);
+  assert.equal(released.balances[BUYER_ID].availableCents, 60_000);
+  assert.equal(
+    released.memberships["membership-sony"].release.reason,
+    "no_acceptable_offer",
+  );
+  assert.equal(assertProductWorkspaceInvariant(released), true);
+});
+
+test("a modeled quote leaves the reservation intact until explicit local release", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(createSeededProductWorkspace({ now: T0 }), 60_000)),
+  );
+
+  // Rendering a modeled quote performs no reducer transition at all.
+  assert.equal(joined.memberships["membership-sony"].status, "active");
+  assert.equal(joined.memberships["membership-sony"].settlement, undefined);
+  assert.equal(joined.balances[BUYER_ID].reservedCents, SONY_MSRP_CENTS);
+  assert.equal(joined.balances[BUYER_ID].capturedCents, 0);
+
+  const released = releaseSonyAfterOutcome(joined, {
+    reason: "rehearsal_complete",
+    operationId: "pool-modeled-quote-sony",
+  });
+  assert.equal(released.memberships["membership-sony"].status, "released");
+  assert.equal(released.memberships["membership-sony"].settlement, undefined);
+  assert.equal(
+    released.memberships["membership-sony"].release.reason,
+    "rehearsal_complete",
+  );
+  assert.equal(released.balances[BUYER_ID].reservedCents, 0);
+  assert.equal(released.balances[BUYER_ID].capturedCents, 0);
+  assert.equal(released.balances[BUYER_ID].availableCents, 60_000);
+  assert.equal(assertProductWorkspaceInvariant(released), true);
+});
+
+test("an explicit authorization decline can release without capturing funds", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(createSeededProductWorkspace({ now: T0 }), 60_000)),
+  );
+  const released = releaseSonyAfterOutcome(joined, {
+    reason: "authorization_declined",
+    operationId: "pool-settle-operation-declined",
+  });
+
+  assert.equal(released.balances[BUYER_ID].capturedCents, 0);
+  assert.equal(released.balances[BUYER_ID].reservedCents, 0);
+  assert.equal(released.balances[BUYER_ID].availableCents, 60_000);
+  assert.equal(
+    released.memberships["membership-sony"].release.reason,
+    "authorization_declined",
+  );
+  assert.equal(assertProductWorkspaceInvariant(released), true);
+});
+
+test("a missed execution window releases only at the exact bid-close boundary", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(createSeededProductWorkspace({ now: T0 }), 60_000)),
+  );
+  const bidClosesAt = new Date(
+    Date.parse(joined.pools[SONY_POOL_ID].cutoffAt) +
+      PRODUCT_POOL_BID_WINDOW_MS,
+  ).toISOString();
+
+  assert.throws(
+    () =>
+      releaseSonyAfterOutcome(joined, {
+        at: new Date(Date.parse(bidClosesAt) - 1).toISOString(),
+        reason: "execution_window_missed",
+        operationId: "pool-settle-operation-missed-too-early",
+      }),
+    (error) => error?.code === "RELEASE_OUTCOME_MISMATCH",
+  );
+
+  const released = releaseSonyAfterOutcome(joined, {
+    at: bidClosesAt,
+    reason: "execution_window_missed",
+    operationId: "pool-settle-operation-missed",
+  });
+  assert.equal(released.balances[BUYER_ID].capturedCents, 0);
+  assert.equal(released.balances[BUYER_ID].reservedCents, 0);
+  assert.equal(released.balances[BUYER_ID].availableCents, 60_000);
+  assert.deepEqual(released.memberships["membership-sony"].release, {
+    reason: "execution_window_missed",
+    operationId: "pool-settle-operation-missed",
+    releasedCents: SONY_MSRP_CENTS,
+    releasedAt: bidClosesAt,
+  });
+  assert.equal(assertProductWorkspaceInvariant(released), true);
+});
+
+test("a below-minimum release must match the pool's actual frozen quantity", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(createSeededProductWorkspace({ now: T0 }), 60_000)),
+  );
+
+  assert.throws(
+    () =>
+      releaseSonyAfterOutcome(joined, {
+        reason: "minimum_not_met",
+      }),
+    (error) => error?.code === "RELEASE_OUTCOME_MISMATCH",
   );
   assert.equal(joined.balances[BUYER_ID].reservedCents, SONY_MSRP_CENTS);
 });
@@ -329,7 +594,7 @@ const settleSony = (state, overrides = {}) =>
   reduceProductWorkspace(state, {
     type: "pool/settle",
     activityId: "activity-settle-sony",
-    at: T3,
+    at: "2026-08-22T16:00:00.000Z",
     membershipId: "membership-sony",
     buyerId: BUYER_ID,
     evidence: "rain-sandbox",
@@ -340,6 +605,26 @@ const settleSony = (state, overrides = {}) =>
     rainCardLast4: "4242",
     ...overrides,
   });
+
+test("settlement cannot mutate reservations before cutoff; exact cutoff succeeds", () => {
+  const joined = joinSonyPool(
+    createSonyIntent(deposit(syncRailTreasury(createSeededProductWorkspace({ now: T0 })))),
+  );
+  const before = structuredClone(joined);
+
+  assert.throws(
+    () => settleSony(joined, { at: "2026-08-22T15:59:59.999Z" }),
+    (error) => error?.code === "POOL_CUTOFF_NOT_REACHED",
+  );
+  assert.deepEqual(joined, before);
+
+  const atCutoff = settleSony(joined);
+  assert.equal(atCutoff.memberships["membership-sony"].status, "settled");
+  assert.equal(
+    atCutoff.memberships["membership-sony"].settlement.settledAt,
+    joined.pools[SONY_POOL_ID].cutoffAt,
+  );
+});
 
 test("settling captures the deal price and releases the exact difference", () => {
   const joined = joinSonyPool(
@@ -378,7 +663,7 @@ test("a capture larger than the reservation is refused", () => {
   assert.ok(assertProductWorkspaceInvariant(joined));
 });
 
-test("a commitment settles once and cannot settle or leave afterwards", () => {
+test("a commitment settles once and cannot settle, leave, or release afterwards", () => {
   const settled = settleSony(
     joinSonyPool(
       createSonyIntent(deposit(syncRailTreasury(createSeededProductWorkspace({ now: T0 })))),
@@ -397,6 +682,14 @@ test("a commitment settles once and cannot settle or leave afterwards", () => {
         at: T3,
         membershipId: "membership-sony",
         buyerId: BUYER_ID,
+      }),
+    (error) => error?.code === "MEMBERSHIP_NOT_ACTIVE",
+  );
+  assert.throws(
+    () =>
+      releaseSonyAfterOutcome(settled, {
+        activityId: "activity-release-after-settle",
+        reason: "authorization_declined",
       }),
     (error) => error?.code === "MEMBERSHIP_NOT_ACTIVE",
   );

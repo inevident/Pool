@@ -2,6 +2,7 @@ import { encodeAbiParameters, keccak256, toBytes, type Hex } from "viem";
 
 import { buildFundingRoot, hashFundingLeaf, MonadCommitmentError } from "./commitment.ts";
 import type { ConsumerOffer } from "../market/consumer.ts";
+import { evaluateProductPoolFunding } from "../product/reducer.ts";
 import type { ProductListing, ProductPool } from "../product/types.ts";
 
 const PRODUCT_TERMS_DOMAIN = keccak256(toBytes("POOL_PRODUCT_TERMS_V1"));
@@ -115,6 +116,16 @@ export function buildProductPoolCommitment(input: {
     (total, entry) => total + entry.quantity,
     0,
   );
+  const fundingStatus = evaluateProductPoolFunding({
+    pool: input.pool,
+    aggregateFundedUnitCount: unitCount,
+  });
+  if (!fundingStatus.hasMetMinimum) {
+    throw new MonadCommitmentError(
+      "MINIMUM_FUNDED_UNITS_NOT_MET",
+      `The pool has ${unitCount} funded units; at least ${fundingStatus.minimumCommittedUnitCount} are required before demand can be committed.`,
+    );
+  }
   const reservedCents = input.reservations.reduce(
     (total, entry) => total + entry.reservedCents,
     0,

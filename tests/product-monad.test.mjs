@@ -8,7 +8,10 @@ import {
 } from "../lib/monad/product-commitment.ts";
 import { hashRainSettlement } from "../lib/monad/commitment.ts";
 import { clearConsumerMarket } from "../lib/market/consumer.ts";
-import { createSeededProductWorkspace } from "../lib/product/index.ts";
+import {
+  createSeededProductWorkspace,
+  evaluateProductPoolFunding,
+} from "../lib/product/index.ts";
 
 const catalog = createSeededProductWorkspace();
 const pool = catalog.pools["pool-sony-xm6-august"];
@@ -49,10 +52,80 @@ test("the reservation set covers every funded unit at full MSRP", () => {
   assert.equal(cents, product.msrpUnitCents * units);
 });
 
+test("the fixed-window minimum is an eligibility floor, never an aggregate cap", () => {
+  const below = evaluateProductPoolFunding({
+    pool,
+    aggregateFundedUnitCount: pool.minimumCommittedUnitCount - 1,
+  });
+  assert.deepEqual(below, {
+    aggregateFundedUnitCount: pool.minimumCommittedUnitCount - 1,
+    minimumCommittedUnitCount: pool.minimumCommittedUnitCount,
+    unitsNeeded: 1,
+    hasMetMinimum: false,
+  });
+
+  const aboveMinimumUnits = pool.minimumCommittedUnitCount + 75;
+  const above = evaluateProductPoolFunding({
+    pool,
+    aggregateFundedUnitCount: aboveMinimumUnits,
+  });
+  assert.equal(above.hasMetMinimum, true);
+  assert.equal(above.unitsNeeded, 0);
+  assert.equal(above.aggregateFundedUnitCount, aboveMinimumUnits);
+});
+
+test("a Monad product commitment refuses demand below the funded minimum", () => {
+  const belowMinimumPool = {
+    ...pool,
+    committedUnitCount: pool.minimumCommittedUnitCount - 2,
+  };
+
+  assert.throws(
+    () =>
+      buildProductPoolCommitment({
+        pool: belowMinimumPool,
+        product,
+        reservations: productReservationSet({
+          pool: belowMinimumPool,
+          product,
+          buyerId: "buyer-demo",
+          buyerIntentId: "intent-live",
+          buyerQuantity: 1,
+        }),
+        frozenAt: FROZEN_AT,
+        bidClosesAt: BID_CLOSES_AT,
+      }),
+    (error) => error?.code === "MINIMUM_FUNDED_UNITS_NOT_MET",
+  );
+});
+
+test("a Monad product commitment accepts the exact funded minimum", () => {
+  const oneBelowMinimumPool = {
+    ...pool,
+    committedUnitCount: pool.minimumCommittedUnitCount - 1,
+  };
+  const commitment = buildProductPoolCommitment({
+    pool: oneBelowMinimumPool,
+    product,
+    reservations: productReservationSet({
+      pool: oneBelowMinimumPool,
+      product,
+      buyerId: "buyer-demo",
+      buyerIntentId: "intent-live",
+      buyerQuantity: 1,
+    }),
+    frozenAt: FROZEN_AT,
+    bidClosesAt: BID_CLOSES_AT,
+  });
+
+  assert.equal(commitment.unitCount, pool.minimumCommittedUnitCount);
+});
+
 test("the commitment reconciles units, reservation, and pool identity", () => {
   const commitment = buildCommitment();
 
   assert.equal(commitment.unitCount, pool.committedUnitCount + 1);
+  assert.ok(commitment.unitCount > pool.minimumCommittedUnitCount);
   assert.equal(
     commitment.reservedCents,
     BigInt(product.msrpUnitCents * commitment.unitCount),

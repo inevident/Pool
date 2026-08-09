@@ -56,6 +56,13 @@ export const CONSUMER_MERCHANTS: readonly ConsumerMerchantIdentity[] = [
   },
 ];
 
+/** Earliest modeled fulfillment promise, used to reject impossible mandates. */
+export function minimumConsumerDeliveryDays() {
+  return Math.min(
+    ...CONSUMER_MERCHANTS.map((merchant) => merchant.deliveryDays),
+  );
+}
+
 /**
  * Volume tiers. A merchant's willingness to discount is a step function of the
  * whole coalition's funded quantity — this is the entire economic reason POOL

@@ -330,6 +330,12 @@
 
 .secondaryButton:hover { border-color: #979b92; background: #fff; }
 
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
 .dangerButton {
   border: 1px solid rgba(165, 60, 56, .3);
   background: rgba(165, 60, 56, .06);
@@ -769,10 +775,12 @@
 .savingsText { color: var(--product-positive) !important; text-align: right; }
 
 .progressBlock { margin-top: 16px; }
-.progressCopy { margin-bottom: 7px; display: flex; justify-content: space-between; color: var(--product-muted); font-size: 8px; }
+.progressCopy { margin-bottom: 7px; display: flex; justify-content: space-between; gap: 12px; color: var(--product-muted); font-size: 8px; }
 .progressCopy strong { color: var(--product-ink); }
+.eligibilityMet { color: var(--product-positive); font-weight: 720; }
 .progressTrack { height: 5px; overflow: hidden; border-radius: 99px; background: #dfded6; }
 .progressTrack span { display: block; height: 100%; border-radius: inherit; background: var(--product-ink); }
+.windowCopy { margin-top: 7px; display: flex; justify-content: space-between; gap: 12px; color: var(--product-muted); font-size: 7px; }
 
 .poolCardFooter {
   margin-top: auto;
@@ -845,6 +853,7 @@
 .rowAction a { min-height: 31px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--product-line-strong); border-radius: 7px; background: transparent; font-size: 8px; font-weight: 720; cursor: pointer; }
 .rowAction button:hover,
 .rowAction a:hover { background: #fff; }
+.rowAction button:disabled { cursor: not-allowed; color: var(--product-muted); background: rgba(18, 20, 17, .035); opacity: .8; }
 
 .emptyState {
   min-height: 230px;
@@ -917,7 +926,7 @@
 .phoneTabs { position: absolute; z-index: 3; right: 11px; bottom: 10px; left: 11px; height: 52px; padding: 6px; display: grid; grid-template-columns: repeat(3,1fr); border: 1px solid rgba(255,255,255,.1); border-radius: 18px 18px 29px 29px; background: rgba(18,20,17,.95); color: #737970; }
 .phoneTabs span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 5px; }.phoneTabs .phoneTabActive { color: var(--product-lime); }
 .phoneCommitHero { padding: 22px 0 15px; text-align: center; }.phoneCommitHero > span { width: 88px; height: 88px; margin: 0 auto 14px; display: grid; place-items: center; border-radius: 24px; background: var(--product-dark); color: var(--product-lime); }.phoneCommitHero h3 { margin: 5px 0 3px; font-size: 16px; letter-spacing: -.04em; }.phoneCommitHero p { margin: 0; color: var(--product-muted); font-size: 7px; }
-.phoneProgress { padding: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border: 1px solid var(--product-line); border-radius: 12px; background: rgba(255,255,255,.65); }.phoneProgress div strong,.phoneProgress div span { display:block; }.phoneProgress div strong { font-size: 14px; }.phoneProgress div span { margin-top: 2px; color: var(--product-muted); font-size: 6px; }.phoneProgress i { grid-column: 1/-1; height: 5px; border-radius: 5px; background: #deddd5; }.phoneProgress i b { display:block; width:72%; height:100%; border-radius:inherit; background:var(--product-lime-deep); }.phoneProgress > small { grid-column:1/-1; color:var(--product-muted); font-size:6px; }
+.phoneProgress { padding: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border: 1px solid var(--product-line); border-radius: 12px; background: rgba(255,255,255,.65); }.phoneProgress div strong,.phoneProgress div span { display:block; }.phoneProgress div strong { font-size: 14px; }.phoneProgress div span { margin-top: 2px; color: var(--product-muted); font-size: 6px; }.phoneProgress i { grid-column: 1/-1; height: 5px; overflow:hidden; border-radius: 5px; background: #deddd5; }.phoneProgress i b { display:block; height:100%; border-radius:inherit; background:var(--product-lime-deep); transition:width .25s ease; }.phoneProgress > small { grid-column:1/-1; color:var(--product-muted); font-size:6px; line-height:1.35; }
 .phoneReserve { margin-top: 10px; padding: 12px; border-radius: 11px; background: var(--product-dark); color: #fff; }.phoneReserve span,.phoneReserve strong,.phoneReserve small { display:block; }.phoneReserve span { color: var(--product-lime); font: 700 5px/1 var(--font-geist-mono); letter-spacing:.1em; }.phoneReserve strong { margin-top:7px; font-size:12px; }.phoneReserve small { margin-top:4px; color:#8d928a; font-size:6px; }
 .phoneButton { width:100%; min-height:35px; margin-top:10px; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:8px; background:var(--product-lime); color:var(--product-dark); font-size:8px; font-weight:800; }
 .betaStatement { padding: 130px 50px; text-align:center; background: var(--product-lime); color: var(--product-dark); }.betaStatement > span,.betaFeatureCopy > span { font:750 9px/1 var(--font-geist-mono); letter-spacing:.14em; }.betaStatement h2 { margin:20px 0 0; font-size:clamp(48px,7vw,92px); line-height:.9; letter-spacing:-.065em; font-weight:560; }
@@ -1116,10 +1125,21 @@
 .pressureNumber { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .pressureNumber strong { font-size: 45px; line-height: .9; letter-spacing: -.06em; }
 .pressureNumber span { color: var(--product-muted); font-size: 8px; }
-.pressureScale { margin-top: 18px; display: grid; gap: 8px; }
-.pressureScale > div { display: grid; grid-template-columns: 55px 1fr; align-items: center; gap: 8px; color: var(--product-muted); font-size: 7px; }
-.pressureScale i { display: block; height: 5px; border-radius: 99px; background: #dcdad2; overflow: hidden; }
-.pressureScale i span { display: block; height: 100%; border-radius: inherit; background: var(--product-ink); }
+.windowEligibility {
+  margin-top: 18px;
+  padding: 13px;
+  border: 1px solid var(--product-line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .48);
+}
+.windowEligibility > span,
+.windowEligibility > strong { display: block; }
+.windowEligibility > span { color: var(--product-muted); font: 720 7px/1 var(--font-geist-mono); letter-spacing: .06em; text-transform: uppercase; }
+.windowEligibility > strong { margin-top: 7px; font-size: 11px; }
+.windowEligibility p { margin: 7px 0 0; color: var(--product-muted); font-size: 8px; line-height: 1.5; }
+.windowEligibilityMet { border-color: rgba(107, 134, 31, .32); background: rgba(201, 255, 87, .1); }
+.windowEligibilityMet > span,
+.windowEligibilityMet > strong { color: var(--product-positive); }
 
 .modalBackdrop {
   position: fixed;

@@ -13,12 +13,12 @@ import { canExecuteLiveDemo } from "../../../../lib/security/demo-access";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const modelAccessUnlocked = canExecuteLiveDemo(request);
   const modelConfigured = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const modelAccessUnlocked = modelConfigured && canExecuteLiveDemo(request);
   return NextResponse.json(
     {
       configured: modelConfigured,
-      mode: modelConfigured && modelAccessUnlocked ? "openai_responses" : "deterministic_fallback",
+      mode: modelAccessUnlocked ? "openai_responses" : "deterministic_fallback",
       modelAccessUnlocked,
       ...agentRuntimeMetadata,
     },
@@ -31,6 +31,10 @@ export async function POST(request: NextRequest) {
     assertSameOriginJsonAction(request, "interpret-buyer-intent");
     assertRateLimit(request, "buyer-intent", { maxRequests: 10 });
     const payload = buyerIntentRequestSchema.parse(await readLimitedJson(request));
+    // Same-origin headers are CSRF controls, not a spend boundary. Production
+    // model calls therefore require the server-minted demo session. Public
+    // visitors still get the bounded deterministic parser, which makes this
+    // route useful without exposing an unmetered OpenAI billing surface.
     const result = await runBuyerIntentAgent(payload.intent, {
       apiKey: canExecuteLiveDemo(request) ? undefined : null,
     });

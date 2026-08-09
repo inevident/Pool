@@ -17,21 +17,48 @@ const title = "POOL — Turn patience into bargaining power";
 const description =
   "Declare what you want, fully fund your commitment, and join patient buyers who make merchants compete for the whole order.";
 
+const PRODUCTION_ORIGIN_FALLBACK =
+  "https://pool-agentic-market-preview-20260808-yeayea.vercel.app";
+
+function trustedConfiguredOrigin() {
+  const configured = process.env.POOL_PUBLIC_ORIGIN?.trim();
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (
+        url.protocol === "https:" &&
+        url.pathname === "/" &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash
+      ) {
+        return url.origin;
+      }
+    } catch {
+      // Invalid deployment configuration falls through to trusted platform data.
+    }
+  }
+
+  const vercelHost =
+    process.env.VERCEL_URL?.trim() ??
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercelHost && /^[a-z0-9.-]+$/i.test(vercelHost)) {
+    return `https://${vercelHost}`;
+  }
+
+  return PRODUCTION_ORIGIN_FALLBACK;
+}
+
 export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const forwardedHost = requestHeaders.get("x-forwarded-host");
-  const host = forwardedHost ?? requestHeaders.get("host") ?? "localhost:3000";
-  const safeHost = /^[a-z0-9.-]+(?::[0-9]{1,5})?$/i.test(host)
-    ? host
-    : "localhost:3000";
-  const forwardedProtocol = requestHeaders.get("x-forwarded-proto");
-  const protocol =
-    safeHost.startsWith("localhost") || safeHost.startsWith("127.0.0.1")
-      ? "http"
-      : forwardedProtocol === "http"
-        ? "http"
-        : "https";
-  const origin = `${protocol}://${safeHost}`;
+  let origin = trustedConfiguredOrigin();
+  if (process.env.NODE_ENV !== "production") {
+    const requestHeaders = await headers();
+    const host = requestHeaders.get("host") ?? "localhost:3000";
+    if (/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/i.test(host)) {
+      origin = `http://${host}`;
+    }
+  }
   const imageUrl = `${origin}/og.png`;
 
   return {

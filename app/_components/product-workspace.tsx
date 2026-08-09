@@ -47,15 +47,20 @@ import {
   PRODUCT_WORKSPACE_SCHEMA_VERSION,
   ProductDomainError,
   assertProductWorkspaceInvariant,
-  createSeededProductWorkspace,
+  createCanonicalProductWorkspace,
+  evaluateProductPoolFunding,
+  evaluateProductExecutionWindow,
+  productExecutionSchedule,
   reduceProductWorkspace,
   type PoolMembership,
+  type PoolMembershipEnvelope,
   type ProductActivityEntry,
   type ProductCategory,
   type ProductListing,
   type ProductPool,
   type ProductWorkspace,
 } from "@/lib/product";
+import { minimumConsumerDeliveryDays } from "@/lib/market/consumer";
 
 import styles from "../product.module.css";
 
@@ -83,7 +88,7 @@ type ModalState =
 
 const STORAGE_KEY = "pool-product-workspace-v1";
 const DAY_MS = 86_400_000;
-const DEFAULT_SEED = createSeededProductWorkspace();
+const DEFAULT_SEED = createCanonicalProductWorkspace();
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -154,6 +159,69 @@ function canLeavePool(pool: ProductPool, now: number) {
 }
 
 /**
+ * The merchant market opens only after the published commitment window has
+ * closed. A zero snapshot is the server/hydration state, so it intentionally
+ * keeps settlement unavailable until the browser has a trustworthy clock.
+ */
+function marketWindowPhase(pool: ProductPool, now: number) {
+  if (now === 0) return "waiting_for_cutoff" as const;
+  try {
+    return evaluateProductExecutionWindow(pool, now).status;
+  } catch {
+    return "unavailable" as const;
+  }
+}
+
+function canRunMarket(pool: ProductPool, now: number) {
+  if (
+    pool.status !== "forming" &&
+    pool.status !== "locked" &&
+    pool.status !== "bidding"
+  ) {
+    return false;
+  }
+  // This only controls the affordance. Both APIs independently re-evaluate the
+  // same canonical boundaries using server time before any side effect.
+  return marketWindowPhase(pool, now) === "open";
+}
+
+/**
+ * Product pools collect every funded commitment submitted during their fixed
+ * window. The percentage below is time elapsed, never enrollment progress.
+ */
+function commitmentWindowProgress(pool: ProductPool, now: number) {
+  if (now === 0) return 0;
+  const openedAt = Date.parse(pool.createdAt);
+  const closesAt = Date.parse(pool.cutoffAt);
+  if (!Number.isFinite(openedAt) || !Number.isFinite(closesAt) || closesAt <= openedAt) {
+    return 0;
+  }
+  return Math.min(100, Math.max(0, ((now - openedAt) / (closesAt - openedAt)) * 100));
+}
+
+function commitmentWindowDays(pool: ProductPool) {
+  const duration = Date.parse(pool.cutoffAt) - Date.parse(pool.createdAt);
+  return Number.isFinite(duration) && duration > 0
+    ? Math.max(1, Math.round(duration / DAY_MS))
+    : 14;
+}
+
+function poolEligibility(pool: ProductPool) {
+  const funding = evaluateProductPoolFunding({
+    pool,
+    aggregateFundedUnitCount: pool.committedUnitCount,
+  });
+  return {
+    eligible: funding.hasMetMinimum,
+    remaining: funding.unitsNeeded,
+    label:
+      funding.hasMetMinimum
+        ? `${pool.minimumCommittedUnitCount}-unit minimum met`
+        : `${funding.unitsNeeded} more funded unit${funding.unitsNeeded === 1 ? "" : "s"} to qualify`,
+  };
+}
+
+/**
  * Local-time greeting. Callers must only use this after hydration, because the
  * server and the visitor's browser can sit in different time zones.
  */
@@ -162,12 +230,6 @@ function greetingFor(date: Date) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-/** Compact provider identifier for display; never a substitute for the full id. */
-function shortId(value?: string) {
-  if (!value) return "—";
-  return value.length <= 12 ? value : `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
 function createId(prefix: string) {
@@ -295,7 +357,10 @@ function activityImpact(entry: ProductActivityEntry) {
   if (entry.kind === "pool.joined") {
     return -Number(entry.metadata.reservedCents ?? 0);
   }
-  if (entry.kind === "pool.left") {
+  if (
+    entry.kind === "pool.left" ||
+    entry.kind === "pool.reservation_released"
+  ) {
     return Number(entry.metadata.releasedCents ?? 0);
   }
   return 0;
@@ -304,7 +369,12 @@ function activityImpact(entry: ProductActivityEntry) {
 function activityIcon(entry: ProductActivityEntry) {
   if (entry.kind === "sandbox.deposit_recorded") return ArrowDownLeft;
   if (entry.kind === "pool.joined") return LockKeyhole;
-  if (entry.kind === "pool.left") return ArrowUpRight;
+  if (
+    entry.kind === "pool.left" ||
+    entry.kind === "pool.reservation_released"
+  ) {
+    return ArrowUpRight;
+  }
   if (entry.kind === "intent.created") return Sparkles;
   return Zap;
 }
@@ -322,8 +392,6 @@ export default function ProductWorkspaceApp({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [quickIntent, setQuickIntent] = useState("");
-  // Bumped after a provider-side money movement so the rail figures re-read.
-  const [treasuryNonce, setTreasuryNonce] = useState(0);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -340,7 +408,7 @@ export default function ProductWorkspaceApp({
       }
 
       if (!nextWorkspace) {
-        nextWorkspace = createSeededProductWorkspace({ now: new Date().toISOString() });
+        nextWorkspace = createCanonicalProductWorkspace();
       }
       setWorkspace(nextWorkspace);
       setHydrated(true);
@@ -411,7 +479,7 @@ export default function ProductWorkspaceApp({
       }
     })();
     return () => controller.abort();
-  }, [hydrated, treasuryNonce]);
+  }, [hydrated]);
 
   useEffect(() => {
     if (!toast) return;
@@ -492,7 +560,7 @@ export default function ProductWorkspaceApp({
   }
 
   function resetWorkspace() {
-    const next = createSeededProductWorkspace({ now: new Date().toISOString() });
+    const next = createCanonicalProductWorkspace();
     setWorkspace(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -627,7 +695,7 @@ export default function ProductWorkspaceApp({
           />
         ) : null}
 
-        {view === "beta" ? <BetaView /> : null}
+        {view === "beta" ? <BetaView workspace={workspace} /> : null}
 
         {view === "pool" ? (
           <PoolDetailView
@@ -665,7 +733,6 @@ export default function ProductWorkspaceApp({
           setToast={setToast}
           showError={showError}
           resetWorkspace={resetWorkspace}
-          refreshTreasury={() => setTreasuryNonce((value) => value + 1)}
         />
       ) : null}
 
@@ -815,7 +882,7 @@ function DashboardView({
           <SummaryMetric
             label="Potential savings"
             value={cents(potentialSavings)}
-            hint="Current targets"
+            hint="At current price estimates"
           />
           <SummaryMetric
             label="Open intents"
@@ -825,7 +892,7 @@ function DashboardView({
           <SummaryMetric
             label="Pools recruiting"
             value={String(pools.filter((pool) => pool.status === "forming").length)}
-            hint="Open now"
+            hint="Fixed two-week windows"
           />
         </div>
       </section>
@@ -859,7 +926,10 @@ function DashboardView({
         <div className={styles.sectionHeader}>
           <div>
             <h2 id="popular-pools-title">Popular group buys</h2>
-            <p>Seeded opportunities for this product sandbox—not live merchant inventory.</p>
+            <p>
+              Each pool accepts every funded join through its two-week cutoff. The
+              minimum only determines whether merchant bidding can open.
+            </p>
           </div>
           <Link href="/explore">Discover all <ArrowRight size={11} /></Link>
         </div>
@@ -964,8 +1034,9 @@ function ExploreView({ workspace, pools, setModal }: SharedViewProps & { pools: 
           <span className={styles.pageEyebrow}>Sample market</span>
           <h1>Discover funded group buys.</h1>
           <p>
-            Compare estimated prices, committed demand, and exit cutoffs. Joining moves
-            the full MSRP from available to reserved; estimates are not binding offers.
+            Compare estimated prices, funded demand, and fixed two-week deadlines.
+            Joining moves the full MSRP from available to reserved; every funded buyer
+            can join until cutoff, even after the minimum is met.
           </p>
         </div>
         <button
@@ -1042,9 +1113,13 @@ function PoolCard({
   featured,
   setModal,
 }: SharedViewProps & { pool: ProductPool; featured?: boolean }) {
+  const now = useNow();
   const product = workspace.products[pool.productId];
   const membership = activeMembershipForPool(workspace, pool.id);
-  const progress = Math.min(100, (pool.committedUnitCount / pool.targetMemberCount) * 100);
+  const windowProgress = commitmentWindowProgress(pool, now);
+  const windowDays = commitmentWindowDays(pool);
+  const eligibility = poolEligibility(pool);
+  const joinIsOpen = canLeavePool(pool, now);
   const savings = Math.max(0, product.msrpUnitCents - pool.estimatedUnitPriceCents);
 
   return (
@@ -1072,15 +1147,24 @@ function PoolCard({
       </div>
       <div className={styles.progressBlock}>
         <div className={styles.progressCopy}>
-          <span><strong>{pool.committedUnitCount}</strong> units committed</span>
-          <span>{pool.targetMemberCount} target</span>
+          <span><strong>{pool.committedUnitCount}</strong> funded units</span>
+          <span className={eligibility.eligible ? styles.eligibilityMet : undefined}>
+            {eligibility.label}
+          </span>
         </div>
-        <div className={styles.progressTrack} aria-label={`${Math.round(progress)}% funded-demand progress`}>
-          <span style={{ width: `${progress}%` }} />
+        <div
+          className={styles.progressTrack}
+          aria-label={`${Math.round(windowProgress)}% of the ${windowDays}-day commitment window elapsed`}
+        >
+          <span style={{ width: `${windowProgress}%` }} />
+        </div>
+        <div className={styles.windowCopy}>
+          <span>{windowDays}-day commitment window</span>
+          <span>Closes {shortDate.format(new Date(pool.cutoffAt))}</span>
         </div>
       </div>
       <div className={styles.poolCardFooter}>
-        <span><Clock3 size={11} /> Exit cutoff {shortDate.format(new Date(pool.cutoffAt))}</span>
+        <span><Clock3 size={11} /> No enrollment cap before cutoff</span>
         {membership ? (
           <Link className={classNames(styles.cardAction, styles.cardActionJoined)} href={poolHref(pool)}>
             View <ChevronRight size={11} />
@@ -1089,9 +1173,11 @@ function PoolCard({
           <button
             type="button"
             className={styles.cardAction}
+            disabled={!joinIsOpen}
             onClick={() => setModal({ kind: "join", poolId: pool.id })}
           >
-            Reserve & join <ChevronRight size={11} />
+            {joinIsOpen ? "Reserve & join" : "Window closed"}{" "}
+            <ChevronRight size={11} />
           </button>
         )}
       </div>
@@ -1111,6 +1197,9 @@ function CommitmentList({
         const pool = workspace.pools[membership.poolId];
         const product = productForMembership(workspace, membership);
         if (!pool || !product) return null;
+        const marketIsOpen = canRunMarket(pool, now);
+        const marketPhase = marketWindowPhase(pool, now);
+        const cutoffLabel = shortDate.format(new Date(pool.cutoffAt));
         return (
           <div className={styles.commitmentRow} key={membership.id}>
             <div className={styles.rowIdentity}>
@@ -1125,19 +1214,38 @@ function CommitmentList({
               <strong>{cents(membership.reservedCents)}</strong>
             </div>
             <div className={styles.rowMetric}>
-              <span>Pool target</span>
-              <strong>{pool.committedUnitCount}/{pool.targetMemberCount} units</strong>
+              <span>Funded demand</span>
+              <strong>{pool.committedUnitCount} units · {poolEligibility(pool).label}</strong>
             </div>
             <div className={styles.rowMetric}>
-              <span>Exit cutoff</span>
+              <span>Two-week cutoff</span>
               <strong>{shortDate.format(new Date(pool.cutoffAt))}</strong>
             </div>
             <div className={styles.rowAction}>
               <Link href={poolHref(pool)}>Details</Link>
               {membership.status === "active" ? (
-                <button type="button" onClick={() => setModal({ kind: "settle", membershipId: membership.id })}>
-                  Run market
-                </button>
+                marketIsOpen ? (
+                  <button type="button" onClick={() => setModal({ kind: "settle", membershipId: membership.id })}>
+                    Run market
+                  </button>
+                ) : marketPhase === "closed" ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setModal({ kind: "settle", membershipId: membership.id })
+                    }
+                  >
+                    Resolve missed window
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    title={`Merchant bidding opens after ${cutoffLabel}`}
+                  >
+                    Bidding opens {cutoffLabel}
+                  </button>
+                )
               ) : null}
               {canLeavePool(pool, now) && membership.status === "active" ? (
                 <button type="button" onClick={() => setModal({ kind: "leave", membershipId: membership.id })}>
@@ -1357,14 +1465,38 @@ function PhoneTabs({ active }: { active: "home" | "discover" | "wallet" }) {
   );
 }
 
-function BetaView() {
+function BetaView({ workspace }: { workspace: ProductWorkspace }) {
+  const now = useNow();
+  const pools = Object.values(workspace.pools);
+  const featuredPool = workspace.pools["pool-sony-xm6-august"] ?? pools[0];
+  const featuredProduct = featuredPool
+    ? workspace.products[featuredPool.productId]
+    : undefined;
+  const commitmentPool =
+    workspace.pools["pool-steam-deck-oled-august"] ?? pools[1] ?? featuredPool;
+  const commitmentProduct = commitmentPool
+    ? workspace.products[commitmentPool.productId]
+    : undefined;
+  const balance = workspace.balances[workspace.owner.id];
+
+  if (!featuredPool || !featuredProduct || !commitmentPool || !commitmentProduct) {
+    return null;
+  }
+
+  const windowDays = commitmentWindowDays(featuredPool);
+  const windowProgress = commitmentWindowProgress(featuredPool, now);
+  const eligibility = poolEligibility(featuredPool);
+  const previewPools = pools.slice(0, 3);
+  const FeaturedIcon = categoryMeta[featuredProduct.category].Icon;
+  const CommitmentIcon = categoryMeta[commitmentProduct.category].Icon;
+
   return (
     <div className={styles.betaPage}>
       <section className={styles.betaHero}>
         <div className={styles.betaHeroCopy}>
           <span className={styles.betaBadge}><span /> Mobile beta</span>
           <h1>Coming soon<br />to <em>mobile.</em></h1>
-          <p>Patient purchasing, built for the moments when you find something worth waiting for.</p>
+          <p>Patient purchasing with fixed windows, fully funded commitments, and no enrollment caps.</p>
           <a href="#mobile-preview" className={styles.betaCta}>Preview the app <ArrowRight size={15} /></a>
         </div>
         <div className={styles.betaHeroPhones}>
@@ -1374,17 +1506,24 @@ function BetaView() {
             <div className={styles.phoneSearch}><Search size={13} /> What are you looking for?</div>
             <div className={styles.phoneSectionTitle}><strong>Popular pools</strong><span>See all</span></div>
             <div className={styles.phoneProductCard}>
-              <span className={styles.phoneProductIcon}><Headphones size={28} /></span>
-              <small>SONY</small><strong>WH-1000XM6</strong>
-              <div><b>$389</b><span>18 buyers</span></div>
+              <span className={styles.phoneProductIcon}><FeaturedIcon size={28} /></span>
+              <small>{featuredProduct.brand.toUpperCase()}</small><strong>{featuredProduct.name}</strong>
+              <div><b>{compactCents(featuredPool.estimatedUnitPriceCents)}</b><span>{featuredPool.committedUnitCount} funded units</span></div>
             </div>
             <PhoneTabs active="home" />
           </PhoneFrame>
           <PhoneFrame label="POOL mobile active commitment screen">
             <PhoneBrand title="Active pool" />
-            <div className={styles.phoneCommitHero}><span><Headphones size={40} /></span><small>SONY</small><h3>WH-1000XM6</h3><p>Noise-canceling headphones</p></div>
-            <div className={styles.phoneProgress}><div><strong>18</strong><span>buyers joined</span></div><div><strong>$389</strong><span>target price</span></div><i><b /></i><small>72% to merchant bidding</small></div>
-            <div className={styles.phoneReserve}><span>YOUR COMMITMENT</span><strong>$449.99 reserved</strong><small>Release available for 8 more days</small></div>
+            <div className={styles.phoneCommitHero}><span><FeaturedIcon size={40} /></span><small>{featuredProduct.brand.toUpperCase()}</small><h3>{featuredProduct.name}</h3><p>{featuredProduct.description}</p></div>
+            <div className={styles.phoneProgress}>
+              <div><strong>{featuredPool.committedUnitCount}</strong><span>funded units</span></div>
+              <div><strong>{compactCents(featuredPool.estimatedUnitPriceCents)}</strong><span>estimated price</span></div>
+              <i aria-label={`${Math.round(windowProgress)}% of the ${windowDays}-day commitment window elapsed`}>
+                <b style={{ width: `${windowProgress}%` }} />
+              </i>
+              <small>{Math.round(windowProgress)}% of {windowDays}-day window elapsed · {featuredPool.minimumCommittedUnitCount}-unit eligibility floor {eligibility.eligible ? "met" : "pending"} · no enrollment cap</small>
+            </div>
+            <div className={styles.phoneReserve}><span>YOUR COMMITMENT</span><strong>{cents(featuredProduct.msrpUnitCents)} reserved</strong><small>Release available until {shortDate.format(new Date(featuredPool.cutoffAt))}</small></div>
             <button className={styles.phoneButton}>View commitment <ChevronRight size={13} /></button>
             <PhoneTabs active="discover" />
           </PhoneFrame>
@@ -1397,14 +1536,16 @@ function BetaView() {
       </section>
 
       <section className={styles.betaFeature} id="mobile-preview">
-        <div className={styles.betaFeatureCopy}><span>01 · DISCOVER</span><h2>See the buying power building.</h2><p>Browse active pools, compare target prices, and know exactly how many buyers are already in.</p></div>
+        <div className={styles.betaFeatureCopy}><span>01 · DISCOVER</span><h2>See the buying power building.</h2><p>Browse active pools, compare estimated prices and funded units, and see the eligibility floor without mistaking it for a cap.</p></div>
         <PhoneFrame label="POOL mobile pool discovery list">
           <PhoneBrand title="Discover" />
           <div className={styles.phoneSearch}><Search size={13} /> Search products</div>
           <div className={styles.phoneChips}><b>For you</b><span>Audio</span><span>Gaming</span></div>
-          {[[Headphones,"Sony WH-1000XM6","$389","18 joined"],[Gamepad2,"Steam Deck OLED","$499","31 joined"],[Laptop,"MacBook Air M4","$899","12 joined"]].map(([Icon,name,price,joined]) => {
-            const ItemIcon = Icon as LucideIcon;
-            return <div className={styles.phoneListItem} key={String(name)}><span><ItemIcon size={20} /></span><div><small>FORMING</small><strong>{String(name)}</strong><p>{String(joined)}</p></div><b>{String(price)}</b></div>;
+          {previewPools.map((pool) => {
+            const product = workspace.products[pool.productId];
+            if (!product) return null;
+            const ItemIcon = categoryMeta[product.category].Icon;
+            return <div className={styles.phoneListItem} key={pool.id}><span><ItemIcon size={20} /></span><div><small>{statusLabel(pool).toUpperCase()}</small><strong>{product.brand} {product.name}</strong><p>{pool.committedUnitCount} funded units · {pool.minimumCommittedUnitCount}-unit floor</p></div><b>{compactCents(pool.estimatedUnitPriceCents)}</b></div>;
           })}
           <PhoneTabs active="discover" />
         </PhoneFrame>
@@ -1413,24 +1554,24 @@ function BetaView() {
       <section className={classNames(styles.betaFeature, styles.betaFeatureReverse)}>
         <PhoneFrame label="POOL mobile commitment confirmation">
           <PhoneBrand title="Join pool" />
-          <div className={styles.phoneCommitHero}><span><Gamepad2 size={38} /></span><small>VALVE</small><h3>Steam Deck OLED</h3><p>512 GB · Black</p></div>
-          <div className={styles.phoneJoinFacts}><div><span>Reserve today</span><strong>$549.00</strong></div><div><span>Expected price</span><strong>$499.00</strong></div><div><span>Exit cutoff</span><strong>Aug 18</strong></div></div>
+          <div className={styles.phoneCommitHero}><span><CommitmentIcon size={38} /></span><small>{commitmentProduct.brand.toUpperCase()}</small><h3>{commitmentProduct.name}</h3><p>{commitmentProduct.description}</p></div>
+          <div className={styles.phoneJoinFacts}><div><span>Reserve today</span><strong>{cents(commitmentProduct.msrpUnitCents)}</strong></div><div><span>Estimated price</span><strong>{cents(commitmentPool.estimatedUnitPriceCents)}</strong></div><div><span>Exit cutoff</span><strong>{shortDate.format(new Date(commitmentPool.cutoffAt))}</strong></div></div>
           <div className={styles.phoneFine}><ShieldCheck size={15} /><span>Your full amount is reserved. You can leave before the cutoff.</span></div>
-          <button className={styles.phoneButton}>Commit $549.00</button>
+          <button className={styles.phoneButton}>Reserve {cents(commitmentProduct.msrpUnitCents)}</button>
           <PhoneTabs active="discover" />
         </PhoneFrame>
-        <div className={styles.betaFeatureCopy}><span>02 · COMMIT</span><h2>Every number, clear before you join.</h2><p>Target price, reserved amount, and exit date stay visible—no checkout surprises.</p></div>
+        <div className={styles.betaFeatureCopy}><span>02 · COMMIT</span><h2>Every number, clear before you join.</h2><p>Estimated price, reserved amount, eligibility floor, and exit date stay visible—no checkout surprises.</p></div>
       </section>
 
       <section className={styles.betaFeature}>
         <div className={styles.betaFeatureCopy}><span>03 · TRACK</span><h2>Your purchasing power, at a glance.</h2><p>Follow reserved funds and active commitments without digging through transaction history.</p></div>
         <PhoneFrame label="POOL mobile wallet screen">
           <PhoneBrand title="Wallet" />
-          <div className={styles.phoneWallet}><small>AVAILABLE TO COMMIT</small><strong>$1,240.00</strong><button><Plus size={12} /> Add funds</button></div>
-          <div className={styles.phoneWalletStats}><div><span>Reserved</span><strong>$549.00</strong></div><div><span>Saved so far</span><strong>$50.00</strong></div></div>
+          <div className={styles.phoneWallet}><small>AVAILABLE TO COMMIT</small><strong>{cents(balance?.availableCents ?? 0)}</strong><button><Plus size={12} /> Add test funds</button></div>
+          <div className={styles.phoneWalletStats}><div><span>Reserved</span><strong>{cents(balance?.reservedCents ?? 0)}</strong></div><div><span>Captured</span><strong>{cents(balance?.capturedCents ?? 0)}</strong></div></div>
           <div className={styles.phoneSectionTitle}><strong>Recent activity</strong><span>View all</span></div>
-          <div className={styles.phoneActivity}><span><LockKeyhole size={15} /></span><div><strong>Steam Deck commitment</strong><small>Today · Reserved</small></div><b>−$549</b></div>
-          <div className={styles.phoneActivity}><span><ArrowDownLeft size={15} /></span><div><strong>Funds added</strong><small>Aug 9 · Test USD</small></div><b>+$1,000</b></div>
+          <div className={styles.phoneActivity}><span><LockKeyhole size={15} /></span><div><strong>Fixed-window policy</strong><small>{windowDays} days · no enrollment cap</small></div><b>ON</b></div>
+          <div className={styles.phoneActivity}><span><ArrowDownLeft size={15} /></span><div><strong>Product sandbox</strong><small>Local fixture · no real money</small></div><b>REV {workspace.revision}</b></div>
           <PhoneTabs active="wallet" />
         </PhoneFrame>
       </section>
@@ -1443,8 +1584,9 @@ function BetaView() {
 function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps & {
   activeMemberships: PoolMembership[];
 }) {
-  const leftMemberships = Object.values(workspace.memberships).filter(
-    (membership) => membership.status === "left",
+  const resolvedMemberships = Object.values(workspace.memberships).filter(
+    (membership) =>
+      membership.status === "left" || membership.status === "released",
   );
   return (
     <>
@@ -1462,7 +1604,10 @@ function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps 
         <div className={styles.sectionHeader}>
           <div>
             <h2 id="current-commitments-title">Current commitments</h2>
-            <p>Recruiting memberships can still be released before their cutoff.</p>
+            <p>
+              Every funded buyer can join or release during the two-week window. Meeting
+              the minimum never closes enrollment early.
+            </p>
           </div>
         </div>
         {activeMemberships.length ? (
@@ -1491,17 +1636,28 @@ function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps 
           <Link href="/demo">See settlement proof <ExternalLink size={10} /></Link>
         </div>
         <div className={styles.orderList}>
-          {leftMemberships.length ? (
-            leftMemberships.map((membership) => {
+          {resolvedMemberships.length ? (
+            resolvedMemberships.map((membership) => {
               const product = productForMembership(workspace, membership);
               if (!product) return null;
+              const outcomeRelease = membership.release;
               return (
                 <div className={styles.orderCard} key={membership.id}>
                   <div className={styles.rowIdentity}>
                     <ProductGlyph product={product} size={17} />
                     <div>
                       <strong>{product.brand} {product.name}</strong>
-                      <small>Commitment closed before cutoff</small>
+                      <small>
+                        {outcomeRelease
+                          ? outcomeRelease.reason === "minimum_not_met"
+                            ? "Window closed below the funded minimum"
+                            : outcomeRelease.reason === "no_acceptable_offer"
+                              ? "No acceptable merchant offer"
+                              : outcomeRelease.reason === "authorization_declined"
+                                ? "Purchase authorization declined"
+                                : "Execution window expired without provider access"
+                          : "Commitment closed before cutoff"}
+                      </small>
                     </div>
                   </div>
                   <div className={styles.rowMetric}>
@@ -1510,7 +1666,13 @@ function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps 
                   </div>
                   <div className={styles.rowMetric}>
                     <span>Closed</span>
-                    <strong>{membership.leftAt ? shortDate.format(new Date(membership.leftAt)) : "—"}</strong>
+                    <strong>
+                      {outcomeRelease
+                        ? shortDate.format(new Date(outcomeRelease.releasedAt))
+                        : membership.leftAt
+                          ? shortDate.format(new Date(membership.leftAt))
+                          : "—"}
+                    </strong>
                   </div>
                   <span className={styles.orderStatus}>Released</span>
                 </div>
@@ -1531,18 +1693,19 @@ function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps 
       <section className={styles.section} aria-labelledby="lifecycle-title">
         <div className={styles.sectionHeader}>
           <div>
-            <h2 id="lifecycle-title">What happens after the pool fills?</h2>
+            <h2 id="lifecycle-title">What happens when the two-week window closes?</h2>
             <p>The production deliverable follows an explicit, failure-aware order lifecycle.</p>
           </div>
         </div>
         <div className={styles.detailPanel}>
           <div className={styles.termsList}>
             {[
-              ["01", "Commitments freeze", "Membership and MSRP reservations lock at the published cutoff."],
-              ["02", "Merchants compete", "Qualified sellers bid privately for the complete funded order."],
-              ["03", "Winner is verified", "Price, inventory, delivery, and buyer policy must all pass."],
-              ["04", "Capture and release", "Only the winning price is captured; the difference returns as savings."],
-              ["05", "Fulfillment", "Production orders require shipping, returns, disputes, and reconciliation."],
+              ["01", "The window closes", "All funded commitments submitted by the published cutoff form the final demand."],
+              ["02", "Eligibility is checked", "A 10-unit minimum opens merchant bidding; it is never a target or enrollment cap."],
+              ["03", "Merchants compete", "Qualified sellers bid privately for the complete funded order."],
+              ["04", "Winner is verified", "Price, inventory, delivery, and buyer policy must all pass."],
+              ["05", "Capture and release", "Only the winning price is captured; the difference returns as savings."],
+              ["06", "Fulfillment", "Production orders require shipping, returns, disputes, and reconciliation."],
             ].map(([step, title, detail]) => (
               <div className={styles.termRow} key={step}>
                 <span>{step}</span>
@@ -1576,7 +1739,16 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
   const settledMembership = Object.values(workspace.memberships).find(
     (entry) => entry.poolId === pool.id && entry.status === "settled",
   );
-  const progress = Math.min(100, (pool.committedUnitCount / pool.targetMemberCount) * 100);
+  const releasedMembership = Object.values(workspace.memberships).find(
+    (entry) => entry.poolId === pool.id && entry.status === "released",
+  );
+  const windowProgress = commitmentWindowProgress(pool, now);
+  const windowDays = commitmentWindowDays(pool);
+  const eligibility = poolEligibility(pool);
+  const marketIsOpen = canRunMarket(pool, now);
+  const marketPhase = marketWindowPhase(pool, now);
+  const leaveIsOpen = canLeavePool(pool, now);
+  const cutoffLabel = shortDate.format(new Date(pool.cutoffAt));
   const savings = product.msrpUnitCents - pool.estimatedUnitPriceCents;
   const balance = workspace.balances[workspace.owner.id];
   return (
@@ -1589,22 +1761,43 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
           <div>
             <span className={styles.statusChip}>{statusLabel(pool)} · Product sandbox</span>
             <h1>{product.brand} {product.name}</h1>
-            <p>{product.description} The displayed price is a non-binding pool target until a qualified merchant offer wins.</p>
+            <p>
+              {product.description} Funded commitments remain open for the full
+              two-week window. The displayed price is a non-binding pool target until
+              a qualified merchant offer wins.
+            </p>
           </div>
           <div className={styles.poolDetailAction}>
             {membership ? (
               <>
-                <button
-                  className={styles.primaryButton}
-                  type="button"
-                  onClick={() => setModal({ kind: "settle", membershipId: membership.id })}
-                >
-                  <Zap size={14} /> Run the market
-                </button>
+                {marketIsOpen ? (
+                  <button
+                    className={styles.primaryButton}
+                    type="button"
+                    onClick={() => setModal({ kind: "settle", membershipId: membership.id })}
+                  >
+                    <Zap size={14} /> Run the market
+                  </button>
+                ) : marketPhase === "closed" ? (
+                  <button
+                    className={styles.primaryButton}
+                    type="button"
+                    onClick={() =>
+                      setModal({ kind: "settle", membershipId: membership.id })
+                    }
+                  >
+                    <RefreshCcw size={14} /> Resolve missed window
+                  </button>
+                ) : (
+                  <button className={styles.secondaryButton} type="button" disabled>
+                    <Clock3 size={14} />
+                    Bidding opens {cutoffLabel}
+                  </button>
+                )}
                 <button
                   className={styles.dangerButton}
                   type="button"
-                  disabled={!canLeavePool(pool, now)}
+                  disabled={!leaveIsOpen}
                   onClick={() => setModal({ kind: "leave", membershipId: membership.id })}
                 >
                   Release commitment
@@ -1614,16 +1807,31 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
               <button className={styles.secondaryButton} type="button" disabled>
                 Order settled
               </button>
+            ) : releasedMembership ? (
+              <button className={styles.secondaryButton} type="button" disabled>
+                Reservation released
+              </button>
             ) : (
-              <button className={styles.primaryButton} type="button" onClick={() => setModal({ kind: "join", poolId: pool.id })}>
+              <button
+                className={styles.primaryButton}
+                type="button"
+                disabled={pool.status !== "forming" || !leaveIsOpen}
+                onClick={() => setModal({ kind: "join", poolId: pool.id })}
+              >
                 Reserve {cents(product.msrpUnitCents)} & join
               </button>
             )}
             <small>
               {membership
-                ? "Freeze this coalition and make merchants compete for the order."
+                ? marketIsOpen
+                  ? "The commitment window is closed. Final demand can now enter sealed merchant bidding."
+                  : marketPhase === "closed"
+                    ? "The one-hour bid window has closed. The reservation remains locked pending an explicit resolution."
+                    : `Merchant bidding opens only after the window closes on ${cutoffLabel}. You can leave before then.`
                 : settledMembership
                   ? `Captured ${cents(settledMembership.settlement?.capturedCents ?? 0)} · released ${cents(settledMembership.settlement?.releasedCents ?? 0)}.`
+                  : releasedMembership?.release
+                    ? `${cents(releasedMembership.release.releasedCents)} returned after the no-purchase outcome.`
                   : `${cents(balance.availableCents)} currently available.`}
             </small>
           </div>
@@ -1632,8 +1840,8 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
           <PoolFact label="MSRP reserved" value={cents(product.msrpUnitCents)} hint="Per unit" />
           <PoolFact label="Target price" value={cents(pool.estimatedUnitPriceCents)} hint="Not a binding offer" />
           <PoolFact label="Potential savings" value={cents(savings)} hint={`${Math.round((savings / product.msrpUnitCents) * 100)}% per unit`} />
-          <PoolFact label="Funded demand" value={`${pool.committedUnitCount} / ${pool.targetMemberCount}`} hint="Committed units" />
-          <PoolFact label="Exit cutoff" value={shortDate.format(new Date(pool.cutoffAt))} hint="Then funds freeze" />
+          <PoolFact label="Funded demand" value={`${pool.committedUnitCount} units`} hint={eligibility.label} />
+          <PoolFact label="Pool closes" value={shortDate.format(new Date(pool.cutoffAt))} hint={`${windowDays}-day window · no cap`} />
         </div>
       </section>
 
@@ -1646,10 +1854,11 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
           <div className={styles.termsList}>
             {[
               ["01", "Full MSRP coverage", `${cents(product.msrpUnitCents)} per unit moves from available to reserved.`],
-              ["02", "Reversible while forming", `Leave before ${shortDate.format(new Date(pool.cutoffAt))} for an exact release.`],
-              ["03", "Frozen during competition", "After cutoff, funded demand remains locked while merchants submit sealed offers."],
-              ["04", "No acceptable offer, no purchase", "POOL releases the full reservation if the pool cannot resolve within policy."],
-              ["05", "Savings only after settlement", "The MSRP-to-winning-price difference becomes available after capture reconciles."],
+              ["02", "Open for two weeks", `Join or leave before ${shortDate.format(new Date(pool.cutoffAt))}; meeting the minimum never closes the pool early.`],
+              ["03", "Minimum for eligibility", `${pool.minimumCommittedUnitCount} funded units are required to open bidding, but there is no enrollment target or cap.`],
+              ["04", "Frozen during competition", "After cutoff, final funded demand remains locked while merchants submit sealed offers."],
+              ["05", "No acceptable offer, no purchase", "POOL releases the full reservation if the pool cannot resolve within policy."],
+              ["06", "Savings only after settlement", "The MSRP-to-winning-price difference becomes available after capture reconciles."],
             ].map(([step, title, detail]) => (
               <div className={styles.termRow} key={step}>
                 <span>{step}</span>
@@ -1660,25 +1869,37 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
         </section>
         <aside className={styles.detailPanel}>
           <div className={styles.detailPanelHeader}>
-            <strong>Demand pressure</strong>
-            <span>Sample market</span>
+            <strong>Two-week buying window</strong>
+            <span>More funded demand can keep joining</span>
           </div>
           <div className={styles.pressureBody}>
             <div className={styles.pressureNumber}>
-              <strong>{Math.round(progress)}%</strong>
-              <span>of unit target</span>
+              <strong>{pool.committedUnitCount}</strong>
+              <span>funded units so far · no enrollment cap</span>
             </div>
             <div className={styles.progressBlock}>
               <div className={styles.progressCopy}>
-                <span><strong>{pool.committedUnitCount}</strong> funded units</span>
-                <span>{pool.targetMemberCount} target</span>
+                <span><strong>{windowDays} days</strong> to collect funded demand</span>
+                <span>{Math.round(windowProgress)}% elapsed</span>
               </div>
-              <div className={styles.progressTrack}><span style={{ width: `${progress}%` }} /></div>
+              <div
+                className={styles.progressTrack}
+                aria-label={`${Math.round(windowProgress)}% of the ${windowDays}-day commitment window elapsed`}
+              >
+                <span style={{ width: `${windowProgress}%` }} />
+              </div>
+              <div className={styles.windowCopy}>
+                <span>Opened {shortDate.format(new Date(pool.createdAt))}</span>
+                <span>Closes {shortDate.format(new Date(pool.cutoffAt))}</span>
+              </div>
             </div>
-            <div className={styles.pressureScale}>
-              <div><span>Volume</span><i><span style={{ width: `${progress}%` }} /></i></div>
-              <div><span>Urgency</span><i><span style={{ width: "42%" }} /></i></div>
-              <div><span>Leverage</span><i><span style={{ width: `${Math.min(100, progress + 12)}%` }} /></i></div>
+            <div className={classNames(styles.windowEligibility, eligibility.eligible && styles.windowEligibilityMet)}>
+              <span>{eligibility.eligible ? "Eligible for merchant bidding" : "Not eligible yet"}</span>
+              <strong>{eligibility.label}</strong>
+              <p>
+                The minimum decides whether bidding opens after cutoff. It does not
+                stop additional funded buyers from joining during the window.
+              </p>
             </div>
           </div>
         </aside>
@@ -1737,7 +1958,6 @@ function ProductModal({
   setToast,
   showError,
   resetWorkspace,
-  refreshTreasury,
 }: {
   modal: Exclude<ModalState, null>;
   workspace: ProductWorkspace;
@@ -1747,7 +1967,6 @@ function ProductModal({
   setToast: (toast: string | null) => void;
   showError: (error: unknown) => void;
   resetWorkspace: () => void;
-  refreshTreasury: () => void;
 }) {
   const titles: Record<Exclude<ModalState, null>["kind"], [string, string]> = {
     fund: ["Product sandbox", "Add test funds"],
@@ -1826,7 +2045,6 @@ function ProductModal({
           <SettleForm
             workspace={workspace}
             membershipId={modal.membershipId}
-            refreshTreasury={refreshTreasury}
             setWorkspace={setWorkspace}
             setModal={setModal}
             setToast={setToast}
@@ -1988,9 +2206,24 @@ function IntentForm({
     const pool = Object.values(workspace.pools).find((candidate) => candidate.productId === inferredProductId);
     return ((pool?.estimatedUnitPriceCents ?? workspace.products[inferredProductId]?.msrpUnitCents ?? 1) / 100).toFixed(2);
   });
-  const [waitDays, setWaitDays] = useState("14");
+  const [waitDays, setWaitDays] = useState("30");
+  const renderNow = useNow();
   const selectedProduct = workspace.products[productId];
   const matchingPool = Object.values(workspace.pools).find((pool) => pool.productId === productId);
+  const requestedDeliverBy = new Date(
+    renderNow + Number(waitDays) * DAY_MS,
+  );
+  const earliestModeledDelivery = matchingPool
+    ? new Date(
+        Date.parse(productExecutionSchedule(matchingPool).bidClosesAt) +
+          minimumConsumerDeliveryDays() * DAY_MS,
+      )
+    : null;
+  const matchingPoolCompatible =
+    !matchingPool ||
+    (Math.round(Number(targetPrice) * 100) >=
+      matchingPool.estimatedUnitPriceCents &&
+      (!earliestModeledDelivery || requestedDeliverBy >= earliestModeledDelivery));
 
   function changeProduct(nextProductId: string) {
     setProductId(nextProductId);
@@ -2059,9 +2292,20 @@ function IntentForm({
           </div>
         </div>
         {matchingPool ? (
-          <div className={styles.successBox}>
+          <div
+            className={
+              matchingPoolCompatible ? styles.successBox : styles.errorBox
+            }
+          >
             <Users size={15} />
-            <span>Matching sample pool found: {matchingPool.committedUnitCount} of {matchingPool.targetMemberCount} target units already committed.</span>
+            <span>
+              Matching sample pool found: {matchingPool.committedUnitCount} funded
+              units; {poolEligibility(matchingPool).label}. It stays open through{" "}
+              {shortDate.format(new Date(matchingPool.cutoffAt))}, with no enrollment cap.
+              {earliestModeledDelivery
+                ? ` Earliest modeled arrival is ${shortDate.format(earliestModeledDelivery)}; your mandate must allow at least that date and the pool's published price target.`
+                : ""}
+            </span>
           </div>
         ) : null}
       </div>
@@ -2089,8 +2333,20 @@ function JoinForm({
     .reverse()
     .find((intent) => intent.productId === product.id && intent.status === "open");
   const quantity = openIntent?.quantity ?? 1;
+  const renderNow = useNow();
   const requiredCents = product.msrpUnitCents * quantity;
   const shortageCents = Math.max(0, requiredCents - balance.availableCents);
+  const earliestModeledDelivery = new Date(
+    Date.parse(productExecutionSchedule(pool).bidClosesAt) +
+      minimumConsumerDeliveryDays() * DAY_MS,
+  );
+  const intendedDeliverBy = openIntent
+    ? new Date(openIntent.expiresAt)
+    : new Date(renderNow + 30 * DAY_MS);
+  const intentCompatible =
+    (!openIntent ||
+      openIntent.targetUnitPriceCents >= pool.estimatedUnitPriceCents) &&
+    intendedDeliverBy >= earliestModeledDelivery;
 
   function addShortage() {
     try {
@@ -2161,8 +2417,32 @@ function JoinForm({
           <div className={styles.reservationLine}><span>Quantity</span><strong>× {quantity}</strong></div>
           <div className={classNames(styles.reservationLine, styles.reservationTotal)}><span>Required reservation</span><strong>{cents(requiredCents)}</strong></div>
           <div className={styles.reservationLine}><span>Available now</span><strong>{cents(balance.availableCents)}</strong></div>
+          <div className={styles.reservationLine}>
+            <span>Current funded demand</span>
+            <strong>{pool.committedUnitCount} units · {poolEligibility(pool).label}</strong>
+          </div>
+          <div className={styles.reservationLine}>
+            <span>Commitment window closes</span>
+            <strong>{shortDate.format(new Date(pool.cutoffAt))}</strong>
+          </div>
+          <div className={styles.reservationLine}>
+            <span>Earliest modeled arrival</span>
+            <strong>{shortDate.format(earliestModeledDelivery)}</strong>
+          </div>
+          <div className={styles.reservationLine}>
+            <span>Your deliver-by deadline</span>
+            <strong>{shortDate.format(intendedDeliverBy)}</strong>
+          </div>
         </div>
-        {shortageCents > 0 ? (
+        {!intentCompatible ? (
+          <div className={styles.errorBox}>
+            <Info size={15} />
+            <span>
+              This saved mandate cannot join: its price ceiling or delivery deadline
+              is incompatible with the pool. Update the intent before reserving funds.
+            </span>
+          </div>
+        ) : shortageCents > 0 ? (
           <div className={styles.errorBox}>
             <Info size={15} />
             <span>You need {cents(shortageCents)} more in available test funds before this commitment can count.</span>
@@ -2175,12 +2455,22 @@ function JoinForm({
         )}
         <div className={styles.ruleBox}>
           <Clock3 size={15} />
-          <span><strong>Exit rule:</strong> leave before {shortDate.format(new Date(pool.cutoffAt))} for an exact release. After cutoff, funds remain frozen while merchants compete.</span>
+          <span>
+            <strong>Two-week window:</strong> leave before{" "}
+            {shortDate.format(new Date(pool.cutoffAt))} for an exact release. The{" "}
+            {pool.minimumCommittedUnitCount}-unit minimum only gates bidding; funded
+            joins remain open above it until cutoff. After cutoff, funds remain frozen
+            while merchants compete.
+          </span>
         </div>
       </div>
       <footer className={styles.modalFooter}>
         <button className={styles.secondaryButton} type="button" onClick={() => setModal(null)}>Not yet</button>
-        {shortageCents > 0 ? (
+        {!intentCompatible ? (
+          <button className={styles.primaryButton} type="button" disabled>
+            Mandate incompatible
+          </button>
+        ) : shortageCents > 0 ? (
           <button className={styles.primaryButton} type="button" onClick={addShortage}><Plus size={14} /> Add exact shortage</button>
         ) : (
           <button className={styles.primaryButton} type="button" onClick={join}><LockKeyhole size={14} /> Reserve & join</button>
@@ -2256,79 +2546,125 @@ type PublicOffer = {
 
 type CommitResponse =
   | {
-      status: "committed";
-      network: string;
-      chainId: number;
-      commitmentId: string;
-      fundingRoot: string;
-      termsHash: string;
-      unitCount: number;
-      reservedCents: number;
-      bidClosesAt: string;
-      committedAt: string;
-      replayed: boolean;
-      transactionHash: string | null;
-      explorerUrl: string | null;
+      status: "below_minimum";
+      code: "minimum_funded_units_not_met";
+      operationId: string;
+      poolId: string;
+      aggregateUnits: number;
+      minimumCommittedUnitCount: number;
+      unitsNeeded: number;
+      reservationState: "release_available";
+      releaseReason: "minimum_not_met";
       message: string;
     }
   | {
-      status: "not_configured" | "blocked" | "failed" | "rejected" | "rate_limited";
+      status: "waiting_for_cutoff";
+      code: "waiting_for_cutoff";
+      poolId: string;
+      cutoffAt: string;
+      bidClosesAt: string;
+      serverTime: string;
+      remainingMs: number;
+      reservationState: "still_reserved";
+      message: string;
+    }
+  | {
+      status: "execution_window_missed";
+      code: "bid_window_closed";
+      operationId: string;
+      poolId: string;
+      cutoffAt: string;
+      bidClosesAt: string;
+      serverTime: string;
+      reservedCents: number;
+      reservationState: "release_available";
+      releaseReason: "execution_window_missed";
+      providerOperationState: "impossible_by_design";
+      resolutionBasis: "product_rehearsal_only";
+      message: string;
+    }
+  | {
+      status: "rehearsal_only" | "rejected" | "rate_limited";
+      code?: string;
+      reservationState?: "still_reserved" | "reconciliation_required";
       message: string;
     };
 
 type SettleResponse =
   | {
-      status: "cleared";
-      evidence: "rain-sandbox" | "rehearsal";
+      status: "modeled_quote";
+      operationId: string;
+      evidence: "rehearsal";
+      code: "aggregate_provider_allocations_unavailable";
+      aggregateOrderPlaced: false;
+      reservationState: "release_available";
+      releaseReason: "rehearsal_complete";
       aggregateUnits: number;
       volumeDiscountBps: number;
       quantity: number;
       reservedCents: number;
-      capturedCents: number;
-      releasedCents: number;
+      modeledAllocationCents: number;
+      modeledSavingsCents: number;
       unitPriceCents: number;
       msrpUnitCents: number;
       targetUnitPriceCents: number;
+      buyerMaxUnitPriceCents: number;
+      deliverBy: string | null;
+      promisedDeliveryAt: string;
       offers: PublicOffer[];
       winner: PublicOffer;
       message: string;
-      monad?: {
-        network: string;
-        chainId: number;
-        commitmentId: string;
-        offerRegistration: {
-          offerHash: string;
-          replayed: boolean;
-          transactionHash: string | null;
-          explorerUrl: string | null;
-        } | null;
-        attestation: {
-          status: "attested" | "attestation_pending";
-          commitmentId: string;
-          rainSettlementHash?: string;
-          replayed?: boolean;
-          transactionHash?: string | null;
-          explorerUrl?: string | null;
-          message?: string;
-        } | null;
-      } | null;
-      rain?: {
-        cardId: string;
-        cardLast4: string;
-        allowedMcc: string;
-        blockedMccProof: { mcc: string; status: string; declinedReason: string };
-        transactionId: string;
-        settledAmountCents: number;
-        idempotencyCached: boolean;
-      };
     }
   | {
       status: "no_acceptable_offer";
+      code: "no_acceptable_offer" | "buyer_mandate_not_met";
+      operationId: string;
       aggregateUnits: number;
       reservedCents: number;
       unitsToClear: number | null;
       targetUnitPriceCents: number;
       offers: PublicOffer[];
+      reservationState: "release_available";
+      releaseReason: "no_acceptable_offer";
+      message: string;
+    }
+  | {
+      status: "below_minimum";
+      code: "minimum_funded_units_not_met";
+      operationId: string;
+      poolId: string;
+      aggregateUnits: number;
+      minimumCommittedUnitCount: number;
+      unitsNeeded: number;
+      reservedCents: number;
+      reservationState: "release_available";
+      releaseReason: "minimum_not_met";
+      message: string;
+    }
+  | {
+      status: "waiting_for_cutoff";
+      code: "waiting_for_cutoff";
+      poolId: string;
+      cutoffAt: string;
+      bidClosesAt: string;
+      serverTime: string;
+      remainingMs: number;
+      reservationState: "still_reserved";
+      message: string;
+    }
+  | {
+      status: "execution_window_missed";
+      code: "bid_window_closed";
+      operationId: string;
+      poolId: string;
+      cutoffAt: string;
+      bidClosesAt: string;
+      serverTime: string;
+      reservedCents: number;
+      reservationState: "release_available";
+      releaseReason: "execution_window_missed";
+      providerOperationState: "impossible_by_design";
+      resolutionBasis: "product_rehearsal_only";
       message: string;
     }
   | {
@@ -2339,30 +2675,70 @@ type SettleResponse =
       message: string;
     };
 
+function executionMembershipEnvelope(
+  membership: PoolMembership,
+): PoolMembershipEnvelope {
+  return {
+    id: membership.id,
+    poolId: membership.poolId,
+    intentId: membership.intentId,
+    buyerId: membership.buyerId,
+    quantity: membership.quantity,
+    reservedCents: membership.reservedCents,
+    status: membership.status,
+    joinedAt: membership.joinedAt,
+  };
+}
+
+function sameExecutionMembership(
+  current: PoolMembership | undefined,
+  submitted: PoolMembershipEnvelope,
+) {
+  if (!current) return false;
+  const candidate = executionMembershipEnvelope(current);
+  return (
+    candidate.id === submitted.id &&
+    candidate.poolId === submitted.poolId &&
+    candidate.intentId === submitted.intentId &&
+    candidate.buyerId === submitted.buyerId &&
+    candidate.quantity === submitted.quantity &&
+    candidate.reservedCents === submitted.reservedCents &&
+    candidate.status === submitted.status &&
+    candidate.joinedAt === submitted.joinedAt
+  );
+}
+
+function assertNeverResponse(value: never): never {
+  throw new Error(`Unexpected API response: ${JSON.stringify(value)}`);
+}
+
 /**
- * Runs the sealed merchant market for a real commitment and, when Rain is
- * enabled, settles it on the provider.
+ * Runs the product page's deterministic, mandate-aware market rehearsal.
  *
  * Every figure rendered here comes from the server response. The browser sends
- * only a pool id, a quantity, and an idempotency key, so it cannot influence the
- * clearing price or the captured amount.
+ * its immutable local membership envelope; the server validates it against
+ * catalog MSRP and derives the modeled operation id, clearing price, and local
+ * allocation itself. This surface never contacts Rain or Monad.
  */
 function SettleForm({
   workspace,
   membershipId,
-  refreshTreasury,
   setWorkspace,
   setModal,
   setToast,
   showError,
-}: ModalFormProps & { membershipId: string; refreshTreasury: () => void }) {
+}: ModalFormProps & { membershipId: string }) {
   const membership = workspace.memberships[membershipId];
   const pool = membership ? workspace.pools[membership.poolId] : undefined;
   const product = pool ? workspace.products[pool.productId] : undefined;
   const [running, setRunning] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
-  const [commitment, setCommitment] = useState<CommitResponse | null>(null);
   const [result, setResult] = useState<SettleResponse | null>(null);
+  const now = useNow();
+  const workspaceRef = useRef(workspace);
+  useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
 
   if (!membership || !pool || !product) {
     return (
@@ -2376,16 +2752,58 @@ function SettleForm({
   // against a missing pool or membership.
   const activePool = pool;
   const activeMembership = membership;
+  const resolvingExpiredWindow =
+    marketWindowPhase(activePool, now) === "closed";
 
   async function run() {
+    const submittedMembership = executionMembershipEnvelope(activeMembership);
+    const latestAtStart = workspaceRef.current;
+    const latestPool = latestAtStart.pools[activePool.id];
+    const latestIntent = latestAtStart.intents[activeMembership.intentId];
+    const latestMarketPhase = latestPool
+      ? marketWindowPhase(latestPool, Date.now())
+      : "unavailable";
+    if (
+      !sameExecutionMembership(
+        latestAtStart.memberships[activeMembership.id],
+        submittedMembership,
+      ) ||
+      submittedMembership.status !== "active" ||
+      !latestPool ||
+      !latestIntent ||
+      latestIntent.status !== "joined" ||
+      (latestMarketPhase !== "open" && latestMarketPhase !== "closed")
+    ) {
+      setModal(null);
+      showError(
+        new Error(
+          "This settlement view became stale. Reopen the active commitment at or after the pool cutoff.",
+        ),
+      );
+      return;
+    }
+
     setRunning(true);
     setResult(null);
-    setCommitment(null);
     try {
-      // Phase 1: commit funded demand on-chain. Sellers cannot bid until this
-      // finalizes, which is what makes the ordering claim verifiable.
-      setStage("Freezing coalition and committing funded demand to Monad…");
-      let commitmentId: string | undefined;
+      const submittedIntent = {
+        id: latestIntent.id,
+        buyerId: latestIntent.buyerId,
+        productId: latestIntent.productId,
+        quantity: latestIntent.quantity,
+        targetUnitPriceCents: latestIntent.targetUnitPriceCents,
+        createdAt: latestIntent.createdAt,
+        expiresAt: latestIntent.expiresAt,
+        status: "joined" as const,
+      };
+      // Phase 1 validates the frozen local coalition. Product-page execution is
+      // intentionally rehearsal-only until every seeded allocation has real
+      // provider evidence; this request cannot write Monad or Rain.
+      setStage(
+        latestMarketPhase === "closed"
+          ? "Asking the server to resolve the expired execution window…"
+          : "Validating the local coalition for a mandate-aware rehearsal…",
+      );
       const commitResponse = await fetch("/api/pool/commit", {
         method: "POST",
         headers: {
@@ -2395,28 +2813,40 @@ function SettleForm({
         cache: "no-store",
         body: JSON.stringify({
           poolId: activePool.id,
-          quantity: activeMembership.quantity,
+          membership: submittedMembership,
           confirmation: "commit-funded-demand",
         }),
       });
       const commitBody = (await commitResponse.json()) as CommitResponse;
-      setCommitment(commitBody);
-      if (commitBody.status === "committed") {
-        commitmentId = commitBody.commitmentId;
-      } else if (commitBody.status === "blocked" || commitBody.status === "failed") {
-        setResult({
-          status: "failed",
-          message: commitBody.message,
-          reservationState: "still_reserved",
-        });
-        return;
+      switch (commitBody.status) {
+        case "rehearsal_only":
+          break;
+        case "below_minimum":
+          setResult({
+            ...commitBody,
+            reservedCents: activeMembership.reservedCents,
+          });
+          return;
+        case "execution_window_missed":
+          setResult(commitBody);
+          return;
+        case "waiting_for_cutoff":
+          setResult(commitBody);
+          return;
+        case "rejected":
+        case "rate_limited":
+          setResult({
+            status: commitBody.status,
+            code: commitBody.code,
+            message: commitBody.message,
+            reservationState: commitBody.reservationState ?? "still_reserved",
+          });
+          return;
+        default:
+          assertNeverResponse(commitBody);
       }
 
-      setStage(
-        commitmentId
-          ? "Demand finalized on-chain. Opening the sealed merchant market…"
-          : "Opening the sealed merchant market…",
-      );
+      setStage("Running the mandate-aware local merchant rehearsal…");
       const response = await fetch("/api/pool/settle", {
         method: "POST",
         headers: {
@@ -2426,41 +2856,31 @@ function SettleForm({
         cache: "no-store",
         body: JSON.stringify({
           poolId: activePool.id,
-          quantity: activeMembership.quantity,
-          settlementId: crypto.randomUUID(),
-          ...(commitmentId ? { commitmentId } : {}),
+          membership: submittedMembership,
+          intent: submittedIntent,
           confirmation: "settle-pool-order",
         }),
       });
       const body = (await response.json()) as SettleResponse;
       setResult(body);
 
-      if (body.status === "cleared") {
-        // Amounts come from the server; the reducer still refuses any capture
-        // larger than the reservation it holds locally.
-        const next = reduceProductWorkspace(workspace, {
-          type: "pool/settle",
-          membershipId: activeMembership.id,
-          buyerId: workspace.owner.id,
-          evidence: body.evidence,
-          unitPriceCents: body.unitPriceCents,
-          capturedCents: body.capturedCents,
-          merchantName: body.winner.merchantName,
-          ...(body.rain
-            ? {
-                rainTransactionId: body.rain.transactionId,
-                rainCardLast4: body.rain.cardLast4,
-              }
-            : {}),
-          activityId: createId("activity-settle"),
-          at: new Date().toISOString(),
-        });
-        setWorkspace(next);
-        setToast(
-          `${cents(body.releasedCents)} released back to your available balance.`,
-        );
-        // Real provider money moved, so re-read Rain's own ceiling and charges.
-        if (body.evidence === "rain-sandbox") refreshTreasury();
+      switch (body.status) {
+        case "modeled_quote": {
+          // A modeled quote is display evidence only. It cannot consume the
+          // reservation, create an order, or move browser-local balances. The
+          // buyer must explicitly choose the no-purchase release below.
+          break;
+        }
+        case "no_acceptable_offer":
+        case "below_minimum":
+        case "execution_window_missed":
+        case "waiting_for_cutoff":
+        case "failed":
+        case "rejected":
+        case "rate_limited":
+          break;
+        default:
+          assertNeverResponse(body);
       }
     } catch (error) {
       showError(error);
@@ -2470,12 +2890,67 @@ function SettleForm({
     }
   }
 
-  const cleared = result?.status === "cleared" ? result : null;
+  const modeledQuote = result?.status === "modeled_quote" ? result : null;
   const declined = result?.status === "no_acceptable_offer" ? result : null;
+  const executionWindowMissed =
+    result?.status === "execution_window_missed" ? result : null;
+  const belowMinimum = result?.status === "below_minimum" ? result : null;
   const failed =
-    result && result.status !== "cleared" && result.status !== "no_acceptable_offer"
+    result &&
+    result.status !== "modeled_quote" &&
+    result.status !== "no_acceptable_offer" &&
+    result.status !== "execution_window_missed" &&
+    result.status !== "below_minimum"
       ? result
       : null;
+  const releasableOutcome =
+    modeledQuote ??
+    belowMinimum ??
+    declined ??
+    executionWindowMissed;
+
+  function releaseAfterOutcome() {
+    if (!releasableOutcome) return;
+    const submittedMembership = executionMembershipEnvelope(activeMembership);
+    const latest = workspaceRef.current;
+    if (
+      !sameExecutionMembership(
+        latest.memberships[activeMembership.id],
+        submittedMembership,
+      )
+    ) {
+      setModal(null);
+      showError(
+        new Error(
+          "This commitment changed before its outcome release could be applied.",
+        ),
+      );
+      return;
+    }
+    try {
+      const next = reduceProductWorkspace(latest, {
+        type: "pool/release_after_outcome",
+        membershipId: activeMembership.id,
+        buyerId: latest.owner.id,
+        reason: releasableOutcome.releaseReason,
+        operationId: releasableOutcome.operationId,
+        activityId: createId("activity-outcome-release"),
+        at:
+          releasableOutcome.status === "execution_window_missed"
+            ? releasableOutcome.serverTime
+            : new Date().toISOString(),
+      });
+      setWorkspace(next);
+      setModal(null);
+      setToast(
+        releasableOutcome.status === "modeled_quote"
+          ? `${cents(activeMembership.reservedCents)} released locally. The modeled quote created no order or payment.`
+          : `${cents(activeMembership.reservedCents)} released after the no-purchase outcome.`,
+      );
+    } catch (error) {
+      showError(error);
+    }
+  }
 
   return (
     <>
@@ -2489,9 +2964,9 @@ function SettleForm({
         {!result ? (
           <>
             <p className={styles.modalIntro}>
-              POOL freezes this pool’s funded demand, sends one anonymized request to
-              every eligible merchant, and awards the cheapest offer that clears the
-              published target. Merchants never see each other’s bids or your maximum.
+              {resolvingExpiredWindow
+                ? "The product rehearsal window has expired. Because these product routes cannot contact Rain or Monad in any environment, the server can safely return the browser-local reservation for release."
+                : "POOL replays a sealed, deterministic merchant market against this local funded-demand fixture and selects the cheapest modeled offer that satisfies your price and delivery mandate. This market rehearsal never places an aggregate order or contacts Rain or Monad."}
             </p>
             <div className={styles.reservationBox}>
               <div className={styles.reservationProduct}>
@@ -2509,159 +2984,114 @@ function SettleForm({
                 <strong>{cents(membership.reservedCents)}</strong>
               </div>
               <div className={styles.reservationLine}>
-                <span>Published target</span>
+                <span>Published price target</span>
                 <strong>{cents(pool.estimatedUnitPriceCents)} / unit</strong>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Market eligibility</span>
+                <strong>{poolEligibility(pool).label}</strong>
               </div>
             </div>
             <div className={styles.ruleBox}>
               <ShieldCheck size={15} />
               <span>
-                The browser sends only this pool’s id and your committed quantity. The
-                server re-derives MSRP, the clearing price, and the captured amount from
-                its own catalog.
+                The browser submits this commitment’s complete identity and reservation
+                envelope plus its saved mandate. The server validates both against the
+                canonical fixture, filters modeled bids by maximum price and promised
+                delivery, and returns rehearsal evidence only. No aggregate order is
+                placed.
               </span>
             </div>
           </>
         ) : null}
 
-        {cleared ? (
+        {modeledQuote ? (
           <>
             <div className={styles.reservationBox}>
               <div className={styles.reservationProduct}>
                 <ProductGlyph product={product} size={18} />
                 <div>
-                  <strong>{cleared.winner.merchantName} won the order</strong>
+                  <strong>{modeledQuote.winner.merchantName} won the modeled market</strong>
                   <small>
-                    {cents(cleared.unitPriceCents)} / unit ·{" "}
-                    {cleared.winner.deliveryDays}-day delivery ·{" "}
-                    {cleared.winner.warrantyMonths}-month warranty
+                    {cents(modeledQuote.unitPriceCents)} / unit ·{" "}
+                    {modeledQuote.winner.deliveryDays}-day delivery ·{" "}
+                    {modeledQuote.winner.warrantyMonths}-month warranty
                   </small>
                 </div>
               </div>
               <div className={styles.reservationLine}>
-                <span>Sealed bids at {cleared.aggregateUnits} funded units</span>
-                <strong>{(cleared.volumeDiscountBps / 100).toFixed(0)}% volume tier</strong>
+                <span>Sealed bids at {modeledQuote.aggregateUnits} funded units</span>
+                <strong>{(modeledQuote.volumeDiscountBps / 100).toFixed(0)}% volume tier</strong>
               </div>
-              {cleared.offers.map((offer) => (
+              {modeledQuote.offers.map((offer) => (
                 <div className={styles.reservationLine} key={offer.merchantId}>
                   <span>
                     {offer.merchantName}
-                    {offer.merchantId === cleared.winner.merchantId ? " · won" : ""}
+                    {offer.merchantId === modeledQuote.winner.merchantId ? " · won" : ""}
                   </span>
                   <strong>{cents(offer.unitPriceCents)}</strong>
                 </div>
               ))}
               <div className={styles.reservationLine}>
-                <span>You reserved</span>
-                <strong>{cents(cleared.reservedCents)}</strong>
+                <span>Your reservation remains locked</span>
+                <strong>{cents(modeledQuote.reservedCents)}</strong>
               </div>
               <div className={styles.reservationLine}>
-                <span>Captured</span>
-                <strong>{cents(cleared.capturedCents)}</strong>
+                <span>Modeled total at quote</span>
+                <strong>{cents(modeledQuote.modeledAllocationCents)}</strong>
               </div>
               <div className={classNames(styles.reservationLine, styles.reservationTotal)}>
-                <span>Released to you</span>
-                <strong>{cents(cleared.releasedCents)}</strong>
+                <span>Modeled savings if a real order existed</span>
+                <strong>{cents(modeledQuote.modeledSavingsCents)}</strong>
               </div>
             </div>
 
-            {cleared.rain ? (
-              <div className={styles.ruleBox}>
-                <ShieldCheck size={15} />
-                <span>
-                  <strong>Rain sandbox settled this order.</strong> Scoped card ••••
-                  {cleared.rain.cardLast4} was issued for exactly{" "}
-                  {cents(cleared.capturedCents)}, restricted to MCC{" "}
-                  {cleared.rain.allowedMcc}. An off-policy MCC{" "}
-                  {cleared.rain.blockedMccProof.mcc} attempt was{" "}
-                  {cleared.rain.blockedMccProof.status} by the provider before any real
-                  authorization ran. Transaction {shortId(cleared.rain.transactionId)}.
-                  {cleared.rain.idempotencyCached
-                    ? " This run replayed a cached idempotent response."
-                    : ""}
-                </span>
-              </div>
-            ) : (
-              <div className={styles.ruleBox}>
-                <Info size={15} />
-                <span>
-                  <strong>REHEARSAL · SIMULATED.</strong> The market cleared
-                  deterministically, but Rain execution is disabled or locked, so no
-                  provider transaction was created and no provider id is shown.
-                </span>
-              </div>
-            )}
-
-            {cleared.monad ? (
-              <div className={styles.ruleBox}>
-                <ShieldCheck size={15} />
-                <span>
-                  <strong>Monad Testnet proved the ordering.</strong> Funded demand was
-                  committed and finalized <em>before</em> any merchant could bid
-                  (commitment {shortId(cleared.monad.commitmentId)}), the winning sealed
-                  offer was then registered against it, and the Rain transaction set was
-                  bound to that exact offer afterwards. Buyer maximums and merchant floors
-                  stayed off-chain behind hashes.
-                  {cleared.monad.attestation?.status === "attestation_pending"
-                    ? " The settlement attestation has not finalized yet, so no on-chain settlement claim is made."
-                    : ""}
-                  {cleared.monad.offerRegistration?.explorerUrl ? (
-                    <>
-                      {" "}
-                      <a
-                        href={cleared.monad.offerRegistration.explorerUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        View offer registration
-                      </a>
-                    </>
-                  ) : null}
-                  {cleared.monad.attestation?.explorerUrl ? (
-                    <>
-                      {" · "}
-                      <a
-                        href={cleared.monad.attestation.explorerUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        View settlement attestation
-                      </a>
-                    </>
-                  ) : null}
-                </span>
-              </div>
-            ) : commitment?.status === "not_configured" ? (
-              <div className={styles.ruleBox}>
-                <Info size={15} />
-                <span>
-                  <strong>No on-chain claim.</strong> Monad is not configured in this
-                  environment, so the market ran without a commitment transaction. POOL
-                  does not assert an ordering proof it cannot show.
-                </span>
-              </div>
-            ) : null}
+            <div className={styles.ruleBox}>
+              <Info size={15} />
+              <span>
+                <strong>REHEARSAL · NO AGGREGATE ORDER PLACED.</strong> This quote did not
+                mutate the browser-local reservation or create an order. No card was
+                issued, no payment was authorized, and neither Rain nor Monad was
+                contacted. Release the local reservation explicitly, or use the fixed
+                Demo page for the complete three-allocation live proof.
+              </span>
+            </div>
           </>
         ) : null}
 
-        {commitment?.status === "committed" ? (
-          <div className={styles.ruleBox}>
-            <ShieldCheck size={15} />
-            <span>
-              <strong>Pre-bid commitment finalized.</strong> {commitment.unitCount} funded
-              units ({cents(commitment.reservedCents)}) were committed to Monad Testnet at{" "}
-              {commitment.committedAt}
-              {commitment.replayed
-                ? " (existing commitment verified, no duplicate write)"
-                : ""}
-              .{" "}
-              {commitment.explorerUrl ? (
-                <a href={commitment.explorerUrl} target="_blank" rel="noopener noreferrer">
-                  View commitment transaction
-                </a>
-              ) : null}
-            </span>
-          </div>
+        {belowMinimum ? (
+          <>
+            <div className={styles.reservationBox}>
+              <div className={styles.reservationProduct}>
+                <ProductGlyph product={product} size={18} />
+                <div>
+                  <strong>Merchant bidding has not opened</strong>
+                  <small>
+                    {belowMinimum.aggregateUnits} funded units ·{" "}
+                    {belowMinimum.unitsNeeded} more needed for eligibility
+                  </small>
+                </div>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Minimum to open bidding</span>
+                <strong>{belowMinimum.minimumCommittedUnitCount} funded units</strong>
+              </div>
+              <div className={classNames(styles.reservationLine, styles.reservationTotal)}>
+                <span>Available for full release</span>
+                <strong>{cents(belowMinimum.reservedCents)}</strong>
+              </div>
+            </div>
+            <div className={styles.ruleBox}>
+              <Info size={15} />
+              <span>
+                <strong>Eligibility outcome—not a failed payment.</strong>{" "}
+                {belowMinimum.message} The minimum is not an enrollment target or cap:
+                funded buyers may keep joining until the published cutoff. If the window
+                closes below the minimum, POOL does not open merchant bidding or attempt
+                a payment authorization.
+              </span>
+            </div>
+          </>
         ) : null}
 
         {declined ? (
@@ -2684,16 +3114,53 @@ function SettleForm({
                 </div>
               ))}
               <div className={classNames(styles.reservationLine, styles.reservationTotal)}>
-                <span>Your reservation is untouched</span>
+                <span>Available for full release</span>
                 <strong>{cents(declined.reservedCents)}</strong>
               </div>
             </div>
             <div className={styles.ruleBox}>
               <Info size={15} />
               <span>
-                {declined.unitsToClear === null
-                  ? "No merchant can reach this pool's published target at any volume tier."
-                  : `Merchants reach the target at ${declined.unitsToClear} funded units. More funded demand unlocks a deeper volume tier — that is the entire mechanism.`}
+                {declined.code === "buyer_mandate_not_met"
+                  ? "Merchant bids were filtered against the saved, server-validated maximum price and promised-delivery deadline before an award was chosen; none qualified."
+                  : declined.unitsToClear === null
+                  ? "No merchant can reach this pool's published price target at any modeled volume tier."
+                  : `The offer model first reaches this price target at ${declined.unitsToClear} funded units. That describes volume pricing, not an enrollment target or cap.`}
+                {" "}No payment authorization was attempted, so releasing this outcome
+                cannot conflict with a purchase.
+              </span>
+            </div>
+          </>
+        ) : null}
+
+        {executionWindowMissed ? (
+          <>
+            <div className={styles.reservationBox}>
+              <div className={styles.reservationProduct}>
+                <ProductGlyph product={product} size={18} />
+                <div>
+                  <strong>Execution window expired</strong>
+                  <small>
+                    Closed {shortDateTime.format(
+                      new Date(executionWindowMissed.bidClosesAt),
+                    )}
+                  </small>
+                </div>
+              </div>
+              <div className={styles.reservationLine}>
+                <span>Provider operation state</span>
+                <strong>Impossible by product-route design</strong>
+              </div>
+              <div className={classNames(styles.reservationLine, styles.reservationTotal)}>
+                <span>Available for full release</span>
+                <strong>{cents(executionWindowMissed.reservedCents)}</strong>
+              </div>
+            </div>
+            <div className={styles.ruleBox}>
+              <Info size={15} />
+              <span>
+                {executionWindowMissed.message} This release changes only the local
+                product sandbox; it is not a custody or provider settlement claim.
               </span>
             </div>
           </>
@@ -2718,16 +3185,33 @@ function SettleForm({
           type="button"
           onClick={() => setModal(null)}
         >
-          {result ? "Done" : "Cancel"}
+          {releasableOutcome ? "Keep reserved" : result ? "Done" : "Cancel"}
         </button>
-        {!cleared ? (
+        {releasableOutcome ? (
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={releaseAfterOutcome}
+            disabled={running}
+          >
+            <ArrowUpRight size={14} /> Release {cents(activeMembership.reservedCents)}
+          </button>
+        ) : !modeledQuote && !belowMinimum && !declined ? (
           <button
             className={styles.primaryButton}
             type="button"
             onClick={run}
             disabled={running}
           >
-            {running ? "Running sealed market…" : result ? "Run again" : "Run the market"}
+            {running
+              ? resolvingExpiredWindow
+                ? "Resolving window…"
+                : "Running local rehearsal…"
+              : result
+                ? "Run again"
+                : resolvingExpiredWindow
+                  ? "Resolve window"
+                  : "Run rehearsal"}
           </button>
         ) : null}
       </footer>

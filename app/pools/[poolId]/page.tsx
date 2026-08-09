@@ -9,7 +9,7 @@ type PoolPageProps = {
 export const metadata: Metadata = {
   title: "Group-buy terms — POOL",
   description:
-    "Review a POOL group buy's full-MSRP reservation, demand progress, price target, and exit cutoff.",
+    "Review a POOL group buy's full-MSRP reservation, live funded demand, minimum, price target, and two-week close.",
 };
 
 export default async function PoolPage({ params }: PoolPageProps) {

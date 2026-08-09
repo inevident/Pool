@@ -28,6 +28,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
+import { HERO_FUNDING } from "@/lib/funding";
+import { BLOCKED_MCC, ELECTRONICS_MCC } from "@/lib/market/consumer";
+
 type RainStatus = {
   configured: boolean;
   connected: boolean;
@@ -99,6 +102,7 @@ type TraceLine = {
 
 type ConsoleResult = {
   kind: "idle" | "running" | "complete" | "failed";
+  verdict?: "passed" | "blocked";
   mode?: string;
   title?: string;
   detail?: string;
@@ -156,8 +160,16 @@ type MonadStatus = {
 
 type MonadPreparationState = "idle" | "running" | "ready" | "local" | "failed";
 
-const MSRP_UNIT = 479;
-const DEAL_UNIT = 389;
+const MSRP_UNIT = HERO_FUNDING.msrpUnitCents / 100;
+const DEAL_UNIT = HERO_FUNDING.dealUnitCents / 100;
+const FIXTURE_TOTAL_UNITS = HERO_FUNDING.summary.buyers.reduce(
+  (total, buyer) => total + buyer.quantity,
+  0,
+);
+const FIXTURE_CAPTURE_COUNT = HERO_FUNDING.summary.buyers.length;
+const FIXTURE_BASELINE = HERO_FUNDING.summary.totalReservedCents / 100;
+const FIXTURE_CAPTURE_TOTAL = HERO_FUNDING.summary.totalCapturedCents / 100;
+const FIXTURE_SAVINGS = HERO_FUNDING.summary.totalReleasedCents / 100;
 
 const buyers = [
   {
@@ -335,10 +347,11 @@ function ConsoleOutput({ state, empty }: { state: ConsoleResult; empty: string }
   if (state.kind === "failed") {
     return <div className="console-empty is-failed" role="alert"><X size={15} /><span>{state.detail ?? "This test did not complete."}</span></div>;
   }
+  const blocked = state.verdict === "blocked";
   return (
-    <div className="console-result" aria-live="polite">
+    <div className={`console-result${blocked ? " is-blocked" : ""}`} aria-live="polite">
       <div className="console-result-head">
-        <div><Check size={14} /><strong>{state.title}</strong></div>
+        <div>{blocked ? <X size={14} /> : <Check size={14} />}<strong>{state.title}</strong></div>
         <span>{state.mode ?? "policy runtime"}</span>
       </div>
       {state.detail ? <p>{state.detail}</p> : null}
@@ -376,10 +389,10 @@ export default function DemoExperience() {
   const round = merchantRound(stage);
   const currentPrice = stage >= 9 ? DEAL_UNIT : stage >= 7 ? 401 : MSRP_UNIT;
   const visibleEvents = timeline.filter((event) => event.stage <= stage);
-  const savings = (MSRP_UNIT - DEAL_UNIT) * 12;
-  const baseline = MSRP_UNIT * 12;
-  const poolTotal = DEAL_UNIT * 12;
-  const totalUnits = buyers.reduce((total, buyer) => total + buyer.quantity, 0);
+  const savings = FIXTURE_SAVINGS;
+  const baseline = FIXTURE_BASELINE;
+  const poolTotal = FIXTURE_CAPTURE_TOTAL;
+  const totalUnits = FIXTURE_TOTAL_UNITS;
   const reservedUnits = buyers
     .slice(0, Math.min(stage, buyers.length))
     .reduce((total, buyer) => total + buyer.quantity, 0);
@@ -610,32 +623,47 @@ export default function DemoExperience() {
       const payload = asRecord(await response.json());
       if (!response.ok) throw new Error(textValue(payload.message ?? payload.error, "Agent route unavailable"));
       const normalized = asRecord(payload.normalized ?? payload.intent ?? payload.parsedIntent);
-      const quantity = textValue(normalized.quantity ?? payload.quantity, "requested quantity");
-      const deadline = textValue(normalized.deadlineDays ?? normalized.deliveryDays ?? payload.deadlineDays, "requested window");
-      const decision = textValue(payload.status, "eligible");
-      const mode = textValue(payload.mode ?? payload.provider, "policy-agent");
+      const policyDecision = asRecord(payload.decision);
+      const quantityValue = normalized.quantity ?? payload.quantity;
+      const quantity = typeof quantityValue === "number" && Number.isInteger(quantityValue)
+        ? quantityValue
+        : null;
+      const deadlineValue = normalized.deadlineDays ?? normalized.deliveryDays ?? payload.deadlineDays;
+      const deadline = typeof deadlineValue === "number" && Number.isFinite(deadlineValue)
+        ? deadlineValue
+        : null;
+      const requiredDepositCents = typeof policyDecision.requiredDepositCents === "number"
+        ? policyDecision.requiredDepositCents
+        : null;
+      const clarification = textValue(normalized.clarification);
+      const decision = textValue(payload.status, "runtime_result");
+      const mode = textValue(payload.mode ?? payload.provider, "runtime result");
+      const details = [
+        clarification,
+        deadline !== null ? `Normalized deadline: ${deadline} days.` : "",
+        requiredDepositCents !== null
+          ? `Required MSRP coverage: ${money.format(requiredDepositCents / 100)}. No funds were moved.`
+          : "",
+      ].filter(Boolean);
       setIntentResult({
         kind: "complete",
+        verdict: decision === "needs_clarification" || policyDecision.eligibleForPool === false
+          ? "blocked"
+          : "passed",
         mode,
-        title: `${decision.replace(/_/g, " ")} · ${quantity} unit${quantity === "1" ? "" : "s"}`,
-        detail: `Normalized deadline: ${deadline}${/^\d+$/.test(deadline) ? " days" : ""}. This test does not mutate the fixed 12-unit Rain evidence run.`,
-        trace: traceFrom(payload.trace ?? payload.toolTrace, [
-          { label: "normalize_intent", detail: "Converted natural language into typed purchase constraints", status: "complete" },
-          { label: "check_catalog", detail: "Compared hard product and delivery constraints", status: "complete" },
-          { label: "check_funding", detail: "MSRP coverage is required before admission", status: "info" },
-        ]),
+        title: quantity === null
+          ? decision.replace(/_/g, " ")
+          : `${decision.replace(/_/g, " ")} · ${quantity} unit${quantity === 1 ? "" : "s"}`,
+        detail: `${details.join(" ") || "The runtime returned no additional decision detail."} This test does not mutate the fixed ${totalUnits}-unit Rain evidence run.`,
+        trace: traceFrom(payload.trace ?? payload.toolTrace, []),
       });
-    } catch {
+    } catch (error) {
       setIntentResult({
-        kind: "complete",
-        mode: "local rehearsal",
-        title: "Compatible intent · 2 units",
-        detail: "The hosted agent route is unavailable, so this is an explicitly labeled local policy rehearsal. It does not join the fixed Rain run.",
-        trace: [
-          { label: "normalize_intent", detail: "27-inch · 4K · USB-C · quantity 2 · deadline 10 days", status: "complete" },
-          { label: "check_catalog", detail: "Hard specifications match POOL-017", status: "complete" },
-          { label: "reserve_funds", detail: "Would require $958 in deposited balance", status: "info" },
-        ],
+        kind: "failed",
+        mode: "runtime unavailable",
+        detail: error instanceof Error
+          ? error.message
+          : "The buyer agent request failed before a verifiable result was returned. No decision was made.",
       });
     }
   }
@@ -790,6 +818,25 @@ export default function DemoExperience() {
     : outcomeMonadStatus === "attestation_pending"
       ? "The Rain receipts are final; POOL is not claiming an on-chain settlement timestamp until confirmation completes."
       : "Monad testnet signing is not configured, so this run does not claim an on-chain transaction.");
+  const rainSummaryState = rainStatus?.connected && rainStatus.liveExecutionEnabled
+    ? "Sandbox execution ready"
+    : rainStatus?.accessRequired
+      ? "Sandbox execution locked"
+      : "Fixed sandbox evidence";
+  const monadSummaryState = outcomeMonadStatus === "attested"
+    ? "Settlement attested"
+    : outcomeMonadStatus === "attestation_pending"
+      ? "Attestation pending"
+      : monadCommitmentIsOnchain
+        ? "Commitment finalized"
+        : monadIsConfigured
+          ? "Testnet ready"
+          : "Local proof only";
+  const monadSummaryDetail = monadCommitmentIsOnchain
+    ? `${monadChainName ?? "Monad Testnet"} · ${shortId(commitmentTx ?? monadCommitmentId ?? undefined)}`
+    : monadIsConfigured
+      ? `${monadChainName ?? "Monad Testnet"} · awaiting commitment`
+      : "No testnet transaction claimed";
 
   return (
     <main className={`app-shell stage-${stage}`}>
@@ -800,8 +847,8 @@ export default function DemoExperience() {
         </Link>
         <nav className="topnav" aria-label="Product navigation">
           <Link href="/">Product workspace</Link>
-          <a href="#judge-console">Judge console</a>
-          <a href="#market">Live market</a>
+          <a href="#judge-console">Technical inspector</a>
+          <a href="#market">Evidence replay</a>
           <a href="#authority">Funds & authority</a>
           <a href="#outcome">Outcome</a>
         </nav>
@@ -823,7 +870,7 @@ export default function DemoExperience() {
             <div className="demo-access-copy">
               <span className="demo-access-icon" aria-hidden="true"><LockKeyhole size={16} /></span>
               <div>
-                <span className="demo-access-kicker">JUDGE ACCESS · LIVE RAIL PROTECTED</span>
+                <span className="demo-access-kicker">JUDGE ACCESS · SANDBOX RAIL PROTECTED</span>
                 <strong id="demo-access-title">Unlock Rain sandbox execution</strong>
                 <p id="demo-access-help">Enter the private demo code. Rehearsal mode remains available without it.</p>
               </div>
@@ -864,149 +911,221 @@ export default function DemoExperience() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <div className="section-label"><span>PREFUNDED COLLECTIVE COMMERCE</span><span>01 / LIVE MARKET</span></div>
-          <h1>Buyers don’t find <br />the market. <em>They become it.</em></h1>
+          <div className="section-label"><span>FIXED TECHNICAL EVIDENCE FIXTURE</span><span>01 / JUDGE REPLAY</span></div>
+          <div className="fixture-notice">
+            <Fingerprint size={14} aria-hidden="true" />
+            <span>Repeatable scenario · fictional organizations · no real money</span>
+          </div>
+          <h1>{totalUnits} prefunded units.<br /><em>{money.format(savings)} stays with buyers.</em></h1>
           <p>
-            To join, every buyer first deposits at least the item’s MSRP into their POOL balance.
-            Joining reserves that amount so it cannot be withdrawn or spent elsewhere while the group buy is active.
+            This page is the fixed, auditable technical fixture for the Rain + Monad proof path—not the repeat-use consumer app.
+            Three buyers reserve MSRP, sellers compete, and only the cleared price can move. <Link href="/">Open the product workspace <ArrowRight size={13} /></Link>
           </p>
           <div className="hero-actions">
             <button className="primary-button" onClick={stage === 0 ? launchDemo : () => setAutoplay((value) => !value)} disabled={stage >= 11}>
               {stage === 0 ? <Play size={15} fill="currentColor" /> : marketIsPlaying ? <Pause size={15} fill="currentColor" /> : stage >= 11 ? <Check size={15} /> : <Play size={15} fill="currentColor" />}
-              {stage === 0 ? "Launch prefunded market" : marketIsPlaying ? "Pause market" : stage >= 11 ? "Market cleared" : "Resume market"}
+              {stage === 0 ? "Replay the fixed market" : marketIsPlaying ? "Pause replay" : stage >= 11 ? "Market cleared" : "Resume replay"}
             </button>
             <button className="text-button" onClick={() => void stepManually()} disabled={stage >= 11 || monadPreparation === "running"}>
               Step manually <ArrowRight size={15} />
             </button>
           </div>
         </div>
-        <div className="hero-ledger" aria-label="Hero market summary">
-          <div className="ledger-head">
-            <span>HERO MARKET</span>
-            <span className="live-chip"><StatusDot online={stage > 0} />{marketState}</span>
-          </div>
-          <div className="product-line">
-            <div className="product-glyph" aria-hidden="true"><span /></div>
-            <div>
-              <strong>27” 4K USB-C displays</strong>
-              <span>12-unit group buy · MSRP {money.format(MSRP_UNIT)} each · New York</span>
+        <div className="hero-evidence-stack">
+          <aside className="proof-summary" aria-labelledby="proof-summary-title">
+            <div className="proof-summary-head">
+              <div><Sparkles size={15} aria-hidden="true" /><span id="proof-summary-title">THE 90-SECOND PROOF</span></div>
+              <span>fixed fixture</span>
             </div>
-          </div>
-          <div className="hero-metrics">
-            <div><span>MSRP requirement</span><strong>{money.format(MSRP_UNIT)}<small>/unit</small></strong></div>
-            <div><span>POOL balances</span><strong>{money.format(baseline)}<small>deposited</small></strong></div>
-            <div><span>Active reservation</span><strong>{money.format(activeReservation)}<small>{stage >= 12 ? "released" : "locked"}</small></strong></div>
-          </div>
-          <div className="funding-rail" aria-label="POOL funding lifecycle">
-            <div className="funding-step is-active"><span>01 · DEPOSIT</span><strong>{money.format(baseline)}</strong><small>across 3 POOL balances</small></div>
-            <ArrowRight size={14} />
-            <div className={`funding-step ${stage >= 1 ? "is-active" : ""}`}><span>02 · JOIN</span><strong>Reserve MSRP</strong><small>unavailable while active</small></div>
-            <ArrowRight size={14} />
-            <div className={`funding-step ${stage >= 9 ? "is-active" : ""}`}><span>03 · SETTLE</span><strong>{money.format(poolTotal)} captured</strong><small>{money.format(savings)} unlocks</small></div>
-          </div>
-          <div className="funding-exit-rule"><LockKeyhole size={12} /><span>Leave while the pool recruits → full release. Before the RFP opens, membership and MSRP reservations freeze through settlement, cancellation, or reconciliation.</span></div>
-          <div className="hero-ticker"><span>POOL-2408-017</span><span>{currentCopy.eyebrow}</span><span>NYC / USD</span></div>
+            <div className="proof-summary-fixture-note"><Fingerprint size={12} aria-hidden="true" /> Technical evidence fixture · no real money · separate from the repeat-use product</div>
+            <div className="proof-summary-grid">
+              <div className="proof-summary-stat is-demand">
+                <span>Prefunded demand</span>
+                <strong>{totalUnits} units</strong>
+                <small>{money.format(baseline)} MSRP reserved before bidding</small>
+              </div>
+              <div className="proof-summary-stat is-outcome">
+                <span>Buyer savings</span>
+                <strong>{money.format(savings)}</strong>
+                <small>{money.format(MSRP_UNIT)} → {money.format(DEAL_UNIT)} per unit</small>
+              </div>
+              <div className="proof-summary-stat is-rain">
+                <span>Rain bounded captures</span>
+                <strong>{FIXTURE_CAPTURE_COUNT} captures</strong>
+                <small>{rainSummaryState}</small>
+                <a href="/evidence/rain-sandbox-2026-08-09.png" target="_blank" rel="noopener noreferrer">
+                  Dated sandbox proof <Link2 size={10} aria-hidden="true" />
+                </a>
+              </div>
+              <div className="proof-summary-stat is-monad">
+                <span>Monad commitment / attestation</span>
+                <strong>{monadSummaryState}</strong>
+                <small>{monadSummaryDetail}</small>
+              </div>
+            </div>
+            <div className="sponsor-proof-row">
+              <div className="guardrail-proof">
+                <ShieldCheck size={17} aria-hidden="true" />
+                <div><span>RAIN GUARDRAIL CHALLENGE</span><strong>MCC {BLOCKED_MCC} BLOCKED</strong><small>off-policy spend cannot pass the scoped card</small></div>
+              </div>
+              <div className="monad-evidence-proof">
+                <Fingerprint size={17} aria-hidden="true" />
+                <div><span>MONAD EVIDENCE STATE</span><strong>{monadSummaryState}</strong><small>{monadSummaryDetail}</small></div>
+                {commitmentProofHref ? (
+                  <a href={commitmentProofHref} target="_blank" rel="noopener noreferrer" aria-label="Open Monad commitment evidence">
+                    Explorer <Link2 size={12} />
+                  </a>
+                ) : <span className="proof-state-pill">Evidence only</span>}
+              </div>
+            </div>
+          </aside>
+
+          <details className="fixture-ledger-disclosure">
+            <summary>
+              <span><CircleDollarSign size={14} aria-hidden="true" /> View fixture funding ledger</span>
+              <span>{money.format(baseline)} reserved · {money.format(poolTotal)} captured <ChevronRight className="disclosure-chevron" size={14} aria-hidden="true" /></span>
+            </summary>
+            <div className="hero-ledger" aria-label="Fixed fixture funding ledger">
+              <div className="ledger-head">
+                <span>FIXTURE FUNDING LEDGER</span>
+                <span className="live-chip"><StatusDot online={stage > 0} />{marketState}</span>
+              </div>
+              <div className="product-line">
+                <div className="product-glyph" aria-hidden="true"><span /></div>
+                <div>
+                  <strong>27” 4K USB-C displays</strong>
+                  <span>{totalUnits}-unit group buy · MSRP {money.format(MSRP_UNIT)} each · New York</span>
+                </div>
+              </div>
+              <div className="hero-metrics">
+                <div><span>MSRP requirement</span><strong>{money.format(MSRP_UNIT)}<small>/unit</small></strong></div>
+                <div><span>POOL balances</span><strong>{money.format(baseline)}<small>deposited</small></strong></div>
+                <div><span>Active reservation</span><strong>{money.format(activeReservation)}<small>{stage >= 12 ? "released" : "locked"}</small></strong></div>
+              </div>
+              <div className="funding-rail" aria-label="POOL funding lifecycle">
+                <div className="funding-step is-active"><span>01 · DEPOSIT</span><strong>{money.format(baseline)}</strong><small>across {FIXTURE_CAPTURE_COUNT} POOL balances</small></div>
+                <ArrowRight size={14} />
+                <div className={`funding-step ${stage >= 1 ? "is-active" : ""}`}><span>02 · JOIN</span><strong>Reserve MSRP</strong><small>unavailable while active</small></div>
+                <ArrowRight size={14} />
+                <div className={`funding-step ${stage >= 9 ? "is-active" : ""}`}><span>03 · SETTLE</span><strong>{money.format(poolTotal)} captured</strong><small>{money.format(savings)} unlocks</small></div>
+              </div>
+              <div className="funding-exit-rule"><LockKeyhole size={12} /><span>Leave while the pool recruits → full release. Before the RFP opens, membership and MSRP reservations freeze through settlement, cancellation, or reconciliation.</span></div>
+              <div className="hero-ticker"><span>POOL-2408-017</span><span>{currentCopy.eyebrow}</span><span>NYC / USD</span></div>
+            </div>
+          </details>
         </div>
       </section>
 
       <section className="judge-console" id="judge-console" aria-labelledby="judge-console-title">
-        <div className="judge-console-head">
-          <div>
-            <span className="eyebrow">00 / JUDGE CONSOLE</span>
-            <h2 id="judge-console-title">Test the agents.<br /><em>Inspect every boundary.</em></h2>
-          </div>
-          <p>
-            These controls exercise the runtime APIs without rewriting the fixed, auditable Rain sandbox scenario below.
-            Every result names whether it came from AI, deterministic policy, testnet, or a local rehearsal.
-          </p>
-        </div>
-
-        <div className="judge-console-grid">
-          <article className="console-card agent-console-card">
-            <div className="console-card-head">
-              <div><Bot size={16} /><span>BUYER INTENT AGENT</span></div>
-              <span>natural language → mandate</span>
+        <details className="judge-console-disclosure">
+          <summary>
+            <div className="judge-console-summary-copy">
+              <span className="eyebrow">OPTIONAL DEEP DIVE</span>
+              <h2 id="judge-console-title">Open the technical inspector</h2>
+              <p>Run both agents, inspect policy traces, and verify the complete Monad ordering proof.</p>
             </div>
-            <form className="console-form" onSubmit={runBuyerAgent}>
-              <label htmlFor="buyer-intent">Try your own purchase intent</label>
-              <textarea
-                id="buyer-intent"
-                value={intent}
-                onChange={(event) => setIntent(event.target.value)}
-                maxLength={500}
-                rows={3}
-                aria-describedby="buyer-intent-help"
-              />
-              <div className="console-form-footer">
-                <small id="buyer-intent-help">No account or money movement · maximum 500 characters</small>
-                <button className="console-submit" type="submit" disabled={intentResult.kind === "running" || intent.trim().length === 0}>
-                  {intentResult.kind === "running" ? <span className="mini-spinner" /> : <Bot size={14} />}
-                  {intentResult.kind === "running" ? "Running…" : "Run buyer agent"}
-                </button>
+            <span className="judge-console-summary-action">3 evidence panels · expand <ChevronRight className="disclosure-chevron" size={16} aria-hidden="true" /></span>
+          </summary>
+          <div className="judge-console-body">
+            <div className="judge-console-head">
+              <div>
+                <span className="eyebrow">00 / RUNTIME CONTROLS</span>
+                <h3>Test the agents.<br /><em>Inspect every boundary.</em></h3>
               </div>
-            </form>
-            <ConsoleOutput state={intentResult} empty="Run an intent to see normalization, catalog matching, and the funding gate." />
-          </article>
+              <p>
+                These controls exercise the runtime APIs without rewriting the fixed, auditable Rain sandbox scenario below.
+                Every result names whether it came from AI, deterministic policy, testnet, or a local rehearsal.
+              </p>
+            </div>
 
-          <article className="console-card merchant-console-card">
-            <div className="console-card-head">
-              <div><Gavel size={16} /><span>MERCHANT BID AGENT</span></div>
-              <span>offer → mandate clearing</span>
-            </div>
-            <form className="bid-form" onSubmit={evaluateMerchantBid}>
-              <label>
-                <span>Unit price</span>
-                <span className="input-shell"><i>$</i><input type="number" min="1" max="999" step="1" value={merchantPrice} onChange={(event) => setMerchantPrice(event.target.value)} aria-label="Merchant unit price in dollars" /></span>
-              </label>
-              <label>
-                <span>Delivery</span>
-                <span className="input-shell"><input type="number" min="1" max="90" step="1" value={merchantDelivery} onChange={(event) => setMerchantDelivery(event.target.value)} aria-label="Merchant delivery days" /><i>days</i></span>
-              </label>
-              <button className="console-submit" type="submit" disabled={stage < 7 || bidResult.kind === "running"}>
-                {bidResult.kind === "running" ? <span className="mini-spinner" /> : stage < 7 ? <LockKeyhole size={14} /> : <Gavel size={14} />}
-                {bidResult.kind === "running" ? "Evaluating…" : stage < 7 ? "Launch market to open committed RFP" : "Submit test bid"}
-              </button>
-            </form>
-            <div className="bid-disclosure"><EyeOff size={12} /> The merchant sees quantity and public requirements—never private buyer maximums.</div>
-            <ConsoleOutput state={bidResult} empty="Submit an offer to test price, delivery, warranty, and commitment rules." />
-          </article>
+            <div className="judge-console-grid">
+              <article className="console-card agent-console-card">
+                <div className="console-card-head">
+                  <div><Bot size={16} /><span>BUYER INTENT AGENT</span></div>
+                  <span>natural language → mandate</span>
+                </div>
+                <form className="console-form" onSubmit={runBuyerAgent}>
+                  <label htmlFor="buyer-intent">Try your own purchase intent</label>
+                  <textarea
+                    id="buyer-intent"
+                    value={intent}
+                    onChange={(event) => setIntent(event.target.value)}
+                    maxLength={500}
+                    rows={3}
+                    aria-describedby="buyer-intent-help"
+                  />
+                  <div className="console-form-footer">
+                    <small id="buyer-intent-help">No account or money movement · maximum 500 characters</small>
+                    <button className="console-submit" type="submit" disabled={intentResult.kind === "running" || intent.trim().length === 0}>
+                      {intentResult.kind === "running" ? <span className="mini-spinner" /> : <Bot size={14} />}
+                      {intentResult.kind === "running" ? "Running…" : "Run buyer agent"}
+                    </button>
+                  </div>
+                </form>
+                <ConsoleOutput state={intentResult} empty="Run an intent to see normalization, catalog matching, and the funding gate." />
+              </article>
 
-          <article className="console-card proof-console-card">
-            <div className="console-card-head">
-              <div><Link2 size={16} /><span>COMMITMENT PROOF</span></div>
-              <span className={commitmentProofHref ? "proof-live" : ""}>{monadLabel}</span>
+              <article className="console-card merchant-console-card">
+                <div className="console-card-head">
+                  <div><Gavel size={16} /><span>MERCHANT BID AGENT</span></div>
+                  <span>offer → mandate clearing</span>
+                </div>
+                <form className="bid-form" onSubmit={evaluateMerchantBid}>
+                  <label>
+                    <span>Unit price</span>
+                    <span className="input-shell"><i>$</i><input type="number" min="1" max="999" step="1" value={merchantPrice} onChange={(event) => setMerchantPrice(event.target.value)} aria-label="Merchant unit price in dollars" /></span>
+                  </label>
+                  <label>
+                    <span>Delivery</span>
+                    <span className="input-shell"><input type="number" min="1" max="90" step="1" value={merchantDelivery} onChange={(event) => setMerchantDelivery(event.target.value)} aria-label="Merchant delivery days" /><i>days</i></span>
+                  </label>
+                  <button className="console-submit" type="submit" disabled={stage < 7 || bidResult.kind === "running"}>
+                    {bidResult.kind === "running" ? <span className="mini-spinner" /> : stage < 7 ? <LockKeyhole size={14} /> : <Gavel size={14} />}
+                    {bidResult.kind === "running" ? "Evaluating…" : stage < 7 ? "Replay market to open committed RFP" : "Submit test bid"}
+                  </button>
+                </form>
+                <div className="bid-disclosure"><EyeOff size={12} /> The merchant sees quantity and public requirements—never private buyer maximums.</div>
+                <ConsoleOutput state={bidResult} empty="Submit an offer to test price, delivery, warranty, and commitment rules." />
+              </article>
+
+              <article className="console-card proof-console-card">
+                <div className="console-card-head">
+                  <div><Link2 size={16} /><span>COMMITMENT PROOF</span></div>
+                  <span className={commitmentProofHref ? "proof-live" : ""}>{monadLabel}</span>
+                </div>
+                <div className="proof-order" aria-label="Required transaction ordering">
+                  <div className="proof-step is-complete"><span>01</span><strong>{money.format(baseline)} funded</strong><small>MSRP verified</small></div>
+                  <ArrowRight size={14} />
+                  <div className="proof-step is-complete"><span>02</span><strong>{totalUnits} units frozen</strong><small>membership sealed</small></div>
+                  <ArrowRight size={14} />
+                  {monadCommitmentIsOnchain && commitmentProofHref ? (
+                    <a className="proof-step is-onchain" href={commitmentProofHref} target="_blank" rel="noopener noreferrer" aria-label="Open finalized Monad commitment evidence">
+                      <span>03</span><strong>Monad commit</strong><small>{commitmentTx ? "testnet transaction" : monadHasFinalizedCommitment ? "finalized registry state" : "locally derived"}</small>
+                    </a>
+                  ) : (
+                    <div className="proof-step is-local"><span>03</span><strong>Monad commit</strong><small>locally derived</small></div>
+                  )}
+                  <ArrowRight size={14} />
+                  <div className="proof-step"><span>04</span><strong>RFP opens</strong><small>sellers may bid</small></div>
+                </div>
+                <div className="proof-facts">
+                  <div><span>Coalition ID</span><strong>POOL-2408-017</strong></div>
+                  <div><span>Commitment</span><strong>{shortId(monadCommitmentHash ?? monadCommitmentId ?? undefined)}</strong></div>
+                  <div><span>Contract</span><strong>{shortId(monadContractAddress ?? undefined)}</strong></div>
+                  <div><span>Chain</span><strong>{monadChainId ? `${monadChainName ?? "Monad"} · ${monadChainId}` : "not configured"}</strong></div>
+                </div>
+                <div className="proof-links">
+                  {commitmentProofHref ? <a href={commitmentProofHref} target="_blank" rel="noopener noreferrer"><Link2 size={12} /> {commitmentTx ? "Commitment tx" : "Finalized commitment state"} <span>{shortId(commitmentTx ?? monadCommitmentId ?? undefined)}</span></a> : <span><Link2 size={12} /> No on-chain commitment transaction claimed</span>}
+                  {settlementHref ? <a href={settlementHref} target="_blank" rel="noopener noreferrer"><Check size={12} /> Settlement attestation <span>{shortId(settlementTx)}</span></a> : <span><Clock3 size={12} /> Settlement proof appears after Rain completes</span>}
+                </div>
+                <p className="proof-disclosure">
+                  The registry timestamps POOL’s funding-root commitment before bidding; observers reconcile POOL and Rain evidence afterward.
+                  A local hash is never presented as a testnet transaction.
+                </p>
+              </article>
             </div>
-            <div className="proof-order" aria-label="Required transaction ordering">
-              <div className="proof-step is-complete"><span>01</span><strong>$5,748 funded</strong><small>MSRP verified</small></div>
-              <ArrowRight size={14} />
-              <div className="proof-step is-complete"><span>02</span><strong>12 units frozen</strong><small>membership sealed</small></div>
-              <ArrowRight size={14} />
-              {monadCommitmentIsOnchain && commitmentProofHref ? (
-                <a className="proof-step is-onchain" href={commitmentProofHref} target="_blank" rel="noopener noreferrer" aria-label="Open finalized Monad commitment evidence">
-                  <span>03</span><strong>Monad commit</strong><small>{commitmentTx ? "testnet transaction" : monadHasFinalizedCommitment ? "finalized registry state" : "locally derived"}</small>
-                </a>
-              ) : (
-                <div className="proof-step is-local"><span>03</span><strong>Monad commit</strong><small>locally derived</small></div>
-              )}
-              <ArrowRight size={14} />
-              <div className="proof-step"><span>04</span><strong>RFP opens</strong><small>sellers may bid</small></div>
-            </div>
-            <div className="proof-facts">
-              <div><span>Coalition ID</span><strong>POOL-2408-017</strong></div>
-              <div><span>Commitment</span><strong>{shortId(monadCommitmentHash ?? monadCommitmentId ?? undefined)}</strong></div>
-              <div><span>Contract</span><strong>{shortId(monadContractAddress ?? undefined)}</strong></div>
-              <div><span>Chain</span><strong>{monadChainId ? `${monadChainName ?? "Monad"} · ${monadChainId}` : "not configured"}</strong></div>
-            </div>
-            <div className="proof-links">
-              {commitmentProofHref ? <a href={commitmentProofHref} target="_blank" rel="noopener noreferrer"><Link2 size={12} /> {commitmentTx ? "Commitment tx" : "Finalized commitment state"} <span>{shortId(commitmentTx ?? monadCommitmentId ?? undefined)}</span></a> : <span><Link2 size={12} /> No on-chain commitment transaction claimed</span>}
-              {settlementHref ? <a href={settlementHref} target="_blank" rel="noopener noreferrer"><Check size={12} /> Settlement attestation <span>{shortId(settlementTx)}</span></a> : <span><Clock3 size={12} /> Settlement proof appears after Rain completes</span>}
-            </div>
-            <p className="proof-disclosure">
-              The registry timestamps POOL’s funding-root commitment before bidding; observers reconcile POOL and Rain evidence afterward.
-              A local hash is never presented as a testnet transaction.
-            </p>
-          </article>
-        </div>
+          </div>
+        </details>
       </section>
 
       <section className="market-section" id="market">
@@ -1073,7 +1192,7 @@ export default function DemoExperience() {
 
           <section className={`pool-core ${stage >= 5 ? "is-formed" : ""}`} aria-labelledby="pool-title">
             <div className="pool-orbit orbit-one" /><div className="pool-orbit orbit-two" />
-            <div className="pool-core-head"><span>POOL-017</span><span>{stage >= 5 ? "COALITION LIVE" : "SCANNING"}</span></div>
+            <div className="pool-core-head"><span>POOL-017</span><span>{stage >= 5 ? "COALITION SEALED" : "SCANNING"}</span></div>
             <div className="pool-quantity">
               <span id="pool-title">AGGREGATED DEMAND</span>
               <strong>{stage >= 5 ? totalUnits : "—"}</strong>
@@ -1116,33 +1235,33 @@ export default function DemoExperience() {
             </div>
             <div className={`auction-callout ${stage >= 8 ? "is-active" : ""}`}>
               <div className="auction-icon"><Zap size={16} /></div>
-              <div><span>COALITION COUNTER</span><strong>$383 / unit</strong><small>12 prefunded · immediate funded commitment</small></div>
+              <div><span>COALITION COUNTER</span><strong>$383 / unit</strong><small>{totalUnits} prefunded · immediate funded commitment</small></div>
               <ArrowRight size={17} />
             </div>
           </section>
         </div>
 
         <div className="market-lower-grid">
-          <section className="event-panel">
-            <div className="panel-head"><div><CloudLightning size={15} /><span>MARKET EVENT STREAM</span></div><span>fixed evidence replay</span></div>
+          <details className="event-panel audit-details">
+            <summary className="panel-head audit-panel-summary"><div><CloudLightning size={15} /><span>MARKET EVENT STREAM</span></div><span>open fixed audit trail <ChevronRight className="disclosure-chevron" size={13} aria-hidden="true" /></span></summary>
             <div className="event-stream" ref={eventStreamRef} aria-live="polite">
               {visibleEvents.length === 0 ? (
-                <div className="empty-stream"><Sparkles size={18} /><span>Launch the market to watch agents coordinate demand.</span></div>
+                <div className="empty-stream"><Sparkles size={18} /><span>Replay the market to watch agents coordinate demand.</span></div>
               ) : visibleEvents.map((event) => (
                 <div className={`event-row tone-${event.tone}`} key={event.stage}>
                   <time>{event.time}</time><span className="event-node" /><p>{event.label}</p><ChevronRight size={13} />
                 </div>
               ))}
             </div>
-          </section>
+          </details>
 
           <section className={`deal-panel ${stage >= 9 ? "is-agreed" : ""}`}>
             <div className="deal-price-block">
-              <div><span>{stage >= 9 ? "NEGOTIATED UNIT PRICE" : "BEST LIVE OFFER"}</span><strong>{money.format(currentPrice)}</strong></div>
+              <div><span>{stage >= 9 ? "NEGOTIATED UNIT PRICE" : "BEST CURRENT OFFER"}</span><strong>{money.format(currentPrice)}</strong></div>
               <div className="price-delta"><ArrowDown size={15} /><strong>{stage >= 6 ? money.format(MSRP_UNIT - currentPrice) : "$0"}</strong><span>per unit</span></div>
             </div>
             <div className="deal-facts">
-              <div><span>Quantity</span><strong>{stage >= 5 ? "12 units" : "forming"}</strong></div>
+              <div><span>Quantity</span><strong>{stage >= 5 ? `${totalUnits} units` : "forming"}</strong></div>
               <div><span>Fulfillment</span><strong>{stage >= 9 ? "7 days" : "open"}</strong></div>
               <div><span>Warranty</span><strong>{stage >= 9 ? "36 months" : "open"}</strong></div>
               <div><span>Seller</span><strong>{stage >= 9 ? "Signal" : "competing"}</strong></div>
@@ -1165,8 +1284,8 @@ export default function DemoExperience() {
           <div className="custody-boundary"><ShieldCheck size={15} /><span><strong>Clear boundary:</strong> POOL balance and reservation are the product ledger. Rain is used only at execution; Rain is not presented as the custodial deposit account.</span></div>
         </div>
 
-        <div className={`reservation-panel ${stage >= 1 ? "is-active" : ""}`}>
-          <div className="panel-head"><div><LockKeyhole size={16} /><span>POOL BALANCE RESERVATIONS</span></div><span>MSRP COVERAGE REQUIRED</span></div>
+        <details className={`reservation-panel audit-details ${stage >= 1 ? "is-active" : ""}`}>
+          <summary className="panel-head audit-panel-summary"><div><LockKeyhole size={16} /><span>POOL BALANCE RESERVATIONS</span></div><span>MSRP audit · expand <ChevronRight className="disclosure-chevron" size={13} aria-hidden="true" /></span></summary>
           <div className="reservation-rules">
             <div><span>JOIN</span><strong>Balance ≥ MSRP</strong><small>or participation is denied</small></div>
             <ArrowRight size={14} />
@@ -1190,13 +1309,13 @@ export default function DemoExperience() {
                 </div>
               );
             })}
-            <div className="reservation-total"><span>TOTAL · 12 UNITS</span><strong>{money.format(baseline)} reserved</strong><ArrowRight size={13} /><strong>{money.format(poolTotal)} captured</strong><strong className="unlock-value">+{money.format(savings)} available</strong></div>
+            <div className="reservation-total"><span>TOTAL · {totalUnits} UNITS</span><strong>{money.format(baseline)} reserved</strong><ArrowRight size={13} /><strong>{money.format(poolTotal)} captured</strong><strong className="unlock-value">+{money.format(savings)} available</strong></div>
           </div>
           <div className="leave-rule"><RefreshCcw size={13} /><span><strong>While recruiting:</strong> leaving releases the full MSRP reservation. <strong>Before the RFP opens:</strong> membership and funds freeze through settlement, cancellation, or reconciliation. Failed or partial execution never appears as released.</span></div>
-        </div>
+        </details>
 
-        <div className="mandate-panel">
-          <div className="panel-head"><div><ShieldCheck size={16} /><span>PRIVATE MANDATE CLEARING</span></div><span>{stage >= 10 ? "3 / 3 pass" : "awaiting deal"}</span></div>
+        <details className="mandate-panel audit-details">
+          <summary className="panel-head audit-panel-summary"><div><ShieldCheck size={16} /><span>PRIVATE MANDATE CLEARING</span></div><span>{stage >= 10 ? `${FIXTURE_CAPTURE_COUNT} / ${FIXTURE_CAPTURE_COUNT} pass` : "policy audit · expand"} <ChevronRight className="disclosure-chevron" size={13} aria-hidden="true" /></span></summary>
           <div className="mandate-table">
             <div className="table-head"><span>Buyer</span><span>Allocation</span><span>Hard max</span><span>Delivery</span><span>Decision</span></div>
             {buyers.map((buyer) => {
@@ -1217,7 +1336,7 @@ export default function DemoExperience() {
             <div><LockKeyhole size={15} /><span>BUYER POLICY</span><strong>private maximum exceeded</strong></div>
             <div className="attack-result"><ShieldCheck size={16} /><span>PRE-FLIGHT</span><strong>BLOCKED</strong></div>
           </div>
-        </div>
+        </details>
 
         <div className={`rain-panel ${stage >= 11 ? "is-ready" : ""}`}>
           <div className="rain-panel-head">
@@ -1229,7 +1348,7 @@ export default function DemoExperience() {
             {buyers.map((buyer) => (
               <div className="scope-row" key={buyer.id}>
                 <div><span>{buyer.name}</span><strong>{money.format(buyer.quantity * DEAL_UNIT)}</strong></div>
-                <div className="scope-tags"><span><CircleDollarSign size={12} /> deal amount</span><span><Store size={12} /> MCC 5732</span><span><Clock3 size={12} /> 48h expiry</span></div>
+                <div className="scope-tags"><span><CircleDollarSign size={12} /> deal amount</span><span><Store size={12} /> MCC {ELECTRONICS_MCC}</span><span><Clock3 size={12} /> 48h expiry</span></div>
                 <div className="scope-state">{stage >= 11 ? <><Check size={14} /> READY</> : <><Clock3 size={14} /> WAITING</>}</div>
               </div>
             ))}
@@ -1239,7 +1358,7 @@ export default function DemoExperience() {
             <div className="rain-action-row">
               <div>
                 <strong>{rainStatus?.connected && rainStatus.liveExecutionEnabled ? "Rain sandbox is ready" : "Rehearsal mode is ready"}</strong>
-                <span>Three separate scoped cards · requested spend {money.format(poolTotal)} · idempotent execution</span>
+                <span>{FIXTURE_CAPTURE_COUNT} separate scoped cards · requested spend {money.format(poolTotal)} · idempotent execution</span>
               </div>
               <div className="rain-buttons">
                 {rainStatus?.connected && rainStatus.liveExecutionEnabled && (
@@ -1258,11 +1377,11 @@ export default function DemoExperience() {
           )}
 
           {settlement.kind === "failed" && (
-            <div className="payment-error"><X size={17} /><div><strong>Live sandbox run did not complete</strong><span>{settlement.message} POOL reservations remain frozen for safe retry or reconciliation; no refund or simulated receipt is substituted.</span></div><button onClick={() => { setSettlement({ kind: "idle" }); setPaymentProgress(0); }}>Retry settlement</button></div>
+            <div className="payment-error"><X size={17} /><div><strong>Rain sandbox run did not complete</strong><span>{settlement.message} POOL reservations remain frozen for safe retry or reconciliation; no refund or simulated receipt is substituted.</span></div><button onClick={() => { setSettlement({ kind: "idle" }); setPaymentProgress(0); }}>Retry settlement</button></div>
           )}
 
           <div className="sandbox-disclosure">
-            <LockKeyhole size={13} /> Hackathon sandbox: POOL’s deposit and reservation ledger is represented in the demo; Rain begins at execution. Three allocations use separate scoped cards under one provisioned Rain test cardholder. No PAN or CVC is stored or shown.
+            <LockKeyhole size={13} /> Hackathon sandbox: POOL’s deposit and reservation ledger is represented in the fixed fixture; Rain begins at execution. {FIXTURE_CAPTURE_COUNT} allocations use separate scoped cards under one provisioned Rain test cardholder. No PAN or CVC is stored or shown.
           </div>
         </div>
       </section>
@@ -1321,7 +1440,7 @@ export default function DemoExperience() {
               })}
               <div className="receipt-row blocked-receipt">
                 <div><ShieldCheck size={15} /><span>Safety challenge</span></div>
-                <strong>MCC {settlement.kind === "live" ? settlement.result.guardrail?.merchantCategoryCode ?? "7995" : "7995"}</strong>
+                <strong>MCC {settlement.kind === "live" ? settlement.result.guardrail?.merchantCategoryCode ?? BLOCKED_MCC : BLOCKED_MCC}</strong>
                 <span className="receipt-id">{settlement.kind === "live" ? `tx ${shortId(settlement.result.guardrail?.transactionId)}` : "demo challenge"}</span>
                 <span className="receipt-status is-blocked"><X size={13} /> {settlement.kind === "live" ? settlement.result.guardrail?.reason?.toUpperCase() ?? "BLOCKED" : "SIMULATED BLOCK"}</span>
               </div>

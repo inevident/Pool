@@ -1,5 +1,6 @@
-export const PRODUCT_WORKSPACE_SCHEMA_VERSION = 2 as const;
-export const PRODUCT_SEED_VERSION = "2026.08.08" as const;
+export const PRODUCT_WORKSPACE_SCHEMA_VERSION = 4 as const;
+export const PRODUCT_SEED_VERSION = "2026.08.08-canonical-window" as const;
+export const PRODUCT_POOL_BID_WINDOW_MS = 60 * 60 * 1_000;
 
 export type Cents = number;
 export type IsoDateTime = string;
@@ -36,7 +37,12 @@ export interface ProductPool {
   readonly productId: string;
   readonly status: ProductPoolStatus;
   readonly cutoffAt: IsoDateTime;
-  readonly targetMemberCount: number;
+  /**
+   * Smallest funded quantity that makes the pool viable when its commitment
+   * window closes. This is a floor, never an enrollment target or cap: every
+   * funded commitment submitted before `cutoffAt` remains welcome.
+   */
+  readonly minimumCommittedUnitCount: number;
   readonly committedUnitCount: number;
   readonly estimatedUnitPriceCents: Cents;
   readonly createdAt: IsoDateTime;
@@ -96,7 +102,30 @@ export interface ProductBuyingIntent {
   readonly status: BuyingIntentStatus;
 }
 
-export type PoolMembershipStatus = "active" | "left" | "settled";
+export type PoolMembershipStatus = "active" | "left" | "released" | "settled";
+
+/** A terminal market outcome that permits the full reservation to return. */
+export type ReservationReleaseReason =
+  | "minimum_not_met"
+  | "no_acceptable_offer"
+  | "authorization_declined"
+  | "execution_failed"
+  | "rehearsal_complete"
+  | "execution_window_missed";
+
+/**
+ * Evidence retained when a post-cutoff market outcome releases a reservation.
+ *
+ * `operationId` is the server-derived execution operation that produced the
+ * outcome. Recording it keeps retries auditable and prevents a release from
+ * being confused with the buyer-controlled, pre-cutoff `left` transition.
+ */
+export interface MembershipRelease {
+  readonly reason: ReservationReleaseReason;
+  readonly operationId: string;
+  readonly releasedCents: Cents;
+  readonly releasedAt: IsoDateTime;
+}
 
 /** How a settlement's money movement was actually evidenced. */
 export type SettlementEvidence = "rain-sandbox" | "rehearsal";
@@ -111,8 +140,29 @@ export interface PoolMembership {
   readonly status: PoolMembershipStatus;
   readonly joinedAt: IsoDateTime;
   readonly leftAt?: IsoDateTime;
+  readonly release?: MembershipRelease;
   readonly settlement?: MembershipSettlement;
 }
+
+/**
+ * The complete, immutable portion of a local membership submitted to an
+ * execution route. The API treats this as a signed-like evidence envelope: it
+ * still validates every field against its server-owned catalog and never
+ * accepts browser-proposed economics.
+ */
+export type PoolMembershipEnvelope = Readonly<
+  Pick<
+    PoolMembership,
+    | "id"
+    | "poolId"
+    | "intentId"
+    | "buyerId"
+    | "quantity"
+    | "reservedCents"
+    | "status"
+    | "joinedAt"
+  >
+>;
 
 /**
  * The result of a cleared market, as applied to one buyer's commitment.
@@ -139,6 +189,7 @@ export type ProductActivityKind =
   | "intent.created"
   | "pool.joined"
   | "pool.left"
+  | "pool.reservation_released"
   | "pool.settled";
 
 export type ProductActivityMetadata = Readonly<
@@ -213,6 +264,13 @@ export type ProductWorkspaceAction =
       readonly buyerId: string;
     })
   | (ProductActionEnvelope & {
+      readonly type: "pool/release_after_outcome";
+      readonly membershipId: string;
+      readonly buyerId: string;
+      readonly reason: ReservationReleaseReason;
+      readonly operationId: string;
+    })
+  | (ProductActionEnvelope & {
       readonly type: "pool/settle";
       readonly membershipId: string;
       readonly buyerId: string;
@@ -241,10 +299,15 @@ export type ProductDomainErrorCode =
   | "INTENT_PRODUCT_MISMATCH"
   | "INTENT_NOT_OPEN"
   | "INTENT_EXPIRED"
+  | "INTENT_PRICE_INCOMPATIBLE"
+  | "INTENT_DEADLINE_INCOMPATIBLE"
   | "POOL_NOT_FORMING"
   | "POOL_CUTOFF_PASSED"
+  | "POOL_CUTOFF_NOT_REACHED"
   | "INSUFFICIENT_AVAILABLE_BALANCE"
   | "MEMBERSHIP_NOT_ACTIVE"
+  | "RELEASE_OUTCOME_MISMATCH"
+  | "DUPLICATE_RELEASE_OPERATION"
   | "TREASURY_LIMIT_EXCEEDED"
   | "CAPTURE_EXCEEDS_RESERVATION";
 

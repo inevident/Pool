@@ -4,7 +4,7 @@
 
 POOL gives patient buyers a credible way to ask for a better price together.
 
-Instead of clicking “buy now,” a buyer declares what they want, how long they can wait, and the most they are willing to pay. They fully reserve the item’s MSRP, join compatible demand, and let merchants compete for the funded order. If a lower offer wins, POOL pays the merchant and releases the difference back to the buyer.
+Instead of clicking “buy now,” a buyer declares what they want, how long they can wait, and the most they are willing to pay. They reserve the item’s full MSRP, join compatible demand, and let merchants compete for the funded order. In the intended production lifecycle, a lower winning offer pays the merchant and releases the difference back to the buyer; the current product surface rehearses that outcome in a browser-local fixture ledger.
 
 The central product insight is simple:
 
@@ -25,20 +25,20 @@ POOL therefore requires `MSRP × quantity` to be available before a buyer joins:
 
 Before a published commitment cutoff, leaving releases the reservation. After the pool freezes for merchant bidding, membership and funds remain locked until the pool resolves. These rules must be visible before every join action.
 
-## Core user journey
+## Intended production journey
 
 1. **Fund** — The buyer adds money and sees exactly what is available versus reserved.
 2. **Declare** — They name a product, quantity, maximum price, and how long they can wait.
 3. **Match** — POOL finds a compatible forming pool or starts a new one.
 4. **Commit** — The buyer reviews the pool rules and reserves the full MSRP.
-5. **Build demand** — The product shows funded participant and unit progress, not unverified interest.
-6. **Freeze** — At the cutoff, membership locks and POOL presents the funded order to merchants.
+5. **Build demand for two weeks** — Every funded buyer may join during the fixed window; the product shows the actual funded quantity and the 10-unit viability minimum, never a target headcount.
+6. **Freeze** — At the two-week cutoff, membership locks and POOL presents however many funded units committed. The minimum decides whether bidding may open; it does not cap enrollment.
 7. **Compete** — Merchants privately submit volume offers without seeing competing bids.
 8. **Resolve** — POOL accepts a policy-compliant winning offer or releases the full reservation if no acceptable offer exists.
 9. **Settle** — The negotiated amount is captured and the difference is released as savings.
 10. **Track** — The buyer follows fulfillment, receipt, delivery, returns, and any dispute from the order view.
 
-The current repository implements steps 1–4 and the buyer-facing state needed to understand steps 5–10 as a deterministic sandbox. The technical walkthrough at `/demo` exercises the simulated competition and Rain sandbox settlement path.
+The current repository implements the buyer-facing journey only through deterministic, mandate-aware merchant clearing after the published cutoff. Product commit and settle routes are rehearsal-only: they return a modeled quote or no-buy outcome, place no aggregate order, and cannot contact Rain or Monad in any environment. Browser-local state and fixture merchants keep this a product sandbox rather than a production commerce backend. The protected technical walkthrough at `/demo` is the only complete three-allocation provider proof.
 
 ## Deliverables that work now
 
@@ -56,9 +56,11 @@ The default route is a product home rather than a judge presentation. It surface
 
 A buyer can create an intent with product requirements, quantity, price ceiling, and patience window. Intent creation produces visible product state instead of a decorative success screen.
 
-### Prefunded pool membership
+### Full-MSRP-reserved pool membership
 
 Joining a group buy checks full MSRP coverage and atomically transfers that amount from available to reserved. Duplicate joins and insufficient balances are rejected. Leaving a still-forming pool restores the exact reservation once.
+
+Every seeded product pool is open for exactly 14 days. Ten funded units is the minimum required to proceed to merchant bidding, but there is no target count and no enrollment cap: commitments continue accumulating until the cutoff.
 
 ### Browser-persisted state
 
@@ -72,23 +74,41 @@ Workspace state is versioned and stored locally in the browser. It survives page
 | `/explore` | Browse realistic seeded group buys and evaluate commitment terms |
 | `/wallet` | Add test funds and inspect available, reserved, released, and spent movements |
 | `/orders` | Review active commitments, exact releases, and the future fulfillment lifecycle without fabricating purchases |
-| `/demo` | Run the isolated Rain + Monad market and settlement proof |
+| `/demo` | Run the protected fixed Rain + Monad market and three-allocation settlement proof |
 
 ### Deterministic commerce domain
 
 Pure transitions enforce integer-cent accounting, sufficient funds, unique membership, exact release, settlement caps, and idempotency. Domain tests cover success and failure paths independently of the UI.
 
+### Fixed-window rehearsal gate
+
+The two-week commitment window is enforced, not merely described:
+
+- Before cutoff, the UI keeps **Run market** unavailable and both rehearsal APIs reject before constructing the local merchant market.
+- The exact cutoff opens a deterministic one-hour bid window. The exact end of that hour closes it.
+- Missing the 10-unit minimum produces an expected no-market outcome. Because product routes cannot create an external operation, the server returns a stable terminal outcome that lets the browser release its local reservation exactly once.
+
+### Server reconstruction for product rehearsal
+
+The browser submits a strict membership envelope containing identity, pool, intent, quantity, reservation, status, and join time, plus the saved buying intent used for settlement. The server checks their structure, reconciles both to the server-owned fixture catalog, rebuilds `MSRP × quantity`, requires the seeded workspace owner and an active pre-cutoff membership, and calculates aggregate units itself.
+
+From that validated input, the server evaluates fixture offers against the pool target and the buyer’s maximum unit price and delivery deadline. It returns either a modeled quote or a terminal no-buy reason. Even a qualifying quote leaves the full reservation untouched, reports `aggregateOrderPlaced: false`, and becomes eligible only for an explicit full local release; it never books a capture or creates an order/payment.
+
+For a modeled quote, below-minimum, no-acceptable-offer, or expired-window outcome, the server derives a stable operation ID. `pool/release_after_outcome` stores that operation and reason, treats an exact retry as a no-op, and rejects a conflicting or duplicate release. The product does not rely on provider idempotency because these routes categorically perform no provider mutation.
+
+These controls establish structural consistency for a local rehearsal. They do not turn the browser-local membership or mandate into an authenticated account record, prove custody, or replace a durable transactional database. Maximum price and deadline originate in browser state; they are validated and withheld from merchant responses, but remain forgeable without production identity and server-side storage. A production system must move this authority to authenticated server state and reconcile every external event against a double-entry ledger.
+
 ### Technical execution proof
 
-The `/demo` route provides the secondary proof that the proposed product can connect funded commitments to merchant competition and constrained execution:
+The protected `/demo` route provides the only complete proof that the proposed product can connect a fixed full-MSRP-reserved fixture coalition to merchant competition and constrained execution:
 
 - deterministic buyer and market policy;
 - compatible-intent coalition formation;
 - private merchant floors and quantity tiers;
-- tamper-evident funding and offer commitments on Monad Testnet;
-- server-only Rain scoped-card authorization and settlement;
-- an enforced off-list MCC decline;
-- exact capture and savings release;
+- tamper-evident funding and offer commitments on Monad Testnet only when finalized explorer evidence is rendered;
+- server-only Rain scoped-card authorization and settlement only when verified provider IDs are rendered;
+- an enforced off-list MCC `7995` challenge that requires Rain’s exact `scoped_card_mcc_not_allowed` decline;
+- three exact Rain sandbox settlement amounts plus fixture-ledger savings reconciliation;
 - labeled rehearsal fallback when external integrations are unavailable.
 
 ## Sandbox boundaries
@@ -103,8 +123,8 @@ The product is deliberately honest about what is and is not live.
 | Buying intent | Persistent local structured state | Authenticated, server-side mandate shared across devices |
 | Reservation | Enforced by the sandbox domain | Legal escrow or production custody hold |
 | Orders | Simulated product states | Merchant fulfillment, shipment, returns, taxes, or warranty service |
-| Rain | Real event sandbox behind an explicit live-demo gate | Production card program or buyer account ledger |
-| Monad | Testnet commitment and attestation workflow when configured | Mainnet settlement, proof of bank funds, or independent oracle truth |
+| Rain | Fixed `/demo` can create real event-sandbox records behind an explicit protected gate; the wider workspace may perform a separately gated balance read | Product commit/settle mutation, production card program, or buyer account ledger |
+| Monad | Fixed `/demo` can use the Testnet commitment/offer/attestation workflow when configured | Product commit/settle mutation, mainnet settlement, proof of bank funds, or independent oracle truth |
 | Identity | Fictional product personas | KYC/KYB, sanctions screening, age verification, or account recovery |
 
 The app should never call the sandbox balance a real bank account, suggest that funds are insured, or imply that a testnet hash independently proves custody. External IDs shown in rehearsal mode must remain labeled **REHEARSAL · SIMULATED**.
@@ -115,7 +135,8 @@ The app should never call the sandbox balance a real bank account, suggest that 
 - Joining reserves full MSRP, not the expected discounted price.
 - Available balance cannot be withdrawn below active reservations.
 - A buyer may leave only before the stated commitment cutoff.
-- A pool can end without a purchase; in that case the reservation is released.
+- A product pool accepts all funded commitments during its 14-day window; the 10-unit minimum is an eligibility floor, not a target or cap.
+- Every product rehearsal ends without a purchase. A stable terminal outcome leaves the reservation untouched and lets the buyer release it in full exactly once. Ambiguous external outcomes in the fixed provider demo remain locked for reconciliation.
 - Merchant bids remain private during competition.
 - The final price, fees, taxes, delivery terms, return policy, and lock period require explicit confirmation before a production commitment.
 - A partial external failure enters reconciliation; the UI must not claim an immediate refund until the ledger and rail agree.
@@ -195,7 +216,7 @@ Merchant onboarding and a production bidding console are launch deliverables, no
 The useful measures are behavioral and economic, not demo clicks:
 
 - percentage of declared intents that become fully funded commitments;
-- time from first commitment to funded pool threshold;
+- time from first commitment to the 10-unit viability minimum, plus final funded quantity at the two-week cutoff;
 - funded units per pool and commitment retention through cutoff;
 - merchant participation and valid bids per frozen pool;
 - realized buyer savings after fees and taxes;

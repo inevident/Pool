@@ -1,9 +1,10 @@
 # POOL — comprehensive product, engineering, hackathon, and operations handoff
 
-- **Last materially verified:** 2026-08-08, America/New_York
+- **Last materially verified:** 2026-08-09, America/New_York
 - **Repository:** [inevident/Pool](https://github.com/inevident/Pool)
 - **Default branch:** `main`
-- **Application baseline when this document was authored:** `7bcacd5` (`docs: link the product preview`)
+- **Last verified public deployment baseline:** `main@9b12002`
+- **Active improvement branch:** `overnight` (not verified as deployed at the time of this update)
 - **Primary product route:** `/`
 - **Technical proof route:** `/demo`
 
@@ -13,7 +14,9 @@ The shorter documents remain useful:
 
 - [`README.md`](./README.md) is the public repository overview and setup guide.
 - [`PRODUCT.md`](./PRODUCT.md) is the product promise, buyer journey, trust boundary, and production-gap brief.
-- [`DEMO.md`](./DEMO.md) is the shortest judge-demo runbook.
+- [`POOL_PITCH.pptx`](./POOL_PITCH.pptx) is the editable six-slide presentation; [`PITCH.md`](./PITCH.md) is its verbatim 90-second talk track, proof by track, and adversarial Q&A.
+- [`public/evidence/rain-sandbox-2026-08-09.png`](./public/evidence/rain-sandbox-2026-08-09.png) and its [sanitized outcome record](./public/evidence/rain-sandbox-2026-08-09.json) are dated, non-secret Rain sandbox evidence. They are also linked from `/demo`. They prove only the provider-labeled sandbox records shown there; their Monad state is explicitly local-only.
+- [`DEMO.md`](./DEMO.md) is the exact 90-second operator runbook and fallback order.
 - This file is the comprehensive handoff and should explain enough context to make safe decisions without reconstructing the entire project history.
 
 ---
@@ -22,7 +25,7 @@ The shorter documents remain useful:
 
 ### The one-sentence product
 
-POOL turns patient, fully funded buying intent into collective bargaining power: compatible buyers reserve full MSRP, merchants compete for the aggregate order, POOL captures the winning price, and the difference is released back to buyers as savings.
+POOL turns patient, full-MSRP-reserved buying intent into collective bargaining power: compatible buyers form aggregate demand, merchants compete for the order, and the intended product captures the winning price while releasing the difference as savings. The current product workspace stops at a modeled quote plus explicit full local release; only the protected fixed `/demo` contains the complete provider flow.
 
 ### The deeper thesis
 
@@ -34,9 +37,9 @@ The memorable formulation is:
 
 ### The most important product rule
 
-A buyer cannot join a pool merely by clicking “interested.” The account must have at least `MSRP × quantity` available. Joining atomically moves that amount from `available` to `reserved`. Reserved money is unavailable for withdrawal or another commitment. Before the published cutoff, leaving releases the exact reservation. After the pool freezes, funds stay locked until settlement, cancellation, or reconciliation.
+A buyer cannot join a pool merely by clicking “interested.” The account must have at least `MSRP × quantity` available. Joining atomically moves that amount from `available` to `reserved`. Reserved money is unavailable for withdrawal or another commitment. Before the published cutoff, leaving releases the exact reservation. After the pool freezes, the current product keeps that reservation untouched through its terminal quote/no-buy rehearsal outcome, then requires the buyer to release it explicitly in full; the intended provider-backed lifecycle would instead remain locked through settlement, cancellation, or reconciliation.
 
-This prefunding rule is the bridge between consumer interest and seller-actionable demand.
+This full-MSRP reservation rule is the bridge between consumer interest and seller-actionable demand. In the current repository it is enforced in a browser-local fixture ledger, not by custody or a bank account.
 
 ### What works today
 
@@ -49,11 +52,15 @@ The default website is a functioning, repeat-use **product sandbox**:
 - Move the exact commitment from available to reserved.
 - Reject insufficient funds and duplicate commitments.
 - Leave before cutoff and release the exact reservation once.
+- Keep the market unavailable until the two-week cutoff, then enforce an exact one-hour bid window.
+- Validate a strict membership envelope and saved buyer mandate against the server-owned fixture catalog.
+- After cutoff, run a deterministic mandate-aware merchant rehearsal that returns a modeled quote while leaving the reservation untouched and placing no aggregate order.
+- Explicitly release the full local reservation after a modeled quote, below-minimum, no-acceptable-offer, or expired-window outcome exactly once using a stable server-derived operation ID.
 - Inspect active commitments, balance activity, and future order states.
 - Persist versioned workspace state in browser `localStorage`.
 - Reset the local sandbox without calling Rain, Monad, a bank, or a merchant.
 
-The separate `/demo` route is a deterministic technical proof of compatible-demand formation, private merchant competition, Rain sandbox execution, and causal Monad Testnet commitments.
+Product commit and settle routes categorically import no Rain or Monad client and cannot mutate either provider in any environment. The separate protected `/demo` route is the only complete three-allocation technical proof of compatible-demand formation, private merchant competition, and the Rain/Monad execution design. It creates Rain sandbox or Monad Testnet evidence only when the UI renders the corresponding provider IDs or finalized explorer links; otherwise it is an explicitly labeled rehearsal/local proof.
 
 ### What does not work today
 
@@ -67,17 +74,19 @@ The repository is not a production financial product. It does not currently prov
 - production order routing, fulfillment, shipment, returns, refunds, or disputes;
 - production Rain issuance or production buyer identities;
 - a mainnet Monad deployment or an independent oracle proving offchain funds;
-- a public, unprotected deployment that every judge can currently open.
+- a deployed build of the current `overnight` branch.
 
 Do not blur these boundaries. Product credibility depends on being exact about them.
 
 ### Current external blockers and warnings
 
-1. **The Vercel preview is protected.** The linked preview may show “You Need Access.” It is not safe to assume a judge can open it.
-2. **The Vercel CLI and the browser are not using the same account context.** The CLI was verified as `haharandomaccover13-5904` under scope `yeayea`; the browser account shown by the owner did not have access to the protected deployment.
-3. **GitHub Actions is not executing jobs.** The audited workflow run created a job with zero steps because GitHub reported: “The job was not started because your account is locked due to a billing issue.” Local validation is therefore the current source of build evidence until the account lock is resolved.
-4. **Treat the Rain credential previously shared in chat or an image as exposed.** Never copy it into this document, a commit, a log, a screenshot, a client bundle, or a ticket. Rotate or re-provision it before any use outside the disposable event sandbox.
-5. **No production funds.** This repository is intentionally testnet/sandbox-only. Never add a mainnet-funded private key.
+1. **`overnight` is not verified as deployed.** The last checked public Vercel Production alias served `main@9b12002`; do not present it as evidence for this branch until a new deployment URL and commit are checked directly.
+2. **Vercel Git integration is not connected.** A Git push does not imply a deployment. Link or deploy explicitly, then verify the resulting Production alias in an incognito session.
+3. **Preview has only `OPENAI_API_KEY`.** No Rain or Monad configuration is present in the Vercel Preview environment, so it must remain rehearsal/unavailable for those rails. Do not infer other environment values or Production settings without a fresh check.
+4. **The Monad signer remains underfunded.** Address `0x070dd53f4FdF178E29df30e03FEAD90Cd300e6ed` has `0.116` finalized Testnet MON. The exact registry deployment estimates at `906,782` gas and currently needs about `0.18317` MON under Hardhat Ignition's fee ceiling; `npm run monad:setup` recommends `0.20149` MON with a 10% retry cushion, leaving about `0.08549` MON to add. Never record or share its private key.
+5. **Treat credentials shared in chat or images as exposed.** Never copy them into this document, a commit, a log, a screenshot, a client bundle, or a ticket. Rotate or re-provision before use.
+6. **Hosted CI state is not asserted here.** Run the local gate and inspect the current GitHub Actions run directly before citing CI in a submission.
+7. **No production funds.** This repository is intentionally testnet/sandbox-only. Never add a mainnet-funded private key.
 
 ---
 
@@ -110,13 +119,13 @@ POOL is not a conventional LLM layer attached to a checkout flow. It demonstrate
 2. Agents normalize those requests into typed intents.
 3. Compatibility logic finds shared demand without erasing hard constraints.
 4. Buyers fully reserve funds, converting soft interest into credible demand.
-5. Seller agents see the aggregate RFP only after the pool freezes.
+5. The fixed demo constructs/exposes its aggregate RFP only after the fixture freezes; this is application behavior, not an onchain proof of what a seller saw.
 6. Sellers compete without seeing private buyer ceilings or one another's sealed economics.
 7. Deterministic policy chooses an acceptable agreement.
 8. Rain receives only bounded execution authority after POOL has cleared the deal.
-9. Monad establishes tamper-evident ordering: funded commitment first, offers second, Rain receipt digest last.
+9. In the fixed competition flow, Monad establishes tamper-evident ordering of POOL’s recorded claims: funding commitment first, admitted offer hashes registered second, and a post-Rain attestation naming the selected registered offer plus receipt digest last.
 
-Rain is structural because autonomous negotiation has no commercial consequence unless the agent can execute a deal safely. Monad is structural in the competition configuration because it prevents POOL from retroactively claiming that demand was funded before sellers bid.
+Rain is structural because autonomous negotiation has no commercial consequence unless the agent can execute a deal safely. Monad is structural in the fixed competition configuration because it makes POOL’s recorded commitment/offer/receipt chronology tamper-evident. It does not prove when an offchain bid first existed or what a seller saw.
 
 ### Original brief and non-negotiable design intent
 
@@ -146,7 +155,7 @@ The mentor discussion introduced several product-level insights that shaped the 
 1. **Require full MSRP before participation.** A buyer can join only after depositing at least the item's MSRP. Choosing to participate locks that amount as a necessary expense.
 2. **Patient demand is the target behavior.** The intended buyer does not need the product immediately and accepts a waiting period in exchange for a lower price.
 3. **Merchants should bid for funded volume.** POOL should tell a merchant, in effect, “45 funded buyers will purchase if your bid wins,” while preventing merchants from seeing competing quotes.
-4. **Prefunding solves buyer default at award.** The edge case “the user committed but never wired funds” should be removed before the merchant RFP, not handled after a seller wins.
+4. **Full-MSRP reservation is intended to solve buyer default at award.** The edge case “the user committed but never wired funds” should be removed before the merchant RFP, not handled after a seller wins. The current fixture ledger models this rule; it does not prove a real wire or deposit.
 5. **On-ramp and virtual-account flows are a product extension.** A future flow could issue a virtual account, receive ACH or wire deposits, convert them onchain, and credit the user's POOL ledger. The mentors considered this valuable product thinking but outside the core hackathon scope.
 6. **Volume-for-margin is the merchant exchange.** A merchant may give up several percentage points of margin to secure a larger guaranteed order and reduce acquisition uncertainty.
 7. **Youth-oriented positioning requires care.** Early conversation mentioned ages 16–26/28, but the current product brief correctly targets adults 18+ because financial participation, custody, identity, and contract rules make minors a separate legal and product problem.
@@ -160,20 +169,20 @@ This is an internal estimate, not a guarantee of judging outcome:
 | Dimension | Current code/product evidence | Remaining risk |
 | --- | --- | --- |
 | Concept originality | Strong: demand-first autonomous coalition is memorable | Must be explained within 10 seconds |
-| Rain relevance | Strong when live sandbox execution is enabled | A rehearsal-only demo weakens sponsor proof |
+| Rain relevance | Strong in the protected fixed demo when verified sandbox execution is enabled | Product market actions are deliberately rehearsal-only; sponsor proof depends on the fixed evidence flow |
 | Monad relevance | Strong causal design and Solidity tests | Needs a verified Testnet deployment and explorer evidence for maximum impact |
 | Financial reasoning | Strong invariants, integer cents, idempotency, freeze/reconcile behavior | Buyer workspace is still browser-local |
 | Product quality | Strong repeat-use sandbox and clear information architecture | No auth, durable backend, real supply, or fulfillment |
-| Demo resilience | Strong deterministic replay and honest fallback | Protected hosting and external-account configuration are operational risks |
-| Technical inspection | Strong test coverage and explicit trust boundaries | GitHub-hosted CI is currently blocked by billing |
+| Demo resilience | Strong deterministic replay, first-frame proof summary, and honest fallback | `overnight` still needs a verified deployment and timed run |
+| Technical inspection | Strong test coverage and explicit trust boundaries | Hosted CI must be checked at the exact submitted commit before it is cited |
 
-With a publicly accessible deployment, fresh Rain sandbox credentials, a finalized Monad Testnet registry, and two successful end-to-end rehearsals, the project can credibly present as roughly **8.5/10 win-ready**. Without those external proofs, do not claim the same readiness merely because the code paths exist.
+The last verified public `main@9b12002` baseline was accessible, but it is not evidence for unshipped `overnight` changes. Readiness must be scored against the exact deployed commit. The branch contains dated Rain sandbox evidence, while its corresponding Monad panel is explicitly local-only. Maximum sponsor credibility still requires a verified deployment, a finalized Monad Testnet registry with explorer links if that claim is made, and two timed rehearsals; code paths alone are not transaction evidence.
 
 ### What judges should remember
 
 The ideal “holy-shit” moment is not a chatbot response. It is this sequence:
 
-> Three strangers' agents discover compatible demand, prove full commitment, exclude an incompatible request, make sellers compete, reduce the price, keep every private maximum hidden, block an off-policy payment, execute three bounded transactions, and release the exact savings.
+> In the protected fixed proof, three strangers' agents discover compatible demand, model full commitment, exclude an incompatible request, make simulated sellers compete, reduce the price, keep every private maximum hidden, block an off-policy Rain sandbox payment, execute three exact sandbox settlements when provider IDs render, and make the fixture savings available again.
 
 ---
 
@@ -250,9 +259,9 @@ stateDiagram-v2
     PoolForming --> Reserved: full MSRP atomically locked
     Reserved --> Funded: buyer leaves before cutoff
     Reserved --> Frozen: cutoff reached / RFP opens
-    Frozen --> Bidding: finalized funding commitment
-    Bidding --> Awarded: valid winning offer frozen
-    Bidding --> Released: no acceptable offer / pool cancelled
+    Frozen --> Bidding: product rehearsal or finalized demo commitment
+    Bidding --> Awarded: valid modeled offer selected
+    Bidding --> Released: terminal no-buy outcome
     Awarded --> Authorizing: bounded Rain execution
     Authorizing --> Settled: all captures confirmed
     Authorizing --> Reconciliation: partial or ambiguous external result
@@ -262,7 +271,7 @@ stateDiagram-v2
     Reconciliation --> Released: cancellation/refund reconciles
 ```
 
-Only the early buyer lifecycle is a mutable product experience today. The full market and settlement lifecycle is exercised by deterministic domain code and the isolated `/demo` scenario, not a durable production backend.
+The buyer workspace exercises joining and deterministic mandate-aware merchant clearing, but returns only a modeled quote. Its commit/settle market path leaves the reservation untouched until the buyer explicitly releases it in full, never places an aggregate order, and never contacts Rain/Monad. A separate session-gated server balance read may label an execution ceiling. The protected `/demo` remains the only complete fixed monitor provider proof. Neither surface is a durable production backend.
 
 ### Sony example: the product in plain language
 
@@ -272,12 +281,13 @@ The featured consumer example is a Sony WH-1000XM6 group buy:
 2. The buyer adds at least `$449.99` of test funds.
 3. They create an intent for one unit with a target price and patience window.
 4. Joining moves exactly `$449.99` from available to reserved.
-5. The pool aggregates funded units toward a target of 50.
-6. Before cutoff, the buyer may leave and restore the full `$449.99`.
-7. In a production pool, membership would freeze, merchants would bid, and POOL would capture the winner's price.
-8. If the winner were `$379.00`, POOL would capture `$379.00` and release `$70.99`.
+5. The pool accepts every funded commitment for exactly 14 days.
+6. Ten funded units is the viability minimum, not a target or cap; the final coalition is however many funded units exist at the cutoff.
+7. Before cutoff, the buyer may leave and restore the full `$449.99`.
+8. At close, the current product runs a deterministic local merchant rehearsal against the actual fixture quantity.
+9. If the modeled winner were `$379.00`, the product would display that quote, create no order/payment, keep the full `$449.99` reservation untouched, and let the buyer explicitly release all `$449.99` locally.
 
-The current buyer workspace stops before real bidding and settlement. It must not fabricate an order after a local join.
+After cutoff, the buyer workspace can run its deterministic mandate-aware merchant rehearsal. Its commit and settle routes never call Rain or Monad. The protected fixed `/demo` is the only route that may create sandbox/Testnet provider evidence when explicitly configured and unlocked.
 
 ### Buyer-facing rules that must remain visible
 
@@ -285,6 +295,7 @@ The current buyer workspace stops before real bidding and settlement. It must no
 - Joining reserves full MSRP, not the estimated discounted price.
 - Available balance cannot be withdrawn below active reservations.
 - Leaving is permitted only before the stated cutoff while a pool is forming.
+- Product pools remain open for a fixed 14-day commitment window. The 10-unit minimum is only an eligibility floor; it is never displayed or enforced as a target or enrollment cap.
 - A pool may fail to find an acceptable offer; full reservations then release after cancellation reconciles.
 - Merchant bids are private during competition.
 - Fees, tax, shipping, delivery, return, warranty, and lock terms require explicit production disclosures.
@@ -295,25 +306,25 @@ The current buyer workspace stops before real bidding and settlement. It must no
 
 All current product listings and pools are deterministic fixtures, not live merchant inventory.
 
-| Product ID | Product | MSRP | Pool ID | Seed progress | Estimated unit price | Initial cutoff |
-| --- | --- | ---: | --- | ---: | ---: | --- |
-| `product-sony-wh1000xm6` | Sony WH-1000XM6 | `$449.99` | `pool-sony-xm6-august` | 34 / 50 | `$379.00` | seed + 7 days |
-| `product-steam-deck-oled-512` | Steam Deck OLED 512GB | `$549.00` | `pool-steam-deck-oled-august` | 18 / 30 | `$494.00` | seed + 10 days |
-| `product-macbook-air-m4-13` | MacBook Air 13-inch M4 | `$999.00` | `pool-macbook-air-campus` | 11 / 25 | `$899.00` | seed + 14 days |
-| `product-dyson-airwrap-id` | Dyson Airwrap i.d. | `$599.99` | `pool-dyson-airwrap-fall` | 27 / 40 | `$525.00` | seed + 18 days |
+| Product ID | Product | MSRP | Pool ID | Current funded units | Minimum | Window | Estimated unit price |
+| --- | --- | ---: | --- | ---: | ---: | --- | ---: |
+| `product-sony-wh1000xm6` | Sony WH-1000XM6 | `$449.99` | `pool-sony-xm6-august` | 34 | 10 | 14 days | `$379.00` |
+| `product-steam-deck-oled-512` | Steam Deck OLED 512GB | `$549.00` | `pool-steam-deck-oled-august` | 18 | 10 | 14 days | `$494.00` |
+| `product-macbook-air-m4-13` | MacBook Air 13-inch M4 | `$999.00` | `pool-macbook-air-campus` | 11 | 10 | 14 days | `$899.00` |
+| `product-dyson-airwrap-id` | Dyson Airwrap i.d. | `$599.99` | `pool-dyson-airwrap-fall` | 27 | 10 | 14 days | `$525.00` |
 
-The default owner fixture is `buyer-demo`, displayed as `Alex Morgan`. The workspace ID is `workspace-pool-marketplace`. The schema version is `1`, and the seed version is `2026.08.08`.
+The default owner fixture is `buyer-demo`, displayed as `Alex Morgan`. The workspace ID is `workspace-pool-marketplace`. The schema version is `3`, and the seed version is `2026.08.08-fixed-window`.
 
 ### Current routes and their jobs
 
 | Route | Current job | What is interactive |
 | --- | --- | --- |
 | `/` | Buyer home | Add funds, create intent, view balance, active commitments, suggested pools, activity |
-| `/explore` | Discovery | Filter/sort seeded pools, inspect progress and terms, open join flow |
-| `/pools/[poolId]` | Pool detail | Review full-MSRP rule, cutoff, progress, join/leave state |
+| `/explore` | Discovery | Filter/sort seeded pools, inspect actual funded demand, minimum eligibility, two-week timing, and terms |
+| `/pools/[poolId]` | Pool detail | Review the full-MSRP rule, actual funded units, minimum, two-week cutoff, and join/leave state |
 | `/wallet` | Sandbox account | Add test funds, view available/reserved totals, audit activity, reset workspace |
 | `/orders` | Commitments and lifecycle | Review active commitments and the disclosed future fulfillment path |
-| `/demo` | Rain + Monad technical proof | Run/step/reset market, test intent and merchant APIs, execute live sandbox or labeled rehearsal |
+| `/demo` | Protected fixed Rain + Monad technical proof | Run/step/reset market, test intent and merchant APIs, execute the complete three-allocation provider flow only when configured, or use the labeled rehearsal |
 
 The navigation is responsive and has distinct desktop/mobile structures. Dialogs use semantic `role="dialog"`, `aria-modal`, labels, close controls, and keyboard-friendly form controls.
 
@@ -341,7 +352,7 @@ The current UI behavior is more specific than the underlying product thesis:
 - Creating an intent never commits money by itself.
 - A join uses the most recent open matching intent. If none exists, the UI creates a one-unit default intent using the pool estimate and a 30-day expiry.
 - When the account is short, **Add exact shortage** creates only the missing local test credit, then the buyer can confirm the reservation.
-- Explore supports text search, the four seeded categories, and sorts for funded demand, potential savings, or cutoff.
+- Explore supports text search, the four seeded categories, and sorts for actual funded demand, potential savings, or cutoff.
 - Potential savings are estimates derived from the seeded target; they are not realized or binding savings.
 - Modal Escape/backdrop dismissal works and controls are labeled, but the current dialogs do not implement a complete focus trap and focus restoration cycle.
 
@@ -355,18 +366,19 @@ Never describe the project using a single word such as “live.” Use the follo
 
 | Capability | Current implementation | Evidence level | Not claimed |
 | --- | --- | --- | --- |
-| Buyer funds | Browser-local credits, capped by Rain's live `spendingPower` | Local ledger bounded by a real provider ceiling | Real money, custody, bank or crypto balance |
+| Buyer funds | Browser-local credits, capped by a labeled local ceiling or a synced Rain sandbox `spendingPower` ceiling | Local ledger; provider ceiling only when the UI labels a successful sync | Real money, custody, bank or crypto balance |
 | Buyer reservation | Pure domain transition with exact accounting | Local, tested | Legal escrow or provider hold |
 | Product catalog | Four seeded products | Fixture | Live retailer catalog or inventory |
 | Product pools | Four seeded pools | Fixture | Real participant or merchant commitments |
 | Buying intent UI | Local structured state | Interactive sandbox | Authenticated cross-device mandate |
-| Natural-language intent | Optional OpenAI Responses extraction with deterministic fallback | Real API only when configured/unlocked; otherwise local | Model authorization or money movement |
+| Natural-language intent | Optional OpenAI Responses extraction with deterministic fallback | Real API when configured; otherwise local | Model authorization or money movement |
 | Demand compatibility | Deterministic typed market fixture | Local, tested | Broad production semantic matching |
 | Merchant competition | Three coherent fictional merchants, consumer and B2B | Deterministic simulation | Real retailers or binding bids |
-| Funding commitment | Hash/root built locally; finalized on Monad Testnet when configured | Local proof or Testnet evidence, explicitly labeled | Onchain proof that a bank deposit exists |
-| Rain execution | Scoped-card issuance, decline, authorizations, settlements when enabled | Real Rain event sandbox records | Production card program or real funds |
-| Monad settlement attestation | Digest of real Rain sandbox IDs when configured | Monad Testnet transaction/finalized state | Chain-native settlement or independent Rain oracle |
-| Orders/fulfillment | Buyer pools clear and settle on Rain; fulfillment is copy only | Real Rain sandbox capture; fixture beyond it | Real order placement, shipping, returns, disputes |
+| Product commitment/settlement | Strict, mandate-aware post-cutoff rehearsal; modeled quote followed by explicit full local release | Browser-local fixture evidence only | Capture, aggregate order, payment, Rain mutation, or Monad mutation |
+| Fixed-demo funding commitment | Hash/root built locally; finalized on Monad Testnet when configured | Local proof or Testnet evidence, explicitly labeled | Onchain proof that a bank deposit exists |
+| Fixed-demo Rain execution | Three scoped cards, decline, authorizations, settlements when enabled | Real Rain event-sandbox records only when provider IDs render | Product-page settlement, production card program, or real funds |
+| Fixed-demo Monad attestation | Post-Rain digest names one previously registered offer when configured | Monad Testnet transaction/finalized state only with explorer evidence | Chain-native settlement, seller-visibility proof, or independent Rain oracle |
+| Orders/fulfillment | Product pools can clear only as local rehearsal; fulfillment is copy | Rehearsal fixture | Real order placement, shipping, returns, disputes |
 | Identity | Fictional personas / one Rain team cardholder | Demo fixture | KYC/KYB or distinct verified customers |
 
 Honest language examples:
@@ -375,7 +387,7 @@ Honest language examples:
 - Incorrect: “Rain held `$5,748` for the buyers.”
 - Correct: “Rain sandbox created real transaction records without moving real funds.”
 - Incorrect: “The buyers paid real merchants.”
-- Correct: “Monad timestamped POOL's commitment claim before seller offers.”
+- Correct: “Monad finalized POOL's funding commitment before POOL registered the admitted offer hashes.”
 - Incorrect: “Monad proved the bank funds existed.”
 - Correct: “The merchants are fictional agents with coherent economics.”
 - Incorrect: “Keystone, Northstar, and Signal are live retailers.”
@@ -418,7 +430,7 @@ The supported demo SKU is `DISPLAY-27-4K-IPS-USBC`. MSRP is `$479` per unit. The
 | 2 | Patchwork reserves `$1,916` | Reserved funds become unavailable |
 | 3 | Kernel reserves `$2,395` | Different hard constraints can coexist |
 | 4 | Ultrawide isolated | Semantic matching cannot erase hard incompatibility |
-| 5 | 12 units / `$5,748` freeze | Seller market sees funded demand only |
+| 5 | 12 units / `$5,748` fixture freeze | Application opens the simulated seller market only after reservation |
 | 6 | Funding terms committed | Monad ordering is causal when configured |
 | 7 | Three merchants receive RFP | No pre-commit bid access |
 | 8 | Price compresses | Negotiation has economic consequence |
@@ -431,7 +443,7 @@ The demo supports autoplay, manual stepping, reset, a buyer-intent console, and 
 
 ### Visible safety proof
 
-The Rain execution path issues cards restricted to electronics MCC `5732`, then deliberately attempts an authorization at MCC `7995`. The run must observe a decline. If Rain unexpectedly authorizes the off-list transaction, POOL reverses the authorization and fails the run with `guardrail_not_applied` rather than continuing.
+The Rain execution path issues cards restricted to electronics MCC `5732`, then deliberately attempts an authorization at MCC `7995`. The run must receive the exact provider reason `scoped_card_mcc_not_allowed`; a generic or ambiguous decline fails closed. If Rain unexpectedly authorizes the off-list transaction, POOL reverses the authorization and fails the run with `guardrail_not_applied` rather than continuing.
 
 This is a central judge moment: a bounded agent is defined as much by what it cannot do as by what it can do.
 
@@ -461,10 +473,10 @@ flowchart TD
     I --> P[Versioned POOL balance]
     P --> R[Atomic full-MSRP reservation]
     R --> C[Compatible funded coalition]
-    C --> M1[Monad funding-root commitment]
-    M1 --> F[Finalized pre-bid gate]
-    F --> S[Private seller competition]
-    S --> A[Immutable accepted offer]
+    C --> M1[Fixed-demo Monad funding-root commitment]
+    M1 --> F[Finalized before offer registration]
+    F --> S[Register admitted sealed-offer hashes]
+    S --> A[Select one registered offer after clearing]
     A --> X[Server-derived buyer allocations]
     X --> RC[Rain scoped cards]
     RC --> G[Off-policy MCC decline proof]
@@ -473,7 +485,7 @@ flowchart TD
     M2 --> L[Capture negotiated amount and release savings]
 ```
 
-The first four boxes exist as an interactive local product sandbox. The entire flow exists as a fixed, tested technical proof. A production product would connect them through authenticated, durable services and a reconciled external ledger.
+The first four boxes exist as an interactive local product sandbox; the product then runs a mandate-aware rehearsal and local modeled accounting only. The entire diagram exists only in the protected fixed `/demo` proof, where the provider steps require corresponding rendered evidence. A production product would connect them through authenticated, durable services and a reconciled external ledger.
 
 ### Runtime stack
 
@@ -518,24 +530,26 @@ The first four boxes exist as an interactive local product sandbox. The entire f
 
 API routes enforce content type, size, origin/action headers, rate limits, access sessions, no-store responses, and strict Zod schemas before calling domain or provider code.
 
-### The product now settles end to end
+### Product rehearsal versus fixed provider proof
 
-The buyer workspace is no longer a dead end. A pool a user actually joined can freeze, run a sealed merchant market, clear, and settle on the Rain sandbox:
+The buyer workspace is no longer a dead end, but its outcome is deliberately a quote rather than a purchase. A pool a user joined can freeze, run a sealed simulated merchant market, and select a modeled offer against the saved maximum price and delivery deadline while leaving the reservation untouched:
 
 - `lib/market/consumer.ts` is the deterministic consumer market: three merchants, private floors, volume tiers, and a policy that awards the cheapest offer beating the pool's published target.
-- `POST /api/pool/settle` re-derives MSRP, aggregate demand, the clearing price, and the capture from the **server's own catalog copy**. The browser sends only a pool id, a committed quantity, and an idempotency key.
-- `pool/settle` in `lib/product/` captures the deal price, releases the exact difference, and refuses any capture above the reservation.
+- `POST /api/pool/settle` receives a strict membership envelope plus saved intent, then re-derives MSRP, aggregate demand, timing, quote, and delivery from the **server's own fixture catalog**. A qualifying result is `modeled_quote`, reports `aggregateOrderPlaced: false`, and never consumes the reservation.
+- `pool/release_after_outcome` explicitly releases the full reservation after a modeled quote or terminal no-buy outcome exactly once by stable operation ID.
+- The older `pool/settle` reducer transition remains a tested domain primitive, but the current product route/UI does not call it; product rehearsal creates no capture or order.
+- Neither `/api/pool/commit` nor `/api/pool/settle` imports a Rain or Monad client. This no-provider posture is invariant across environments.
 
-Verified live on 2026-08-08 against the event sandbox: joining the Sony pool and running the market issued a scoped card for `$377.65`, saw Rain **decline** an off-policy MCC `7995` attempt with `scoped_card_mcc_not_allowed`, settled `$377.65`, and released `$72.34`. Rain's own `GET /issuing/balances` moved `postedCharges` from `466800` to `504565` — exactly the captured amount. Replaying the same `settlementId` returned the cached transaction and did not charge again.
+A historical 2026-08-08 development run exercised a Sony-shaped single-allocation Rain path, but that is not a supported product-page capability in this release and must not be presented as current product behavior. The current reproducible provider artifact is the dated fixed-fixture evidence under `public/evidence/`; it records three Rain sandbox settlements plus the MCC `7995` decline and explicitly labels Monad local-only.
 
 ### Remaining seam
 
 Two domain surfaces still exist, and this is now the largest engineering gap:
 
-1. `lib/product/` powers the buyer workspace: deposit, intent, join, leave, settle. Its state is still browser-local.
+1. `lib/product/` powers the buyer workspace: deposit, intent, join, leave, modeled quote display, and full release after a terminal rehearsal outcome. Its state is browser-local and provider-free.
 2. `lib/funding/` plus `lib/market/index.ts` power the fixed monitor proof at `/demo` with the richer freeze/reconciliation model.
 
-They share merchant identities and the same settlement discipline but not one durable aggregate. Do not add a third parallel state machine. Establish one canonical server-side aggregate for buyer balance, intent, membership, pool, RFP, offer, award, settlement, order, and reconciliation; then migrate the product UI and preserve `/demo` as a fixed fallback fixture.
+They share merchant identities and settlement discipline but not one durable aggregate. Do not add a third parallel state machine. Establish one canonical authenticated server-side aggregate for buyer balance, mandate, membership, pool, RFP, offer, award, settlement, order, and reconciliation before reconnecting product pages to providers; preserve `/demo` as a fixed evidence fixture.
 
 ### Next.js-specific contributor rule
 
@@ -553,7 +567,38 @@ Public API:
 createSeededProductWorkspace({ now?, workspaceId?, workspaceName?, owner? })
 reduceProductWorkspace(state, action)
 assertProductWorkspaceInvariant(state)
+evaluateProductPoolFunding({ pool, aggregateFundedUnitCount })
+hasProductPoolMetMinimum(pool)
 ```
+
+`PRODUCT_POOL_COMMITMENT_WINDOW_DAYS` is `14`. Every seeded pool uses a
+`minimumCommittedUnitCount` of `10`. That value is an eligibility floor only:
+actual funded demand remains exact above it and joining stays open until cutoff.
+
+`lib/product/execution.ts` is the structural-validation bridge between
+browser-held product state and server-side rehearsal. Its guarantees are
+deliberately narrow and testable:
+
+- `poolMembershipEnvelopeSchema` requires the complete immutable membership
+  envelope and rejects unknown fields.
+- `validateProductExecutionMembership` checks pool, seeded workspace owner,
+  active status, pre-cutoff join time, and exact server-catalog
+  `MSRP × quantity`; it derives aggregate units and reservation totals itself.
+- `validateProductExecutionIntent` checks that the saved intent matches the
+  membership and product, then carries the browser-originated maximum unit price
+  and delivery deadline into deterministic offer filtering.
+- `evaluateProductExecutionWindow` rejects before cutoff, opens exactly at
+  cutoff, and closes exactly one hour later. Both `/api/pool/commit` and
+  `/api/pool/settle` run this gate before local market construction.
+- `deriveSettlementOperationId` produces a stable server-derived operation ID
+  for terminal rehearsal outcomes. It is used to make local no-buy release
+  idempotent; it is not a provider exactly-once guarantee.
+
+This is structural consistency for a sandbox request. The browser membership
+and mandate are not signed, authenticated, durable, or custodial. The maximum
+price and deadline enter the browser bundle and request body, although they are
+withheld from merchant responses. None of this can replace a server database,
+transactional lock, double-entry ledger, or provider reconciliation.
 
 Actions:
 
@@ -563,18 +608,21 @@ Actions:
 | `intent/create` | IDs, timestamps, buyer/product, quantity, target, expiry | Creates an open intent and activity entry |
 | `pool/join` | IDs, time, pool, intent, buyer | Reserves `MSRP × quantity`, joins intent, increments pool units |
 | `pool/leave` | activity/time, membership, buyer | Releases exact reservation before cutoff and decrements pool units |
+| `pool/release_after_outcome` | activity/time, membership, buyer, terminal reason, server operation ID | Releases the full browser-local reservation exactly once after a modeled quote, below-minimum, no-offer, or expired-window rehearsal |
+| `treasury/sync` | source, provider balance figures, activity/time | Records the labeled Rain or local execution ceiling |
+| `pool/settle` | membership/buyer, capture, merchant, evidence | Tested legacy/local domain transition; not called by the current product rehearsal route or UI |
 
 Key rejection codes include invalid identifiers/timestamps/money/quantity, duplicates, missing entities, buyer or product mismatch, expired/non-open intent, non-forming pool, cutoff passed, insufficient available balance, and inactive membership.
 
 The reducer does not mutate its input. Every successful action increments `revision`, appends one activity event, and preserves the accounting invariant:
 
 ```text
-total deposited = available + reserved
+total deposited = available + reserved + captured
 ```
 
-for the current simplified workspace.
+for the current browser-local workspace.
 
-The assertion also checks that active memberships sum exactly to `reserved`, referenced products/pools/intents exist and agree, membership ownership is correct, pool funded-unit counts reconcile, activity IDs are unique, activity revisions are monotonic, and the latest activity revision equals the workspace revision. Activity entries and metadata are frozen at creation.
+The assertion also checks that every pool has a positive minimum, nonnegative committed units, and a cutoff after creation; active memberships sum exactly to `reserved`; referenced products/pools/intents exist and agree; membership ownership is correct; pool funded-unit counts reconcile; activity IDs are unique; activity revisions are monotonic; and the latest activity revision equals the workspace revision. Activity entries and metadata are frozen at creation.
 
 ### `lib/funding/`: financial lifecycle proof
 
@@ -685,11 +733,11 @@ This mismatch is deliberate isolation for the hackathon proof, but a production 
 
 ### Official sandbox capability
 
-The official [Rain hackathon quickstart](https://rain-sandbox-trial.mintlify.app/docs/quickstart) states that every call runs in sandbox and moves no real money. The flow supports simulated collateral funding, scoped-card issuance, card authorization, settlement, refunds/reversals, transaction retrieval, and payment routes between fiat and onchain destinations.
+The official [Rain hackathon quickstart](https://rain-sandbox-trial.mintlify.site/docs/quickstart) states that every call runs in sandbox and moves no real money. The flow supports simulated collateral funding, scoped-card issuance, card authorization, settlement, refunds/reversals, transaction retrieval, and payment routes between fiat and onchain destinations.
 
-The official [scoped-card guide](https://rain-sandbox-trial.mintlify.app/docs/scoped-cards) describes cards bounded by an amount, optional expiry, and an MCC allowlist. Rain applies a documented 1.2× lifetime authorization ceiling over `amountInUSDCents` to accommodate holds. POOL therefore performs its own exact deterministic amount check before Rain and does not interpret the provider buffer as buyer permission to overspend.
+The official [scoped-card guide](https://rain-sandbox-trial.mintlify.site/docs/scoped-cards) describes cards bounded by an amount, optional expiry, and an MCC allowlist. Rain applies a documented 1.2× lifetime authorization ceiling over `amountInUSDCents` to accommodate holds. POOL therefore performs its own exact deterministic amount check before Rain and does not interpret the provider buffer as buyer permission to overspend.
 
-The official [idempotency guide](https://rain-sandbox-trial.mintlify.app/reference/idempotency) says mutation keys are at most 64 characters, successful/client-error responses are cached for 24 hours, `5xx` is not cached, and concurrent identical keys may return `429`. The adapter mirrors those rules with stable operation keys and safe retries.
+The official [idempotency guide](https://rain-sandbox-trial.mintlify.site/reference/idempotency) says mutation keys are at most 64 characters, successful/client-error responses are cached for 24 hours, `5xx` is not cached, and concurrent identical keys may return `429`. The fixed-demo adapter mirrors those rules with stable operation keys and bounded same-key retries. This repository has no durable exactly-once store, provider-webhook ledger, or automatic retry worker across processes or beyond Rain’s cache window.
 
 ### Provisioned Rain identifiers
 
@@ -717,7 +765,7 @@ Only their environment-variable names belong in documentation. The actual values
 9. Exposes only card ID, last four, transaction ID/status, and cache metadata needed by the UI.
 10. Never decrypts, stores, logs, or returns PAN or CVC.
 
-The live `/api/rain/execute` sequence is:
+The protected fixed `/api/rain/execute` sequence is the only Rain mutation path in this release:
 
 1. Require `RAIN_LIVE_EXECUTION_ENABLED=true`.
 2. Require same-origin action header `x-pool-demo-action: execute-sandbox`.
@@ -727,17 +775,19 @@ The live `/api/rain/execute` sequence is:
 6. Verify the fixed market agreement still reconciles.
 7. Simulate `$5,000` team collateral funding with a stable idempotency key.
 8. Issue three scoped cards under the one provisioned Rain user, one per buyer allocation.
-9. Request each card with `amountInUSDCents` equal to its exact intended allocation, electronics MCC `5732`, and short UTC expiry; POOL's own policy remains exact despite Rain's provider-side 1.2× hold buffer.
-10. Attempt an MCC `7995` authorization and require a decline.
+9. Request each card with `amountInUSDCents` derived from its intended allocation, electronics MCC `5732`, and short UTC expiry. Rain applies its documented 1.2× lifetime authorization ceiling; POOL's deterministic preflight still admits only the exact agreed charge.
+10. Attempt an MCC `7995` authorization and require the exact `scoped_card_mcc_not_allowed` decline; fail closed on a generic/ambiguous decline or unexpected authorization.
 11. Authorize each valid allocation.
 12. If one authorization fails, reverse previously open authorizations before settlement begins.
 13. Settle each authorized allocation.
 14. Return real Rain sandbox card/transaction metadata and label the shared cardholder limitation.
-15. If configured, attest the exact set of Rain transaction IDs on Monad.
+15. If configured, attest the exact Rain transaction-ID set on Monad while naming one previously registered offer as accepted.
+
+Product-page `/api/pool/commit` and `/api/pool/settle` never call this route or import the Rain client. Their results are deterministic rehearsal evidence only.
 
 ### Rain is an execution rail, not the buyer ledger
 
-The `$5,000` simulated collateral funding call is team-level rail setup. It does not credit a POOL buyer balance and does not satisfy the product's full-MSRP deposit rule. The three product/demo reservations exist in POOL's deterministic ledger. Rain begins only after market clearing.
+The `$5,000` simulated collateral funding call is team-level rail setup. It does not credit a POOL buyer balance and does not satisfy the product's full-MSRP deposit rule. The three fixed-demo reservations exist only in POOL's deterministic fixture ledger. Rain begins only after the fixed market clears.
 
 This distinction must remain visible in code, UI, pitch, and documentation.
 
@@ -747,11 +797,12 @@ The event sandbox supplies one test cardholder/user ID. The three buyer personas
 
 ### Failure behavior
 
-- Before any settlement: keep all POOL reservations frozen for retry.
+- Before any fixed-demo settlement: keep all fixture reservations frozen until the operator can retry with the same defined keys or reconcile provider evidence.
 - Authorization failure: reverse prior open authorizations when possible.
 - Partial settlement: report `partial`, retain internal locks, and require reconciliation.
-- Monad attestation failure after successful Rain settlement: Rain remains final; return `attestation_pending` and safely retry only the idempotent attestation.
+- Monad attestation failure after successful Rain settlement: Rain remains final; return `attestation_pending` and do not claim onchain completion. The attestation is idempotent, but no automatic retry worker exists; an operator must retry/reconcile deliberately.
 - Rain failure: never substitute a rehearsal receipt in the same response.
+- Product terminal rehearsal outcomes, including a modeled quote, are different: because product commit/settle cannot contact a provider, the full browser-local reservation may release exactly once using the server outcome operation ID.
 
 ### Future on-ramp / virtual-account design
 
@@ -772,10 +823,11 @@ This is not implemented. Never add a fake routing/account number or describe the
 
 ### Why Monad exists in POOL
 
-A decorative transaction hash would make the product weaker. POOL uses Monad to make two claims causally ordered and tamper-evident:
+A decorative transaction hash would make the product weaker. The fixed competition flow uses Monad to make three recorded claims causally ordered and tamper-evident:
 
-1. A specific aggregate demand/funding commitment existed before sellers could bid.
-2. A specific set of Rain settlement IDs resolved the previously registered winning offer.
+1. A specific aggregate demand/funding commitment finalized before POOL registered the admitted sealed-offer hashes.
+2. A specific set of offer hashes was registered under that commitment before Rain execution.
+3. A post-Rain attestation named one registered offer as accepted and bound the Rain settlement-ID set to it.
 
 Monad does not store private buyer ceilings or merchant prices in plaintext. It stores collision-resistant commitments, aggregate unit/reservation data, and timestamps.
 
@@ -834,19 +886,19 @@ Events:
 
 ### Causal workflow
 
-Competition/live mode follows this order:
+Protected fixed competition mode follows this order:
 
 1. Build the hero funding commitment from frozen POOL reservations.
 2. Submit `commitCoalition`.
 3. Wait for finalized state, not merely a transaction submission or latest block.
 4. Re-read chain ID, registry bytecode, `operator()`, commitment fields, and timing.
-5. Only then construct/evaluate seller offers using server clock plus finalized close time.
-6. Hash and register each admitted sealed offer.
+5. Only then construct/evaluate the fixed seller offers using server clock plus finalized close time.
+6. Hash and register each admitted sealed offer. The chain proves registration after commitment finality, not when an offchain bid first existed or what a seller saw.
 7. Reconstruct the identical offer set from finalized state across cold starts.
 8. Execute Rain only if finalized state matches today's exact agreement.
 9. Hash the complete unique Rain settlement-ID set.
-10. Submit `attestRainSettlement` against the registered winner.
-11. Wait for finalized attestation or report a retryable pending state.
+10. Submit `attestRainSettlement`; this is when `acceptedOfferHash` is set to the selected previously registered offer and bound to the receipt digest.
+11. Wait for finalized attestation or report an operator-retryable pending state; no automatic retry worker exists.
 
 ### Fail-closed configuration
 
@@ -856,7 +908,7 @@ Monad configuration can be:
 - `partial` or `invalid`: blocked, never silently downgraded;
 - `ready`: registry, signer, and RPC syntax present, followed by live chain verification.
 
-Production live Rain requires Monad readiness. `MONAD_LIVE_REQUIRED=true` applies the same gate locally. Wrong chain, missing bytecode, wrong operator, incomplete values, malformed key/address, stale commitment, unfinalized write, or closed bid window prevents the downstream action.
+The protected fixed Rain flow requires Monad readiness when `MONAD_LIVE_REQUIRED=true`. Wrong chain, missing bytecode, wrong operator, incomplete values, malformed key/address, stale commitment, unfinalized write, or closed bid window prevents that downstream action. Product commit/settle remain provider-mutation-free regardless of this configuration.
 
 ### Finality implementation and production review note
 
@@ -866,7 +918,7 @@ Current Monad documentation distinguishes `Finalized` consensus ordering from th
 
 ### What the chain does not prove
 
-The contract records POOL's commitments. It cannot independently inspect a bank account, POOL database, or Rain API. Verification requires authorized disclosure of the offchain reservation proofs and Rain receipts, then reconciliation against roots/digests. Low-entropy private values may also be vulnerable to guessing if hashed without sufficient salt/context; keep sensitive economics offchain and design disclosure carefully.
+The contract records POOL's claims. It cannot independently inspect a bank account, POOL database, Rain API, the moment an offchain bid was created, or what any seller saw. Verification requires authorized disclosure of the offchain reservation proofs, admitted offers, and Rain receipts, then reconciliation against roots/digests. Low-entropy private values may also be vulnerable to guessing if hashed without sufficient salt/context; keep sensitive economics offchain and design disclosure carefully. The dated Rain evidence currently included in this branch explicitly reports Monad `not_configured`/local-only and is not Testnet evidence.
 
 ---
 
@@ -876,13 +928,16 @@ All dynamic routes return no-store responses. Mutation routes use strict bodies 
 
 | Endpoint | Method | Required body/header | Access and behavior |
 | --- | --- | --- | --- |
-| `/api/agent/run` | `GET` | none | Reports OpenAI configuration, effective mode, authority boundary, and unlock state |
-| `/api/agent/run` | `POST` | JSON `{ intent }`; `x-pool-agent-action: interpret-buyer-intent` | Same-origin when Origin exists; 10/min isolate limit; max 2KB; OpenAI only when unlocked, otherwise deterministic fallback |
+| `/api/agent/run` | `GET` | none | Reports OpenAI configuration, effective mode, and the non-financial authority boundary |
+| `/api/agent/run` | `POST` | JSON `{ intent }`; `x-pool-agent-action: interpret-buyer-intent` | Same-origin when Origin exists; 10/min isolate limit; max 2KB; OpenAI when configured, otherwise deterministic fallback; never reserves or moves money |
+| `/api/pool/commit` | `POST` | Strict `{ poolId, membership, confirmation: "commit-funded-demand" }`; `x-pool-demo-action: commit-funded-demand` | Same-origin; max 4KB; validates membership/timing and returns rehearsal or terminal no-buy state; imports no Monad/Rain client and never creates an external operation |
+| `/api/pool/settle` | `POST` | Strict `{ poolId, membership, intent, confirmation: "settle-pool-order" }`; `x-pool-demo-action: settle-pool-order` | Same-origin; max 4KB; validates membership plus mandate and derives a modeled quote or no-buy outcome; leaves the reservation untouched and always reports no aggregate order, payment, or provider mutation |
 | `/api/merchant/bid` | `POST` | Strict merchant, integer price, delivery, warranty, RFP version; `x-pool-agent-action: evaluate-merchant-bid` | 20/min; pins quantity server-side; finalized Monad read/write when configured; local labeled policy fallback only when fully unconfigured and optional |
-| `/api/monad/prepare` | `POST` | `{ scenarioVersion: "monitor-pool-v1", confirmation: "prepare-monad-testnet" }`; standard agent action boundary | 3/min; protected live write; commits coalition, then offers, and returns finalized evidence |
+| `/api/monad/prepare` | `POST` | `{ scenarioVersion: "monitor-pool-v1", confirmation: "prepare-monad-testnet" }`; standard agent action boundary | 3/min; protected fixed-demo write; commits coalition, then registers admitted offers, and returns finalized evidence |
 | `/api/monad/status` | `GET` | none | Reads finalized proof or explicit local/unavailable state; never invents address/transaction |
+| `/api/rain/balance` | `GET` | none | Session-gated, rate-limited read of the team Rain sandbox spending ceiling; falls back to an explicitly labeled local/null ceiling and never mutates provider state |
 | `/api/rain/status` | `GET` | none | Reports configuration, access, Monad gate, and provider connection; may contact Rain only after access boundary permits it |
-| `/api/rain/execute` | `POST` | `{ scenarioVersion: "monitor-pool-v1", confirmation: "execute-rain-sandbox" }`; `x-pool-demo-action: execute-sandbox` | Live flag + same origin + protected access + exact scenario + Monad gate; 8-second process-local repeat guard; max 4KB |
+| `/api/rain/execute` | `POST` | `{ scenarioVersion: "monitor-pool-v1", confirmation: "execute-rain-sandbox" }`; `x-pool-demo-action: execute-sandbox` | Only complete provider flow; live flag + same origin + protected access + exact fixed scenario + Monad gate; 8-second process-local repeat guard; max 4KB |
 | `/api/demo/session` | `POST` | `{ accessCode }`, same Origin | Max 1KB; 5 attempts/min/IP; constant-time comparison; creates four-hour HttpOnly, SameSite Strict cookie |
 
 ### Merchant bid schema
@@ -999,7 +1054,9 @@ The Cloudflare worker generates a per-response nonce and injects it into scripts
 | --- | --- |
 | `README.md` | Public product/architecture/setup overview |
 | `PRODUCT.md` | Product promise, lifecycle, sandbox truth, launch gaps |
-| `DEMO.md` | 2:30 judge narrative, fallback order, judge answers |
+| `PITCH.md` | Six-slide outline, verbatim 90-second talk track, track proof, adversarial Q&A |
+| `POOL_PITCH.pptx` | Editable six-slide industrial-grid presentation with evidence boundaries and source notes |
+| `DEMO.md` | 90-second operator sequence, evidence language, fallback order |
 | `handoff.md` | This comprehensive source of truth |
 | `AGENTS.md` | Mandatory Next.js contributor warning |
 | `CLAUDE.md` | Additional repository agent context if applicable |
@@ -1041,9 +1098,12 @@ The Cloudflare worker generates a per-response nonce and injects it into scripts
 | Path | Purpose |
 | --- | --- |
 | `app/api/agent/run/route.ts` | Buyer intent status and execution |
+| `app/api/pool/commit/route.ts` | Post-cutoff product rehearsal validation; never writes Monad or Rain |
+| `app/api/pool/settle/route.ts` | Post-cutoff mandate-aware modeled quote/no-buy outcome; never creates a capture, order, or provider write |
 | `app/api/merchant/bid/route.ts` | Strict merchant bid evaluation/admission |
 | `app/api/monad/prepare/route.ts` | Protected pre-bid commitment preparation |
 | `app/api/monad/status/route.ts` | Finalized/local Monad proof status |
+| `app/api/rain/balance/route.ts` | Session-gated read-only Rain sandbox ceiling with labeled local fallback |
 | `app/api/rain/status/route.ts` | Rain/access/Monad readiness status |
 | `app/api/rain/execute/route.ts` | Protected fixed Rain sandbox settlement |
 | `app/api/demo/session/route.ts` | Shared-code-to-HttpOnly-session exchange |
@@ -1054,7 +1114,9 @@ The Cloudflare worker generates a per-response nonce and injects it into scripts
 | --- | --- |
 | `lib/product/types.ts` | Product workspace types, actions, domain errors, versions |
 | `lib/product/seed.ts` | Four products/pools and default buyer/workspace fixtures |
-| `lib/product/reducer.ts` | Pure deposit, intent, join, leave transitions and invariants |
+| `lib/product/reducer.ts` | Pure deposit, intent, join, leave, terminal-outcome release, and legacy settlement transitions/invariants |
+| `lib/product/execution.ts` | Strict membership/mandate validation, fixed rehearsal window, quote bounds, stable outcome operation IDs |
+| `lib/product/window-resolution.ts` | Safe expired-window release evidence based on the product routes' provider-free design |
 | `lib/product/index.ts` | Stable public product-domain exports |
 | `lib/funding/index.ts` | Full accounting lifecycle and hero funding fixture |
 | `lib/market/index.ts` | Compatibility, coalition, merchants, negotiation, policy, agreement, settlement, outcomes |
@@ -1086,21 +1148,12 @@ The Cloudflare worker generates a per-response nonce and injects it into scripts
 
 ### Tests
 
-| Path | Focus | Current test count |
-| --- | --- | ---: |
-| `tests/product.test.mjs` | Product seed/reducer success and rejection paths | 9 |
-| `tests/funding.test.mjs` | Accounting, reservation, idempotency, freeze, settlement, reconciliation | 11 |
-| `tests/market.test.mjs` | Compatibility, economics, privacy, negotiation, policy, settlement | 11 |
-| `tests/agent-runtime.test.mjs` | OpenAI/fallback authority, injection safety, merchant policy | 9 |
-| `tests/merchant-monad-runtime.test.mjs` | Finalized bid gating, offer writes/replays, fail-closed config | 8 |
-| `tests/monad.test.mjs` | Commitment ordering, deterministic roots, receipt digest, cold starts | 6 |
-| `tests/competition-gate.test.mjs` | Rain/Monad configuration matrix and operator mismatch | 5 |
-| `tests/security.test.mjs` | Loopback/production/token/session boundary | 6 |
-| `tests/rendered-html.test.mjs` | Product/demo server rendering, routes, headers, starter removal | 5 |
-| `tests/next-config.test.mjs` | Vercel/Next security baseline | 1 |
-| `test/PoolCommitmentRegistry.ts` | Solidity lifecycle, rejection, timing, operator rotation | 5 |
-
-Total: 71 Node application/domain tests plus 5 Solidity tests.
+The suites cover product state, fixed-window execution, provider authority,
+funding, markets, agents, Rain, Monad, security, rendered routes, and Solidity.
+Counts change as the branch evolves; `npm test` output at the submitted commit is
+the source of truth. In particular, do not omit `tests/product-execution.test.mjs`,
+the pool route tests, or `test/PoolCommitmentRegistry.ts` when citing timing,
+reconstruction, retry, or onchain evidence.
 
 Generated directories such as `.next`, `dist`, `artifacts`, `cache`, `.wrangler`, `.vercel`, `.playwright-cli`, `tmp`, and local `.env` files are ignored and should not be treated as source.
 
@@ -1127,6 +1180,7 @@ Generated directories such as `.next`, `dist`, `artifacts`, `cache`, `.wrangler`
 | `MONAD_PRIVATE_KEY` | **Yes** | empty | Monad writes | Fresh funded Testnet operator key only |
 | `OPENAI_API_KEY` | **Yes** | empty | Optional live extraction | Server-only Responses API key |
 | `OPENAI_MODEL` | No | `gpt-5.6` | Optional override | Intent interpreter model |
+| `POOL_PUBLIC_ORIGIN` | No | empty | Non-Vercel production metadata | Canonical HTTPS origin for OG/Twitter image URLs; Vercel system URLs are used automatically when unset |
 
 Never put actual values in a Markdown file. Never prefix a client-visible variable with `NEXT_PUBLIC_` for these secrets.
 
@@ -1150,7 +1204,7 @@ Supply fresh Rain sandbox values and set `RAIN_LIVE_EXECUTION_ENABLED=true`. Lea
 Expected behavior:
 
 - Loopback permits live action only if no access token was supplied.
-- Rain sandbox settlement can run.
+- The protected fixed `/demo` Rain sandbox settlement can run; product commit/settle remain rehearsal-only.
 - Response explicitly says Monad is not configured and makes no onchain claim.
 
 This profile is a debugging fallback, not the strongest competition story.
@@ -1169,10 +1223,10 @@ For a public/production runtime, also supply a random `POOL_DEMO_ACCESS_TOKEN` o
 Expected behavior:
 
 - Preflight verifies finalized chain ID, bytecode, and operator match.
-- Coalition commitment finalizes before offers.
-- Seller bids are gated by finalized demand.
+- Coalition commitment finalizes before admitted offer hashes are registered.
+- Fixed seller-offer construction/admission is gated by finalized demand; the chain does not prove offchain seller visibility.
 - Rain executes the scoped-card flow.
-- Exact Rain ID set is attested on Monad Testnet.
+- The exact Rain ID set is attested on Monad Testnet while naming one previously registered offer as accepted.
 
 ### Profile D: public no-secret rehearsal
 
@@ -1185,16 +1239,17 @@ Expected behavior:
 - All receipts are `REHEARSAL · SIMULATED`.
 - No unlock prompt should be advertised unless a valid token and live action are actually configured.
 
-### Audited environment snapshot on 2026-08-08
+### Environment snapshot on 2026-08-09
 
-No values were read or printed during this audit; only readiness states were checked.
+No secret value belongs in this document. Record only the verified capability state.
 
-| Environment | Rain | OpenAI | Monad | Access |
+| Environment | Rain | OpenAI | Monad | Deployment/access |
 | --- | --- | --- | --- | --- |
-| Local ignored `.env.local` | Credentials complete; sandbox execution flag enabled | No key; deterministic fallback | Completely unconfigured; optional local proof | Non-production loopback bypass because no token is configured |
-| Protected Vercel preview | No Rain variables; rehearsal only | No key; deterministic fallback | No registry/key; local proof only | No app unlock required because no live action is enabled; Vercel team protection still blocks page access |
+| Local ignored `.env.local` | Run `npm run demo:preflight`; do not rely on a prior snapshot | Run preflight; deterministic fallback remains available | Signer has `0.116` finalized Testnet MON, below the current `0.18317` deployment requirement / `0.20149` cushioned target | Loopback development only |
+| Vercel Preview | Not configured; rehearsal/unavailable only | `OPENAI_API_KEY` is the only currently recorded Preview variable | Not configured; local evidence only | No `overnight` deployment had been verified at this snapshot |
+| Public Vercel Production alias | Do not infer environment from page access | Do not infer environment from page access | Do not infer environment from page access | Last verified public baseline served `main@9b12002` |
 
-The local Rain state means a sandbox run is technically enabled, not that the exposed credential is safe to keep using. Rotate it before the next public demonstration. The hosted no-secret state is an intentional safe rehearsal profile, not an integration outage.
+Vercel Git integration is not connected, so branch pushes do not create or update deployments automatically. Re-run the environment inventory after the next explicit deployment and update this table from observed settings and UI evidence, never from assumptions.
 
 ---
 
@@ -1229,8 +1284,8 @@ Open `http://localhost:3000`.
 | `npm run start` | Starts the built Vinext target |
 | `npm run build:next` | Builds native Next target used by Vercel |
 | `npm run lint` | Runs ESLint across source, excluding build outputs |
-| `npm test` | Vinext build, 71 Node tests, then Solidity tests |
-| `npm run test:contracts` | Runs 5 Hardhat contract tests |
+| `npm test` | Vinext build, current Node suites, then current Solidity suites; use the runner output for counts |
+| `npm run test:contracts` | Runs the current Hardhat contract suite |
 | `npm run monad:compile` | Compiles the registry |
 | `npm run monad:deploy:testnet` | Deploys with Ignition to Monad Testnet using ignored `.env.local` |
 | `npm run demo:preflight` | Reports safe integration readiness without values |
@@ -1263,18 +1318,10 @@ npm audit --omit=dev --audit-level=high
 git diff --check
 ```
 
-The last application baseline was locally reported green for:
-
-- 71 Node application/domain tests;
-- 5 Solidity tests;
-- ESLint;
-- Vinext build;
-- native Next build;
-- zero high-severity production dependency audit findings;
-- desktop and mobile browser walkthroughs;
-- zero production console errors during the verified walkthrough.
-
-Re-run rather than trusting this snapshot after any dependency or behavior change.
+Do not cite a historical pass count as evidence for `overnight`. Re-run every
+command against the exact commit being submitted, preserve its output, and use
+the test runner's current count. Browser walkthrough and console claims likewise
+belong only to the exact deployed build that was inspected.
 
 ### What the suites specifically protect
 
@@ -1282,14 +1329,14 @@ Re-run rather than trusting this snapshot after any dependency or behavior chang
 - Immutable revisions and duplicate-action rejection.
 - Exact leave release and hard cutoff boundary.
 - Account/reservation reconciliation.
-- Stable idempotent retries and conflict rejection.
+- Stable same-key retry behavior and conflict rejection, without claiming durable exactly-once execution beyond provider/cache boundaries.
 - Frozen reservation behavior on partial provider failure.
 - Semantic compatibility plus hard ultrawide exclusion.
 - Private mandate and merchant floor non-disclosure.
 - Coherent seller tiers reaching `$389`.
 - Stale/tampered/over-budget offer rejection.
 - OpenAI strict-tool authority boundary and safe fallback.
-- Finalized Monad commitment before offer construction.
+- Finalized fixed-demo Monad commitment before admitted offer construction/registration.
 - Cold-start reconstruction instead of trusting process memory.
 - Set-based Rain receipt hashing.
 - Partial/malformed/wrong-operator configuration failure.
@@ -1298,11 +1345,17 @@ Re-run rather than trusting this snapshot after any dependency or behavior chang
 - Security headers in both Next and deployment targets.
 - Solidity authorization, bid-window, settlement, duplicate, and rotation guards.
 
-### GitHub Actions caveat
+### GitHub Actions status
 
-`.github/workflows/ci.yml` is correctly configured to run checkout, Node 22.13, `npm ci`, lint, Next build, all tests, and a high-severity production audit. The audited baseline run for application commit `7bcacd5`, [GitHub Actions run 31278405482](https://github.com/inevident/Pool/actions/runs/31278405482), did not start any steps because the GitHub account was locked due to a billing issue. New pushes may create newer run IDs with the same account-level failure until that lock is resolved.
-
-Do not interpret the red check as a code-test failure. Do not interpret it as success either. Resolve account billing, rerun CI, and require a green hosted check before external collaboration or production release.
+`.github/workflows/ci.yml` defines checkout, Node setup, install, lint, build,
+tests, and dependency audit. The latest audited `main` run for `9b12002`
+([Actions run `31294162264`](https://github.com/inevident/Pool/actions/runs/31294162264))
+did not start a runner or execute a single step. GitHub's check annotation says
+the repository owner account is locked because of a billing issue. That is an
+external account condition, not a passing or failing code result. Resolve the
+GitHub account lock, rerun CI for the exact submitted SHA, and cite it only after
+the steps actually execute successfully. Local validation remains evidence for
+the local worktree, not hosted CI.
 
 ---
 
@@ -1321,6 +1374,11 @@ Recent application baseline commits, newest first:
 
 | Commit | Purpose |
 | --- | --- |
+| `9b12002` | Polish the product workspace and add the mobile beta preview |
+| `01f854d` | Prove the product lifecycle on a local chain before deployment |
+| `d710a1c` | Anchor product pools on Monad before seller bidding |
+| `4a8fef3` | Clear a buyer pool and settle through the Rain sandbox path |
+| `79b0395` | Bound the buyer workspace by Rain sandbox spending power when synced |
 | `7bcacd5` | Link product preview |
 | `9efa1b5` | Turn POOL into a repeat-use product |
 | `9fffcae` | Position POOL honestly as a product sandbox |
@@ -1336,38 +1394,42 @@ Recent application baseline commits, newest first:
 
 ### Vercel
 
-Configured preview URL:
+Facts verified on 2026-08-09:
 
-`https://pool-agentic-market-preview-20260808-ldktkkf37-yeayea.vercel.app`
-
-Technical proof URL:
-
-`https://pool-agentic-market-preview-20260808-ldktkkf37-yeayea.vercel.app/demo`
-
-Operational facts verified on 2026-08-08:
-
-- Vercel CLI account: `haharandomaccover13-5904`.
-- Vercel scope/team in the deployment URL and prior operation: `yeayea`.
-- Vercel project: `pool-agentic-market-preview-20260808` (`prj_vYnFrr9rC5If88NHJJZ8TKGfAkoz`).
-- The active deployment is a `READY` Preview target, not a successful current Production target.
-- The deployment is protected and asks non-team viewers to request access.
-- The protected response advertises `x-robots-tag: noindex`.
-- The owner's currently open browser account was not authorized for that team/deployment.
-- The preview has no configured environment variables, so it intentionally runs product sandbox + deterministic rehearsal only.
-- The repository has no persistent `.vercel/project.json`; verify/link the project explicitly before a future deploy.
-- Vercel project settings reported Node `24.x` even though `package.json` and CI require Node `22.x`; align this to prevent runtime drift.
+- The last verified stable public Production alias was
+  `https://pool-agentic-market-preview-20260808-yeayea.vercel.app` and returns
+  the current `main@9b12002` baseline without a Vercel access gate.
+- `https://pool-agentic-market-preview-20260808-yeayea.vercel.app/demo` is the
+  corresponding technical-proof route for that same baseline.
+- Vercel Git integration is **not connected** to `inevident/Pool`; a Git push
+  does not create a deployment. A 2026-08-09 CLI connection attempt failed
+  because the signed-in Vercel account has no GitHub Login Connection. That
+  OAuth/account link must be added by the account owner before `vercel git
+  connect https://github.com/inevident/Pool.git` can succeed.
+- No `overnight` deployment had been verified at this snapshot. Do not use the
+  public `main` alias as evidence for branch behavior.
+- The Vercel Preview environment currently contains only `OPENAI_API_KEY`.
+  Rain and Monad must therefore appear as rehearsal, local evidence, or
+  unavailable there.
+- No claim is made here about uninspected Production environment values, the
+  latest hosted build result, or a future deployment URL.
 - `vercel.json` selects the Next.js framework and `npm run build:next`.
 
-Before sharing with judges:
+Deployment handoff for `overnight`:
 
-1. Determine the intended Vercel owner/team.
-2. Sign the CLI into that exact account or transfer/link the project.
-3. Disable deployment protection for the public demo or create a deliberately public production deployment.
-4. Keep all live financial actions separately protected by the application session; public page access must not imply public mutation authority.
-5. Open the link in a private/incognito browser with no Vercel session.
-6. Verify `/`, `/explore`, `/wallet`, `/orders`, one pool detail, and `/demo`.
-7. Verify mobile width and no console errors.
-8. Align the Vercel runtime with Node 22.x and confirm both native Next and Vinext builds still pass.
+1. Run the full local gate and record the exact commit SHA.
+2. Explicitly link or deploy through the intended Vercel owner/project; do not
+   assume Git integration.
+3. Configure only the intended environment variables through Vercel's encrypted
+   settings. Never paste values into source or this handoff.
+4. Keep provider mutations behind POOL's application session even when the page
+   itself is public.
+5. Promote or assign a stable Production alias only after the deployment passes.
+   Update this section with the observed alias; do not pre-write one.
+6. Open the alias in an incognito browser and verify `/`, `/explore`, `/wallet`,
+   `/orders`, one pool detail, and `/demo` at desktop and mobile widths.
+7. Confirm the UI's Rain/Monad evidence labels match the configured environment;
+   page access alone is never provider-proof.
 
 ### Cloudflare/Vinext
 
@@ -1390,53 +1452,32 @@ Do not move secret values between Vercel, local shell, GitHub, and another host 
 3. Run the full local validation gate.
 4. Run `npm run demo:preflight` with the intended environment.
 5. Confirm Rain says configured/connected and live execution enabled only if intended.
-6. Confirm Monad registry, chain `10143`, bytecode, signer/operator, and finalized state.
-7. Execute one complete live sandbox rehearsal.
+6. Confirm Monad registry, chain `10143`, bytecode, signer/operator, finalized state, and signer gas. The currently recorded signer `0x070dd53f4FdF178E29df30e03FEAD90Cd300e6ed` has `0.116` finalized Testnet MON, below the current `0.18317` deployment requirement / `0.20149` cushioned target.
+7. Execute one complete Rain sandbox run only if the UI shows provider readiness; otherwise rehearse the explicitly simulated path.
 8. Wait or account for Rain's 24-hour idempotency cache and scoped-card limits.
 9. Execute a reset and a second rehearsal to prove replay behavior.
-10. Keep one local product tab, one `/demo` tab, one public no-secret fallback tab, and explorer evidence ready.
+10. Keep one local product tab, one `/demo` tab, one public no-secret fallback tab, and any verified explorer evidence ready. Confirm the first frame shows the fixed-fixture 12-unit / `$1,080` outcome summary.
 11. Close any terminal, environment editor, wallet key view, or screenshot containing credentials.
 
-### Two-minute-thirty-second narrative
+### 90-second primary narrative
 
-#### 0:00 — Problem
+[`PITCH.md`](./PITCH.md) is the canonical six-slide structure and verbatim talk
+track. [`DEMO.md`](./DEMO.md) is the canonical click sequence. The operator should
+lead with the first-frame outcome summary, then replay:
 
-“Agents shop one buyer at a time. POOL lets patient buyers organize into prefunded demand, then makes merchants compete for the whole order.”
+1. `12` compatible full-MSRP-reserved fixture units and `$5,748` reserved before bidding;
+2. one incompatible request excluded by hard constraints;
+3. funding commitment → registered sealed-offer set → Rain settlement →
+   selected-offer receipt attestation as the Monad causal chain;
+4. three simulated merchants clearing at `$389` per unit;
+5. Rain sandbox's three exact settled allocations and MCC `7995` reason `scoped_card_mcc_not_allowed`, only when provider IDs
+   prove a sandbox run;
+6. Rain sandbox settling `$4,668` and the fixture ledger making `$1,080` available again.
 
-Show `$5,748` reserved and say that no buyer can join without full MSRP coverage.
-
-#### 0:25 — Bounded buyer agent
-
-Run the natural-language intent. Point to typed constraints and the trace. Say: “AI translates fuzzy intent. Deterministic policy controls catalog, budget, delivery, funding, and payment. The model has no payment tool.”
-
-#### 0:45 — Launch market
-
-Launch the prefunded market. Let the incompatible ultrawide request visibly fail compatibility. Freeze 12 units before merchants appear.
-
-#### 1:10 — Monad causal proof
-
-Point to the commitment rail. If an explorer link exists, show it. Say: “POOL committed the funded terms before sellers could bid. Prices stay private behind hashes. The chain timestamps our claim; it does not inspect the bank.”
-
-If the UI says local proof, say exactly that no testnet transaction is being claimed.
-
-#### 1:35 — Merchant competition
-
-Submit `$389`, seven-day delivery. Show server-pinned quantity and private-policy clearing. Explain that sellers never see buyer maximums or competing floors.
-
-#### 1:55 — Rain execution
-
-Click **Settle in sandbox**. Point out:
-
-- three scoped cards;
-- electronics MCC restriction;
-- forced MCC `7995` decline;
-- three valid authorizations and settlements;
-- provider transaction IDs;
-- one shared sandbox cardholder limitation.
-
-#### 2:20 — Close
-
-“POOL captured `$4,668`, released `$1,080`, and required zero human negotiation. We did not build AI that shops. We built a market where demand organizes itself.”
+The technical inspector is optional Q&A, not part of the 90-second primary run.
+If the outcome is `REHEARSAL · SIMULATED`, say that it created no provider or
+Testnet transaction. If the UI lacks an explorer link, say no onchain transaction
+is claimed.
 
 ### Judge answers
 
@@ -1446,11 +1487,11 @@ It converts interest into credible demand and removes the buyer-funding default 
 
 **Why Rain?**
 
-Rain gives the already-cleared deal purpose-specific card authority: amount, MCC, expiry, and provider-enforced authorization behavior.
+Rain gives the fixed-demo deal scoped card authority derived from its cleared allocations: amount, MCC, expiry, and provider-enforced authorization behavior. Rain’s documented lifetime authorization ceiling includes a 1.2× hold buffer; POOL still admits only the exact agreed charges, and the dated evidence shows exact settled amounts.
 
 **Why Monad?**
 
-It makes “funded before bidding” and “these Rain IDs resolved this winning offer” ordered and tamper-evident without exposing private economics.
+It makes POOL’s recorded funding commitment, admitted offer set, and post-Rain selected-offer receipt attestation ordered and tamper-evident without exposing private economics. It does not prove when an offchain bid first existed or what a seller saw.
 
 **What does AI control?**
 
@@ -1458,11 +1499,11 @@ Interpretation and potentially matching/strategy. Deterministic code alone contr
 
 **What is simulated?**
 
-The buyer deposit ledger, product catalog, buyers, merchants, offers, and fulfillment. Rain creates real sandbox records when enabled. Monad is onchain only when verified Testnet evidence is shown.
+The buyer fixture ledger, product catalog, buyers, merchants, offers, and fulfillment. Rain creates real sandbox records only in the protected fixed demo when provider IDs render. Monad is onchain only when finalized Testnet evidence is shown.
 
 **What happens if one buyer payment fails?**
 
-The design prefunds before bidding. During external execution, open authorizations are reversed where possible; partial settlement freezes the internal reservation for reconciliation and does not claim an immediate release.
+The intended design reserves full MSRP before bidding. During fixed-demo external execution, open authorizations are reversed where possible; partial settlement freezes the fixture reservation for reconciliation and does not claim an immediate release. Product pages create no payment and release the full local reservation only after an explicit terminal rehearsal outcome.
 
 **Why would a merchant discount?**
 
@@ -1478,16 +1519,19 @@ Demand density, repeated buyer mandates, merchant participation, transaction out
 
 ### P0: demo-critical external gaps
 
-- Public deployment is blocked by Vercel protection/account mismatch.
+- No `overnight` deployment has been verified; the last checked public alias served `main@9b12002`.
+- Vercel Git integration is not connected, so deployment must be explicit.
+- Vercel Preview has only `OPENAI_API_KEY`; it cannot provide Rain or Monad evidence.
 - Rain key needs rotation/re-provisioning because it was shared in a conversation image.
-- Fresh Rain connectivity and a complete live run must be reverified.
+- The dated fixed-fixture Rain record exists, but any future provider run must use rotated credentials and freshly verify connectivity.
+- Monad signer `0x070dd53f4FdF178E29df30e03FEAD90Cd300e6ed` has `0.116` finalized Testnet MON, below the current `0.18317` deployment requirement / `0.20149` cushioned target; add only testnet gas before deployment/write verification.
 - Monad Testnet registry/operator/explorer evidence must be deployed and verified if the competition path is used.
-- Hosted GitHub CI needs billing/account repair.
+- Hosted GitHub CI must be inspected and green at the exact submitted SHA before it is cited.
 - A final incognito/mobile/judge-network rehearsal is required.
 
 ### Product gaps
 
-- Product UI and monitor proof still use separate catalogs and state models, though both now settle through Rain.
+- Product UI and monitor proof still use separate catalogs and state models. Only the protected monitor proof has a Rain sandbox execution path; product pages stop at a modeled quote and explicit full local release.
 - No general natural-language intent creation for the four consumer products.
 - No server-side pool creation or matching; the settle route re-derives from the seed rather than a database.
 - No real merchant onboarding, console, or sealed-bid exchange.
@@ -1554,19 +1598,19 @@ Demand density, repeated buyer mandates, merchant participation, transaction out
 Acceptance criteria:
 
 - Anyone can open the product URL in incognito without a Vercel account.
-- Live mutation remains protected by POOL's own access session.
+- Rain sandbox and Monad Testnet mutations remain protected by POOL's own access session.
 - All six public routes render at desktop and mobile widths.
 
-#### 0.2 Fresh Rain live proof
+#### 0.2 Fresh Rain sandbox proof
 
 Acceptance criteria:
 
 - Fresh, non-exposed sandbox credential.
 - Preflight green without displaying values.
-- MCC `7995` visibly declined.
+- MCC `7995` visibly returns `scoped_card_mcc_not_allowed`; generic/ambiguous declines fail closed.
 - Three MCC `5732` authorizations settle.
 - UI shows provider IDs and shared-cardholder disclosure.
-- A repeat uses idempotent/cached evidence without duplicate effects.
+- A same-day repeat reuses the defined idempotency keys and visibly reports cached evidence when Rain returns it; do not extrapolate this into a durable exactly-once guarantee beyond the 24-hour provider cache.
 
 #### 0.3 Monad Testnet proof
 
@@ -1576,22 +1620,21 @@ Acceptance criteria:
 - Finalized bytecode and operator match.
 - Funding commitment transaction available in explorer.
 - Offers registered only after finalized commitment.
-- Rain ID-set attestation finalizes against registered winner.
+- Rain ID-set attestation finalizes while naming one previously registered offer as accepted.
 - UI links to the exact evidence and does not overclaim what it proves.
 
 #### 0.4 Hosted verification
 
 Acceptance criteria:
 
-- GitHub billing/account issue resolved.
-- CI completes every step and is green at the presented commit.
+- CI completes every step and is green at the exact presented commit.
 - Production dependency audit has no high-severity finding.
 
 #### 0.5 Presentation rehearsal
 
 Acceptance criteria:
 
-- Two successful timed runs under 2:30.
+- Two successful timed 90-second primary runs.
 - One deliberate fallback run with honest labels.
 - Presenter can answer every trust-boundary question without reading notes.
 
@@ -1670,9 +1713,9 @@ The defining behavior is autonomous discovery and temporary coordination of comp
 
 ## 20. Troubleshooting
 
-### “You Need Access” on Vercel
+### A future Vercel deployment shows “You Need Access”
 
-Cause: deployment protection/team access, not the POOL demo token.
+Cause: deployment protection/team access on that deployment, not the POOL demo token. The current stable Production alias was public when verified; do not infer the state of a new deployment.
 
 Fix:
 
@@ -1684,11 +1727,13 @@ Fix:
 
 Do not tell users to enter `POOL_DEMO_ACCESS_TOKEN` into Vercel's access screen; they are different layers.
 
-### GitHub Actions fails instantly with zero steps
+### GitHub Actions does not execute the expected steps
 
-Cause: GitHub account locked due billing, verified through the check annotation.
-
-Fix: resolve the account/billing lock, then rerun all jobs. Local green output cannot change the hosted status.
+Open the exact run and read its annotations before naming a cause. Resolve the
+reported repository/account/workflow condition, then rerun. For the currently
+audited `main` run, the annotation is an owner-account billing lock and the job
+has zero steps. Local green output cannot substitute for a hosted check, and an
+unexecuted job is neither a code failure nor a pass.
 
 ### Rain status says rehearsal/unconfigured
 
@@ -1809,7 +1854,7 @@ The key north-star candidate is not “pools joined.” It is **successfully ful
 
 ### Thirty seconds
 
-“Buying power is fragmented. POOL turns independent purchase intent into funded coalitions. Buyers reserve full MSRP, agents match compatible requirements, sellers bid privately for the aggregate order, and deterministic policy selects a deal within every mandate. Rain gives the agent scoped payment authority; Monad proves the pool was committed before bidding and binds the eventual Rain receipt set to the winner.”
+“Buying power is fragmented. POOL turns independent purchase intent into full-MSRP-reserved coalitions. Buyers reserve the fixture amount, agents match compatible requirements, sellers bid privately for the aggregate order, and deterministic policy selects a deal within every mandate. In the protected fixed proof, Rain gives the agent scoped payment authority; Monad finalizes the funding commitment before offer hashes are registered, then binds the eventual Rain receipt set to the selected registered offer.”
 
 ### Product framing
 
@@ -1825,7 +1870,7 @@ The key north-star candidate is not “pools joined.” It is **successfully ful
 
 ### Monad framing
 
-“Seller competition is credible only if demand cannot be rewritten after bids arrive. Monad timestamps the funding commitment first and the Rain settlement digest last.”
+“Monad makes POOL’s recorded chronology tamper-evident: the funding commitment finalizes before admitted offer hashes are registered, then the post-Rain attestation names the selected registered offer and receipt digest.”
 
 ---
 
@@ -1838,15 +1883,15 @@ The key north-star candidate is not “pools joined.” It is **successfully ful
 ### Rain hackathon sandbox
 
 - [Documentation index](https://rain-sandbox-trial.mintlify.site/llms.txt)
-- [Quickstart](https://rain-sandbox-trial.mintlify.app/docs/quickstart)
-- [Scoped cards](https://rain-sandbox-trial.mintlify.app/docs/scoped-cards)
-- [Authentication](https://rain-sandbox-trial.mintlify.app/reference/authenticating-with-the-api)
-- [Idempotency](https://rain-sandbox-trial.mintlify.app/reference/idempotency)
-- [Simulating transactions](https://rain-sandbox-trial.mintlify.app/docs/simulating-transactions/overview)
-- [Card authorizations](https://rain-sandbox-trial.mintlify.app/docs/simulating-transactions/card-authorizations)
-- [Settlement](https://rain-sandbox-trial.mintlify.app/docs/simulating-transactions/settlement)
-- [Authorization reversals](https://rain-sandbox-trial.mintlify.app/docs/simulating-transactions/authorization-reversals)
-- [Payment routes](https://rain-sandbox-trial.mintlify.app/docs/payment-routes)
+- [Quickstart](https://rain-sandbox-trial.mintlify.site/docs/quickstart)
+- [Scoped cards](https://rain-sandbox-trial.mintlify.site/docs/scoped-cards)
+- [Authentication](https://rain-sandbox-trial.mintlify.site/reference/authenticating-with-the-api)
+- [Idempotency](https://rain-sandbox-trial.mintlify.site/reference/idempotency)
+- [Simulating transactions](https://rain-sandbox-trial.mintlify.site/docs/simulating-transactions/overview)
+- [Card authorizations](https://rain-sandbox-trial.mintlify.site/docs/simulating-transactions/card-authorizations)
+- [Settlement](https://rain-sandbox-trial.mintlify.site/docs/simulating-transactions/settlement)
+- [Authorization reversals](https://rain-sandbox-trial.mintlify.site/docs/simulating-transactions/authorization-reversals)
+- [Payment routes](https://rain-sandbox-trial.mintlify.site/docs/payment-routes)
 
 ### Monad
 
@@ -1877,11 +1922,12 @@ An incoming owner should be able to answer “yes” to all of these before clai
 - [ ] I can run the app and all validation commands locally.
 - [ ] I can reset product and demo state without external side effects.
 - [ ] I have not copied any secret from chat, screenshots, or local env into source.
-- [ ] I have resolved or explicitly accepted the Vercel protection risk.
-- [ ] I have resolved or explicitly accepted the GitHub Actions billing block.
+- [ ] I know which exact commit the public Vercel alias serves and whether the branch I am presenting has been deployed.
+- [ ] I have verified Vercel Git/deployment ownership instead of assuming a push deployed.
+- [ ] I inspected the GitHub Actions result for the exact submitted SHA before citing CI.
 - [ ] I can run a fresh Rain sandbox proof with rotated credentials.
 - [ ] I can verify the Monad registry, operator, finality, and explorer evidence.
-- [ ] I can deliver the complete judge story in under 2:30.
+- [ ] I can deliver the primary judge story in 90 seconds and reserve the technical inspector for Q&A.
 - [ ] I can demonstrate an invalid payment being blocked.
 - [ ] I can explain every fallback without overstating it.
 - [ ] I know the P0 path and will not bury it under lower-priority features.
@@ -1901,8 +1947,9 @@ If any answer is “no,” keep the corresponding claim out of the pitch until t
 - **Cutoff** — deadline after which membership and reservations freeze for bidding.
 - **Deterministic policy** — ordinary typed code that produces the same authorization decision from the same validated state.
 - **Funding root** — cryptographic root over private reservation records; a commitment to POOL's evidence, not independent custody proof.
-- **Idempotency** — repeated execution of the same operation/key produces one side effect and the same result.
+- **Idempotency** — within a defined system/cache boundary, retrying the same operation/key is intended to reuse the same side effect/result; it is not a substitute for durable reconciliation.
 - **MCC** — merchant category code used by card networks and Rain scoping.
+- **Minimum funded units** — smallest funded quantity that permits merchant bidding after the fixed window; a floor, not a target or cap.
 - **Merchant floor** — private lowest acceptable seller price under its economics.
 - **Monad finality** — the finalized chain state POOL waits for before downstream actions.
 - **MSRP** — manufacturer suggested retail price; used as the maximum reservation baseline in the current model.
@@ -1924,12 +1971,12 @@ If any answer is “no,” keep the corresponding claim out of the pitch until t
 
 POOL's strongest asset is the coherence between its product rule and its technical architecture:
 
-- Full prefunding turns intent into credible demand.
+- Full-MSRP reservation turns intent into credible fixture demand today and is the intended production funding rule.
 - Aggregation turns patience into leverage.
 - Private competition turns leverage into a lower price.
 - Deterministic policy keeps every mandate intact.
 - Rain turns an accepted deal into bounded execution.
-- Monad prevents the competition story from being rewritten after the fact.
+- Monad makes changes to POOL’s recorded commitment/offer/receipt chronology detectable; it does not prove offchain seller visibility.
 - Exact accounting turns the difference into auditable buyer savings.
 
 Protect that chain of reasoning. Every new feature should make it clearer, safer, more real, or easier to repeat.

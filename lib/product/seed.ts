@@ -10,6 +10,7 @@ import {
 
 const DAY_MS = 86_400_000;
 export const DEFAULT_PRODUCT_SEED_TIME = "2026-08-08T16:00:00.000Z";
+export const PRODUCT_POOL_COMMITMENT_WINDOW_DAYS = 14;
 
 /**
  * Offline spend ceiling used before the live Rain sandbox balance is read.
@@ -86,6 +87,11 @@ export interface CreateSeededProductWorkspaceInput {
   readonly owner?: BuyerProfile;
 }
 
+export type CreateCanonicalProductWorkspaceInput = Omit<
+  CreateSeededProductWorkspaceInput,
+  "now"
+>;
+
 const toRecord = <T extends { readonly id: string }>(items: readonly T[]) =>
   Object.fromEntries(items.map((item) => [item.id, item])) as Record<string, T>;
 
@@ -107,8 +113,8 @@ export function createSeededProductWorkspace(
       id: "pool-sony-xm6-august",
       productId: "product-sony-wh1000xm6",
       status: "forming",
-      cutoffAt: isoAfterDays(createdAt, 7),
-      targetMemberCount: 50,
+      cutoffAt: isoAfterDays(createdAt, PRODUCT_POOL_COMMITMENT_WINDOW_DAYS),
+      minimumCommittedUnitCount: 10,
       committedUnitCount: 34,
       estimatedUnitPriceCents: 37_900,
       createdAt,
@@ -117,8 +123,8 @@ export function createSeededProductWorkspace(
       id: "pool-steam-deck-oled-august",
       productId: "product-steam-deck-oled-512",
       status: "forming",
-      cutoffAt: isoAfterDays(createdAt, 10),
-      targetMemberCount: 30,
+      cutoffAt: isoAfterDays(createdAt, PRODUCT_POOL_COMMITMENT_WINDOW_DAYS),
+      minimumCommittedUnitCount: 10,
       committedUnitCount: 18,
       estimatedUnitPriceCents: 49_400,
       createdAt,
@@ -127,8 +133,8 @@ export function createSeededProductWorkspace(
       id: "pool-macbook-air-campus",
       productId: "product-macbook-air-m4-13",
       status: "forming",
-      cutoffAt: isoAfterDays(createdAt, 14),
-      targetMemberCount: 25,
+      cutoffAt: isoAfterDays(createdAt, PRODUCT_POOL_COMMITMENT_WINDOW_DAYS),
+      minimumCommittedUnitCount: 10,
       committedUnitCount: 11,
       estimatedUnitPriceCents: 89_900,
       createdAt,
@@ -137,8 +143,8 @@ export function createSeededProductWorkspace(
       id: "pool-dyson-airwrap-fall",
       productId: "product-dyson-airwrap-id",
       status: "forming",
-      cutoffAt: isoAfterDays(createdAt, 18),
-      targetMemberCount: 40,
+      cutoffAt: isoAfterDays(createdAt, PRODUCT_POOL_COMMITMENT_WINDOW_DAYS),
+      minimumCommittedUnitCount: 10,
       committedUnitCount: 27,
       estimatedUnitPriceCents: 52_500,
       createdAt,
@@ -191,4 +197,22 @@ export function createSeededProductWorkspace(
     memberships: {},
     activity: Object.freeze([seededActivity]),
   };
+}
+
+/**
+ * The product routes and browser must execute against the same published
+ * fixture window. Runtime callers therefore use this canonical constructor;
+ * the clock-injectable constructor above remains available for isolated domain
+ * tests only.
+ *
+ * Neither request bodies nor a visitor's device clock can move this window.
+ * Commit and settlement routes still evaluate eligibility with server time.
+ */
+export function createCanonicalProductWorkspace(
+  input: CreateCanonicalProductWorkspaceInput = {},
+): ProductWorkspace {
+  return createSeededProductWorkspace({
+    ...input,
+    now: DEFAULT_PRODUCT_SEED_TIME,
+  });
 }

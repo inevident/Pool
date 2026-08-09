@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server.js";
 import { z } from "zod";
 import {
   accessCodeMatches,
@@ -6,7 +6,11 @@ import {
   DEMO_ACCESS_COOKIE,
   DEMO_ACCESS_TTL_SECONDS,
   isDemoAccessConfigured,
-} from "../../../../lib/security/demo-access";
+} from "../../../../lib/security/demo-access.ts";
+import {
+  readLimitedJson,
+  RequestBoundaryError,
+} from "../../../../lib/agent/http.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +58,12 @@ export async function POST(request: NextRequest) {
       { status: 403, headers: { "Cache-Control": "no-store" } },
     );
   }
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return NextResponse.json(
+      { status: "rejected", message: "Invalid session request." },
+      { status: 415, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   if (isRateLimited(request)) {
     return NextResponse.json(
       { status: "rate_limited", message: "Too many access attempts." },
@@ -64,21 +74,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const length = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(length) && length > 1_024) {
-    return NextResponse.json(
-      { status: "rejected", message: "Invalid session request." },
-      { status: 413, headers: { "Cache-Control": "no-store" } },
-    );
-  }
-
   let input: z.infer<typeof inputSchema>;
   try {
-    input = inputSchema.parse(await request.json());
-  } catch {
+    input = inputSchema.parse(await readLimitedJson(request, 1_024));
+  } catch (error) {
+    const status = error instanceof RequestBoundaryError ? error.status : 400;
     return NextResponse.json(
       { status: "rejected", message: "Invalid session request." },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status, headers: { "Cache-Control": "no-store" } },
     );
   }
 

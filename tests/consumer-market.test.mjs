@@ -38,6 +38,25 @@ test("deeper volume tiers unlock strictly better prices", () => {
   }
 });
 
+test("market pricing uses every funded unit above the pool minimum", () => {
+  const catalog = createSeededProductWorkspace();
+  const pool = catalog.pools["pool-sony-xm6-august"];
+  const atMinimum = clearConsumerMarket({
+    productId: SONY,
+    aggregateUnits: pool.minimumCommittedUnitCount,
+    targetUnitPriceCents: SONY_TARGET,
+  });
+  const actualFundedUnits = pool.minimumCommittedUnitCount + 90;
+  const aboveMinimum = clearConsumerMarket({
+    productId: SONY,
+    aggregateUnits: actualFundedUnits,
+    targetUnitPriceCents: SONY_TARGET,
+  });
+
+  assert.equal(aboveMinimum.aggregateUnits, actualFundedUnits);
+  assert.ok(aboveMinimum.discountBps > atMinimum.discountBps);
+});
+
 test("a merchant never bids below its private floor", () => {
   // The deepest tier is where floors bind hardest.
   const offers = collectConsumerOffers({

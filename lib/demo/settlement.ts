@@ -32,6 +32,7 @@ export const settlementTotalInCents = settlementAllocations.reduce(
 
 export type DemoFundingState =
   | "frozen_for_retry"
+  | "released_after_failure"
   | "reconciliation_required"
   | "settled";
 
@@ -40,6 +41,7 @@ export function getDemoFundingState(
   externalSettledInCents = 0,
 ) {
   const isSettled = state === "settled";
+  const isReleased = state === "released_after_failure";
   return {
     simulatedLedger: true as const,
     ledger: "POOL" as const,
@@ -49,7 +51,7 @@ export function getDemoFundingState(
     dealUnitInCents: HERO_FUNDING.dealUnitCents,
     totalDepositedInCents: HERO_FUNDING.summary.totalDepositedCents,
     totalReservedBeforeInCents: HERO_FUNDING.summary.totalReservedCents,
-    totalLockedInCents: isSettled
+    totalLockedInCents: isSettled || isReleased
       ? 0
       : HERO_FUNDING.summary.totalReservedCents,
     totalCapturedInCents: isSettled
@@ -57,7 +59,9 @@ export function getDemoFundingState(
       : 0,
     totalReleasedInCents: isSettled
       ? HERO_FUNDING.summary.totalReleasedCents
-      : 0,
+      : isReleased
+        ? HERO_FUNDING.summary.totalReservedCents
+        : 0,
     externalSettledInCents,
     buyers: HERO_FUNDING.summary.buyers.map((buyer) => ({
       ...buyer,
@@ -66,10 +70,18 @@ export function getDemoFundingState(
           (candidate) => candidate.buyerId === buyer.buyerId,
         )?.buyerName ?? buyer.buyerId,
       state: isSettled ? ("settled" as const) : state,
-      lockedInCents: isSettled ? 0 : buyer.reservedCents,
+      lockedInCents: isSettled || isReleased ? 0 : buyer.reservedCents,
       capturedInCents: isSettled ? buyer.capturedCents : 0,
-      releasedInCents: isSettled ? buyer.releasedCents : 0,
-      availableInCents: isSettled ? buyer.availableAfterCents : 0,
+      releasedInCents: isSettled
+        ? buyer.releasedCents
+        : isReleased
+          ? buyer.reservedCents
+          : 0,
+      availableInCents: isSettled
+        ? buyer.availableAfterCents
+        : isReleased
+          ? buyer.reservedCents
+          : 0,
     })),
   };
 }

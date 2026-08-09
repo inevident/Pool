@@ -47,3 +47,6 @@ next-env.d.ts
 /outputs/
 /work/
 /tmp/
+.gstack/
+/*.pptx.inspect.ndjson
+/POOL_PITCH/

@@ -23,6 +23,10 @@ async function render(path = "/") {
   );
 }
 
+function renderedText(html) {
+  return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ");
+}
+
 test("server-renders the functional POOL buyer product", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -47,7 +51,10 @@ test("keeps the cinematic market and payment proof isolated at /demo", async () 
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /<title>Live market walkthrough — POOL<\/title>/i);
-  assert.match(html, /Launch the market/);
+  assert.match(html, /Replay the fixed market/);
+  assert.match(html, /FIXED TECHNICAL EVIDENCE FIXTURE/);
+  assert.match(html, /Rain bounded captures/);
+  assert.match(html, /Monad commitment \/ attestation/);
   assert.match(html, /BUYER AGENTS/);
   assert.match(html, /SELLER COMPETITION/);
   assert.match(html, /POOL BALANCE RESERVATIONS/);
@@ -61,7 +68,8 @@ test("server-renders every repeat-use product surface", async () => {
   const surfaces = [
     ["/explore", /Discover funded group buys/],
     ["/wallet", /Know what is free and what is committed/],
-    ["/orders", /From reserved demand to delivery/],
+    ["/orders", /Your purchases, from commitment to delivery/],
+    ["/beta", /Coming soon/],
     [
       "/pools/pool-sony-xm6-august",
       /Full MSRP coverage/,
@@ -71,8 +79,36 @@ test("server-renders every repeat-use product surface", async () => {
   for (const [path, expected] of surfaces) {
     const response = await render(path);
     assert.equal(response.status, 200, `${path} should render successfully`);
-    assert.match(await response.text(), expected);
+    const html = await response.text();
+    assert.match(html, expected);
+    assert.doesNotMatch(html, /\d+%\s+to\s+(?:merchant\s+)?bidding/i);
+    assert.doesNotMatch(html, /\d+\s*\/\s*\d+\s+(?:buyers|members|units)/i);
   }
+});
+
+test("renders the mobile preview from current fixed-window pool fixtures", async () => {
+  const response = await render("/beta");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const text = renderedText(html);
+  assert.match(text, /34 funded units/);
+  assert.match(text, /\$379/);
+  assert.match(text, /10-unit eligibility floor/);
+  assert.match(text, /14-day window elapsed/);
+  assert.match(text, /no enrollment cap/);
+  assert.doesNotMatch(html, /18 buyers|buyers joined|72% to merchant bidding/i);
+});
+
+test("does not reintroduce target-headcount progress semantics", async () => {
+  const source = await readFile(
+    new URL("../app/_components/product-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    source,
+    /targetMemberCount|of unit target|target headcount|buyers needed/i,
+  );
+  assert.doesNotMatch(source, /18 buyers|buyers joined|72% to merchant bidding/i);
 });
 
 test("applies a secure browser header baseline", async () => {

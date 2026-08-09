@@ -18,6 +18,10 @@ import {
   reverseAuthorization,
   settleAuthorization,
 } from "../../../../lib/rain/client";
+import {
+  compensateUnsettledRainAuthorizations,
+  rainCompensationRequiresReconciliation,
+} from "../../../../lib/rain/compensation";
 import { canExecuteLiveDemo } from "../../../../lib/security/demo-access";
 import {
   getMonadRainGate,
@@ -29,6 +33,11 @@ import {
   monadTransactionForJson,
   requireFinalizedHeroMarketOnMonad,
 } from "../../../../lib/monad/workflow";
+import {
+  assertSameOriginJsonAction,
+  readLimitedJson,
+  RequestBoundaryError,
+} from "../../../../lib/agent/http";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +47,12 @@ const requestSchema = z
     confirmation: z.literal("execute-rain-sandbox"),
   })
   .strict();
+
+// Rain's scoped-card sandbox documents this exact decline reason when an
+// authorization is outside the card's MCC allowlist. A generic decline (for
+// example, insufficient balance) does not prove the MCC guardrail worked.
+const EXPECTED_BLOCKED_MCC_DECLINE_REASON =
+  "scoped_card_mcc_not_allowed" as const;
 
 let lastExecutionAt = 0;
 
@@ -56,26 +71,6 @@ function utcRunWindow(now = new Date()) {
   return { runKey: `pool-${DEMO_SCENARIO_VERSION}-${day}`, expiration };
 }
 
-function isTrustedDemoRequest(request: NextRequest) {
-  if (request.headers.get("x-pool-demo-action") !== "execute-sandbox") {
-    return false;
-  }
-
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-
-  try {
-    const requestUrl = new URL(request.url);
-    const originUrl = new URL(origin);
-    return (
-      requestUrl.protocol === originUrl.protocol &&
-      requestUrl.host === originUrl.host
-    );
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: NextRequest) {
   if (process.env.RAIN_LIVE_EXECUTION_ENABLED !== "true") {
     return NextResponse.json(
@@ -87,10 +82,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!isTrustedDemoRequest(request)) {
+  try {
+    assertSameOriginJsonAction(
+      request,
+      "execute-sandbox",
+      "x-pool-demo-action",
+    );
+  } catch (error) {
     return NextResponse.json(
-      { status: "rejected", message: "Invalid demo execution request." },
-      { status: 403 },
+      {
+        status: "rejected",
+        message:
+          error instanceof RequestBoundaryError
+            ? error.message
+            : "Invalid demo execution request.",
+      },
+      {
+        status:
+          error instanceof RequestBoundaryError ? error.status : 403,
+        headers: { "Cache-Control": "no-store" },
+      },
     );
   }
 
@@ -113,21 +124,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const requestLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(requestLength) && requestLength > 4_096) {
-    return NextResponse.json(
-      { status: "rejected", message: "Invalid demo execution payload." },
-      { status: 413, headers: { "Cache-Control": "no-store" } },
-    );
-  }
-
   let input: z.infer<typeof requestSchema>;
   try {
-    input = requestSchema.parse(await request.json());
-  } catch {
+    input = requestSchema.parse(await readLimitedJson(request, 4_096));
+  } catch (error) {
     return NextResponse.json(
       { status: "rejected", message: "Invalid demo execution payload." },
-      { status: 400 },
+      {
+        status:
+          error instanceof RequestBoundaryError ? error.status : 400,
+        headers: { "Cache-Control": "no-store" },
+      },
     );
   }
 
@@ -204,6 +211,11 @@ export async function POST(request: NextRequest) {
     status: string;
     cached: boolean;
   }> = [];
+  let outstandingProbeAuthorization: {
+    buyerId: string;
+    transactionId: string;
+  } | null = null;
+  let authorizationCallInFlight = false;
 
   try {
     await fundDemoRailCollateral(500_000, `${runKey}-fund`);
@@ -225,6 +237,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    authorizationCallInFlight = true;
     const probe = await authorizeCard({
       cardId: cards[0].cardId,
       amountInCents: cards[0].amountInCents,
@@ -232,20 +245,35 @@ export async function POST(request: NextRequest) {
       merchantCategoryCode: BLOCKED_MCC,
       idempotencyKey: `${runKey}-blocked-mcc-probe`,
     });
+    authorizationCallInFlight = false;
 
     if (probe.transaction.status !== "declined") {
-      await reverseAuthorization({
+      // Treat an unexpectedly open off-policy probe like every other
+      // authorization. Centralized catch compensation must observe it even if
+      // a reversal call itself fails.
+      outstandingProbeAuthorization = {
+        buyerId: "guardrail-probe",
         transactionId: probe.transaction.transactionId,
-        idempotencyKey: `${runKey}-unsafe-probe-reversal`,
-      });
+      };
       throw new RainApiError(
         "Rain did not apply the expected MCC restriction",
         502,
         "guardrail_not_applied",
       );
     }
+    if (
+      probe.transaction.declinedReason !==
+      EXPECTED_BLOCKED_MCC_DECLINE_REASON
+    ) {
+      throw new RainApiError(
+        "Rain declined the off-policy probe without confirming the scoped-card MCC restriction",
+        502,
+        "guardrail_decline_unverified",
+      );
+    }
 
     for (const card of cards) {
+      authorizationCallInFlight = true;
       const authorization = await authorizeCard({
         cardId: card.cardId,
         amountInCents: card.amountInCents,
@@ -253,18 +281,27 @@ export async function POST(request: NextRequest) {
         merchantCategoryCode: ELECTRONICS_MCC,
         idempotencyKey: `${runKey}-${card.buyerId}-authorize`,
       });
+      authorizationCallInFlight = false;
 
-      if (authorization.transaction.status !== "authorized") {
-        for (const open of authorized) {
-          await reverseAuthorization({
-            transactionId: open.transactionId,
-            idempotencyKey: `${runKey}-${open.buyerId}-compensate`,
-          });
-        }
+      if (authorization.transaction.status === "declined") {
         throw new RainApiError(
           "A buyer authorization was declined",
           409,
           authorization.transaction.declinedReason,
+        );
+      }
+
+      if (authorization.transaction.status !== "authorized") {
+        authorized.push({
+          buyerId: card.buyerId,
+          transactionId: authorization.transaction.transactionId,
+          amountInCents: card.amountInCents,
+          cached: authorization.cached,
+        });
+        throw new RainApiError(
+          "Rain returned an ambiguous buyer authorization state",
+          502,
+          "authorization_state_ambiguous",
         );
       }
 
@@ -372,7 +409,7 @@ export async function POST(request: NextRequest) {
         monad,
         guardrail: {
           status: probe.transaction.status,
-          reason: probe.transaction.declinedReason ?? "blocked_mcc",
+          reason: EXPECTED_BLOCKED_MCC_DECLINE_REASON,
           transactionId: probe.transaction.transactionId,
           merchantCategoryCode: BLOCKED_MCC,
         },
@@ -405,24 +442,49 @@ export async function POST(request: NextRequest) {
       (total, entry) => total + entry.amountInCents,
       0,
     );
+    // Centralized compensation covers declines, settlement failures, and
+    // unexpected exceptions. Only authorizations without settled provider
+    // evidence are reversed; settled allocations stay locked for reconciliation.
+    const compensation = await compensateUnsettledRainAuthorizations({
+      runKey,
+      authorized: [
+        ...authorized,
+        ...(outstandingProbeAuthorization
+          ? [outstandingProbeAuthorization]
+          : []),
+      ],
+      settled,
+      reverse: reverseAuthorization,
+    });
+    const reconciliationRequired =
+      authorizationCallInFlight ||
+      rainCompensationRequiresReconciliation({
+        settledCount: settled.length,
+        attempts: compensation,
+      });
     const fundingState =
-      settled.length > 0
+      reconciliationRequired
         ? getDemoFundingState(
             "reconciliation_required",
             externalSettledInCents,
           )
-        : getDemoFundingState("frozen_for_retry");
+        : getDemoFundingState("released_after_failure");
     return NextResponse.json(
       {
         status: settled.length > 0 ? "partial" : "failed",
         code,
         message:
-          "Rain sandbox could not complete this run. No simulated receipt has been substituted.",
+          authorizationCallInFlight
+            ? "Rain did not return an authoritative authorization result. The run remains locked for reconciliation; no simulated receipt or release has been substituted."
+            : "Rain sandbox could not complete this run. No simulated receipt has been substituted.",
         funding: fundingState,
         progress: {
           cardsIssued: cards.length,
           authorizations: authorized.length,
           settlements: settled.length,
+          reversals: compensation.filter((entry) => entry.reversed).length,
+          reversalFailures: compensation.filter((entry) => !entry.reversed).length,
+          authorizationAmbiguous: authorizationCallInFlight,
         },
       },
       {

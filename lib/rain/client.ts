@@ -1,6 +1,23 @@
 import "server-only";
 import { z } from "zod";
 
+export const RAIN_IDEMPOTENCY_KEY_MAX_LENGTH = 64;
+
+export function assertRainIdempotencyKey(value: string) {
+  if (
+    value.length < 1 ||
+    value.length > RAIN_IDEMPOTENCY_KEY_MAX_LENGTH ||
+    !/^[A-Za-z0-9._:-]+$/.test(value)
+  ) {
+    throw new RainApiError(
+      `Rain idempotency keys must be 1-${RAIN_IDEMPOTENCY_KEY_MAX_LENGTH} URL-safe characters.`,
+      500,
+      "invalid_idempotency_key",
+    );
+  }
+  return value;
+}
+
 const SANDBOX_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCAP192809jZyaw62g/eTzJ3P9H
 +RmT88sXUYjQ0K8Bx+rJ83f22+9isKx+lo5UuV8tvOlKwvdDS/pVbzpG7D7NO45c
@@ -131,6 +148,9 @@ async function rainRequest(
 ): Promise<{ body: unknown; idempotencyCached: boolean }> {
   const config = getRainConfig();
   const method = options.method ?? "GET";
+  if (options.idempotencyKey) {
+    assertRainIdempotencyKey(options.idempotencyKey);
+  }
   const retryable = method === "GET" || Boolean(options.idempotencyKey);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {

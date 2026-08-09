@@ -9,6 +9,10 @@ import {
   getDemoAccessConfiguration,
   isDemoAccessConfigured,
 } from "../../../../lib/security/demo-access";
+import {
+  assertRateLimit,
+  RequestBoundaryError,
+} from "../../../../lib/agent/http";
 
 export const dynamic = "force-dynamic";
 
@@ -51,12 +55,31 @@ export async function GET(request: NextRequest) {
   const accessRequired =
     !accessUnlocked &&
     (isDemoAccessConfigured() || accessConfiguration.required);
+  const providerAccessLocked =
+    process.env.NODE_ENV === "production" && !accessUnlocked;
 
-  if (accessRequired) {
+  if (accessRequired || providerAccessLocked) {
     return NextResponse.json(
-      localTreasury("Unlock the protected demo to read the live Rain ceiling."),
+      localTreasury(
+        "Live Rain balance reads are locked; the product is using its labeled local ceiling.",
+      ),
       { headers: NO_STORE },
     );
+  }
+
+  try {
+    assertRateLimit(request, "rain-balance-read", {
+      maxRequests: 12,
+      windowMs: 60_000,
+    });
+  } catch (error) {
+    if (error instanceof RequestBoundaryError) {
+      return NextResponse.json(localTreasury(error.message), {
+        status: error.status,
+        headers: { ...NO_STORE, "Retry-After": "60" },
+      });
+    }
+    throw error;
   }
 
   try {

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createSeededProductWorkspace } from "../../../../lib/product/index";
+
 import {
-  buildProductPoolCommitment,
-  productReservationSet,
-} from "../../../../lib/monad/product-commitment";
-import {
-  commitCoalitionOnMonad,
-  getMonadWriteConfiguration,
-  MonadRegistryError,
-  verifyMonadOperatorReadiness,
-} from "../../../../lib/monad/server";
-import { monadExplorerTransactionUrl } from "../../../../lib/monad/registry";
-import { canExecuteLiveDemo } from "../../../../lib/security/demo-access";
+  createCanonicalProductWorkspace,
+  deriveSettlementOperationId,
+  evaluateProductExecutionWindow,
+  evaluateProductPoolFunding,
+  poolMembershipEnvelopeSchema,
+  ProductExecutionError,
+  resolveMissedExecutionWindow,
+  validateProductExecutionMembership,
+} from "../../../../lib/product/index";
 import {
   assertRateLimit,
   noStoreHeaders,
@@ -22,13 +20,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** Sellers get a bounded window to respond once demand is committed. */
-const BID_WINDOW_MS = 60 * 60 * 1_000;
-
 const requestSchema = z
   .object({
     poolId: z.string().min(1).max(64),
-    quantity: z.number().int().min(1).max(20),
+    membership: poolMembershipEnvelopeSchema,
     confirmation: z.literal("commit-funded-demand"),
   })
   .strict();
@@ -52,13 +47,10 @@ function isTrustedRequest(request: NextRequest) {
 }
 
 /**
- * Commits a product pool's funded demand to Monad Testnet before any seller can
- * bid.
- *
- * This is the causal half of the proof: the registry timestamps the funding root
- * and public terms, so POOL cannot later claim demand was funded earlier, larger,
- * or on different terms than the sellers actually competed against. It publishes
- * hashes only — no buyer ceiling and no merchant floor reaches the chain.
+ * Product-page commitments remain local rehearsal data for this release. The
+ * seeded coalition has no complete provider allocation set, so publishing an
+ * aggregate Monad commitment would imply an executable order that does not
+ * exist. The fixed /demo route retains the complete live proof.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -75,118 +67,120 @@ export async function POST(request: NextRequest) {
 
   if (!isTrustedRequest(request)) {
     return NextResponse.json(
-      { status: "rejected", message: "Invalid commitment request." },
+      {
+        status: "rejected",
+        code: "untrusted_request",
+        message: "Invalid commitment request.",
+      },
       { status: 403, headers: noStoreHeaders },
     );
   }
 
   let input: z.infer<typeof requestSchema>;
   try {
-    input = requestSchema.parse(await readLimitedJson(request, 1_024));
+    input = requestSchema.parse(await readLimitedJson(request, 4_096));
   } catch {
     return NextResponse.json(
-      { status: "rejected", message: "Invalid commitment payload." },
+      {
+        status: "rejected",
+        code: "invalid_membership_envelope",
+        message: "Invalid product commitment payload.",
+      },
       { status: 400, headers: noStoreHeaders },
     );
   }
 
-  const configuration = getMonadWriteConfiguration();
-  if (!configuration.ready) {
-    // Partial or invalid configuration is blocked rather than downgraded, so a
-    // half-configured deployment can never quietly present a local proof as a
-    // chain proof.
-    const blocked = configuration.issues.length > 0;
-    return NextResponse.json(
-      {
-        status: blocked ? "blocked" : "not_configured",
-        network: "Monad Testnet",
-        message: blocked
-          ? "Monad configuration is incomplete or invalid; no commitment was written."
-          : "Monad is not configured. The market will run without an on-chain commitment.",
-        issues: configuration.issues,
-      },
-      { status: blocked ? 503 : 200, headers: noStoreHeaders },
-    );
-  }
-
-  if (!canExecuteLiveDemo(request)) {
-    return NextResponse.json(
-      { status: "rejected", message: "Live chain writes are locked." },
-      { status: 401, headers: noStoreHeaders },
-    );
-  }
-
-  const catalog = createSeededProductWorkspace();
-  const pool = catalog.pools[input.poolId];
-  if (!pool) {
-    return NextResponse.json(
-      { status: "rejected", message: "Unknown pool." },
-      { status: 404, headers: noStoreHeaders },
-    );
-  }
-  const product = catalog.products[pool.productId];
-
-  const frozenAt = new Date();
-  const reservations = productReservationSet({
-    pool,
-    product,
-    buyerId: catalog.owner.id,
-    buyerIntentId: `${pool.id}-live-intent`,
-    buyerQuantity: input.quantity,
-  });
-
+  let execution: ReturnType<typeof validateProductExecutionMembership>;
   try {
-    await verifyMonadOperatorReadiness();
-
-    const commitment = buildProductPoolCommitment({
-      pool,
-      product,
-      reservations,
-      frozenAt: frozenAt.toISOString(),
-      bidClosesAt: new Date(frozenAt.getTime() + BID_WINDOW_MS).toISOString(),
+    execution = validateProductExecutionMembership({
+      workspace: createCanonicalProductWorkspace(),
+      poolId: input.poolId,
+      membership: input.membership,
     });
-
-    // Writes, then re-reads finalized state before reporting success.
-    const result = await commitCoalitionOnMonad(commitment);
-
+  } catch (error) {
+    const executionError =
+      error instanceof ProductExecutionError ? error : null;
     return NextResponse.json(
       {
-        status: "committed",
-        network: "Monad Testnet",
-        chainId: 10_143,
-        commitmentId: result.commitmentId,
-        fundingRoot: commitment.fundingRoot,
-        termsHash: commitment.termsHash,
-        unitCount: commitment.unitCount,
-        reservedCents: Number(commitment.reservedCents),
-        bidClosesAt: new Date(
-          Number(commitment.bidClosesAt) * 1_000,
-        ).toISOString(),
-        committedAt: new Date(Number(result.committedAt) * 1_000).toISOString(),
-        replayed: result.replayed,
-        transactionHash: result.transaction?.hash ?? null,
-        explorerUrl: result.transaction
-          ? monadExplorerTransactionUrl(result.transaction.hash)
-          : null,
-        message: result.replayed
-          ? "This coalition was already committed; finalized state was verified without a duplicate write."
-          : "Funded demand is committed and finalized. Sellers may now bid.",
+        status: "rejected",
+        code: executionError?.code ?? "invalid_membership_envelope",
+        message: executionError?.message ?? "Invalid membership envelope.",
+      },
+      {
+        status: executionError?.code === "pool_not_found" ? 404 : 409,
+        headers: noStoreHeaders,
+      },
+    );
+  }
+
+  const executionWindow = evaluateProductExecutionWindow(execution.pool);
+  if (executionWindow.status === "waiting_for_cutoff") {
+    return NextResponse.json(
+      {
+        ...executionWindow,
+        poolId: execution.pool.id,
+        reservationState: "still_reserved",
+        message:
+          "Funded demand remains open until the published cutoff. No chain or provider action occurred.",
+      },
+      { status: 409, headers: noStoreHeaders },
+    );
+  }
+  if (executionWindow.status === "closed") {
+    const resolution = resolveMissedExecutionWindow(execution);
+    return NextResponse.json(
+      {
+        ...resolution,
+        poolId: execution.pool.id,
+        cutoffAt: executionWindow.cutoffAt,
+        bidClosesAt: executionWindow.bidClosesAt,
+        serverTime: executionWindow.serverTime,
+      },
+      {
+        status: 200,
+        headers: noStoreHeaders,
+      },
+    );
+  }
+
+  const aggregateUnits = execution.aggregateUnits;
+  const fundingStatus = evaluateProductPoolFunding({
+    pool: execution.pool,
+    aggregateFundedUnitCount: aggregateUnits,
+  });
+  if (!fundingStatus.hasMetMinimum) {
+    return NextResponse.json(
+      {
+        status: "below_minimum",
+        code: "minimum_funded_units_not_met",
+        operationId: deriveSettlementOperationId(execution),
+        poolId: execution.pool.id,
+        aggregateUnits,
+        minimumCommittedUnitCount: fundingStatus.minimumCommittedUnitCount,
+        unitsNeeded: fundingStatus.unitsNeeded,
+        reservationState: "release_available",
+        releaseReason: "minimum_not_met",
+        message:
+          "The local pool is below its bidding minimum. No chain or provider action occurred, so the browser-local reservation is eligible for release.",
       },
       { headers: noStoreHeaders },
     );
-  } catch (error) {
-    return NextResponse.json(
-      {
-        status: "failed",
-        network: "Monad Testnet",
-        code:
-          error instanceof MonadRegistryError ? error.code : "MONAD_COMMIT_FAILED",
-        message:
-          error instanceof MonadRegistryError
-            ? error.message
-            : "The Monad commitment did not finalize.",
-      },
-      { status: 502, headers: noStoreHeaders },
-    );
   }
+
+  return NextResponse.json(
+    {
+      status: "rehearsal_only",
+      evidence: "rehearsal",
+      code: "aggregate_provider_allocations_unavailable",
+      operationId: deriveSettlementOperationId(execution),
+      poolId: execution.pool.id,
+      aggregateUnits,
+      minimumCommittedUnitCount: fundingStatus.minimumCommittedUnitCount,
+      aggregateOrderPlaced: false,
+      reservationState: "still_reserved",
+      message:
+        "The product-page coalition has no complete provider allocation set. No Monad commitment, aggregate order, or Rain transaction was created; continue with the local mandate-aware rehearsal.",
+    },
+    { headers: noStoreHeaders },
+  );
 }

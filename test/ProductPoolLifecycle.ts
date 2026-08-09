@@ -79,6 +79,11 @@ describe("Product pool lifecycle on-chain", async () => {
     const stored = await registry.read.getCommitment([commitmentId]);
     assert.equal(stored.poolIdHash, commitment.poolIdHash);
     assert.equal(stored.fundingRoot, commitment.fundingRoot);
+    assert.equal(
+      commitment.unitCount,
+      pool.committedUnitCount + BUYER_QUANTITY,
+    );
+    assert.ok(commitment.unitCount > pool.minimumCommittedUnitCount);
     assert.equal(stored.unitCount, commitment.unitCount);
     assert.equal(stored.reservedCents, commitment.reservedCents);
     assert.ok(stored.committedAt > BigInt(0));

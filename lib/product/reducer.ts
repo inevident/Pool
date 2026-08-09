@@ -1,15 +1,71 @@
 import {
+  PRODUCT_POOL_BID_WINDOW_MS,
   ProductDomainError,
   type PoolMembership,
   type ProductActivityEntry,
   type ProductActivityKind,
   type ProductActivityMetadata,
   type ProductBuyingIntent,
+  type ProductPool,
   type ProductTreasury,
   type ProductWorkspace,
   type ProductWorkspaceAction,
   type SandboxBalance,
 } from "./types.ts";
+import { minimumConsumerDeliveryDays } from "../market/consumer.ts";
+
+/**
+ * Fixed-window funding eligibility. The aggregate remains exact above the
+ * minimum because the minimum is a viability floor, never a target or cap.
+ */
+export interface ProductPoolFundingStatus {
+  readonly aggregateFundedUnitCount: number;
+  readonly minimumCommittedUnitCount: number;
+  readonly unitsNeeded: number;
+  readonly hasMetMinimum: boolean;
+}
+
+export function evaluateProductPoolFunding(input: {
+  readonly pool: ProductPool;
+  readonly aggregateFundedUnitCount: number;
+}): ProductPoolFundingStatus {
+  if (
+    !Number.isSafeInteger(input.pool.minimumCommittedUnitCount) ||
+    input.pool.minimumCommittedUnitCount <= 0
+  ) {
+    throw new ProductDomainError(
+      "INVALID_QUANTITY",
+      "The product pool minimum funded quantity must be a positive integer.",
+    );
+  }
+  if (
+    !Number.isSafeInteger(input.aggregateFundedUnitCount) ||
+    input.aggregateFundedUnitCount < 0
+  ) {
+    throw new ProductDomainError(
+      "INVALID_QUANTITY",
+      "The aggregate funded quantity must be a non-negative integer.",
+    );
+  }
+
+  const unitsNeeded = Math.max(
+    0,
+    input.pool.minimumCommittedUnitCount - input.aggregateFundedUnitCount,
+  );
+  return {
+    aggregateFundedUnitCount: input.aggregateFundedUnitCount,
+    minimumCommittedUnitCount: input.pool.minimumCommittedUnitCount,
+    unitsNeeded,
+    hasMetMinimum: unitsNeeded === 0,
+  };
+}
+
+export function hasProductPoolMetMinimum(pool: ProductPool) {
+  return evaluateProductPoolFunding({
+    pool,
+    aggregateFundedUnitCount: pool.committedUnitCount,
+  }).hasMetMinimum;
+}
 
 const requireIdentifier = (value: string, label: string) => {
   if (!value.trim()) {
@@ -312,6 +368,23 @@ function joinProductPool(
       "The buying intent expired before the join was requested.",
     );
   }
+  if (pool.estimatedUnitPriceCents > intent.targetUnitPriceCents) {
+    throw new ProductDomainError(
+      "INTENT_PRICE_INCOMPATIBLE",
+      "This pool's published price target exceeds the buying intent maximum.",
+    );
+  }
+  if (
+    timestamp(pool.cutoffAt, "Pool cutoff") +
+      PRODUCT_POOL_BID_WINDOW_MS +
+      minimumConsumerDeliveryDays() * 24 * 60 * 60 * 1_000 >
+    timestamp(intent.expiresAt, "Intent expiration")
+  ) {
+    throw new ProductDomainError(
+      "INTENT_DEADLINE_INCOMPATIBLE",
+      "Even the fastest modeled delivery would arrive after the buying intent deadline.",
+    );
+  }
   if (
     workspace.memberships[action.membershipId] ||
     Object.values(workspace.memberships).some(
@@ -493,6 +566,184 @@ function leaveProductPool(
 }
 
 /**
+ * Releases a reservation after the fixed window produced a terminal no-buy
+ * outcome. This is deliberately distinct from `pool/leave`: buyers control a
+ * leave only before cutoff, while this transition requires a server-derived
+ * market operation and preserves its reason for audit.
+ */
+function releaseReservationAfterOutcome(
+  workspace: ProductWorkspace,
+  action: Extract<
+    ProductWorkspaceAction,
+    { type: "pool/release_after_outcome" }
+  >,
+): ProductWorkspace {
+  requireIdentifier(action.operationId, "Release operation ID");
+  const balance = requireBuyerBalance(workspace, action.buyerId);
+  const membership = workspace.memberships[action.membershipId];
+  if (!membership) {
+    throw new ProductDomainError(
+      "MEMBERSHIP_NOT_FOUND",
+      `Membership ${action.membershipId} does not exist.`,
+    );
+  }
+  if (membership.buyerId !== action.buyerId) {
+    throw new ProductDomainError(
+      "MEMBERSHIP_NOT_FOUND",
+      "The membership does not belong to this buyer.",
+    );
+  }
+
+  // A retry of the exact server outcome is a no-op. A different outcome, a
+  // settled order, or a prior buyer exit can never credit the reservation a
+  // second time.
+  if (
+    membership.status === "released" &&
+    membership.release?.operationId === action.operationId &&
+    membership.release.reason === action.reason
+  ) {
+    return workspace;
+  }
+  if (membership.status !== "active") {
+    throw new ProductDomainError(
+      "MEMBERSHIP_NOT_ACTIVE",
+      "Only an active, unsettled reservation can be released after a no-buy outcome.",
+    );
+  }
+  if (
+    Object.values(workspace.memberships).some(
+      (candidate) =>
+        candidate.id !== membership.id &&
+        candidate.release?.operationId === action.operationId,
+    )
+  ) {
+    throw new ProductDomainError(
+      "DUPLICATE_RELEASE_OPERATION",
+      "This market outcome already released a different reservation.",
+    );
+  }
+
+  const pool = workspace.pools[membership.poolId];
+  if (!pool) {
+    throw new ProductDomainError(
+      "POOL_NOT_FOUND",
+      `Pool ${membership.poolId} does not exist.`,
+    );
+  }
+  const releasedAt = timestamp(action.at, "Outcome release timestamp");
+  if (releasedAt < timestamp(pool.cutoffAt, "Pool cutoff")) {
+    throw new ProductDomainError(
+      "POOL_CUTOFF_NOT_REACHED",
+      "A market outcome cannot release a reservation before the published cutoff.",
+    );
+  }
+  if (
+    action.reason === "execution_window_missed" &&
+    releasedAt <
+      timestamp(pool.cutoffAt, "Pool cutoff") + PRODUCT_POOL_BID_WINDOW_MS
+  ) {
+    throw new ProductDomainError(
+      "RELEASE_OUTCOME_MISMATCH",
+      "A missed-window release is unavailable until the complete bid window has expired.",
+    );
+  }
+  if (
+    action.reason === "minimum_not_met" &&
+    evaluateProductPoolFunding({
+      pool,
+      aggregateFundedUnitCount: pool.committedUnitCount,
+    }).hasMetMinimum
+  ) {
+    throw new ProductDomainError(
+      "RELEASE_OUTCOME_MISMATCH",
+      "A pool that met its funded minimum cannot use a below-minimum release.",
+    );
+  }
+  if (balance.reservedCents < membership.reservedCents) {
+    throw new ProductDomainError(
+      "INSUFFICIENT_AVAILABLE_BALANCE",
+      "The account reservation no longer reconciles to this membership.",
+    );
+  }
+  const intent = workspace.intents[membership.intentId];
+  if (!intent) {
+    throw new ProductDomainError(
+      "INTENT_NOT_FOUND",
+      `Buying intent ${membership.intentId} does not exist.`,
+    );
+  }
+  const product = workspace.products[pool.productId];
+  if (!product) {
+    throw new ProductDomainError(
+      "PRODUCT_NOT_FOUND",
+      `Product ${pool.productId} does not exist.`,
+    );
+  }
+
+  const release = Object.freeze({
+    reason: action.reason,
+    operationId: action.operationId,
+    releasedCents: membership.reservedCents,
+    releasedAt: action.at,
+  });
+  const event = appendActivity(workspace, {
+    id: action.activityId,
+    at: action.at,
+    actorId: "system",
+    kind: "pool.reservation_released",
+    summary:
+      action.reason === "minimum_not_met"
+        ? `${product.name} closed below its funded minimum; the full MSRP reservation was released.`
+        : action.reason === "no_acceptable_offer"
+          ? `${product.name} received no acceptable merchant offer; the full MSRP reservation was released.`
+          : action.reason === "authorization_declined"
+            ? `${product.name} payment authorization was declined; the full MSRP reservation was released.`
+            : action.reason === "execution_failed"
+              ? `${product.name} provider execution failed and every open authorization was reversed; the full MSRP reservation was released.`
+              : action.reason === "rehearsal_complete"
+                ? `${product.name} produced a modeled quote without placing an order; the full browser-local reservation was released.`
+                : `${product.name} missed its rehearsal window without any provider path; the full browser-local reservation was released.`,
+    metadata: {
+      membershipId: membership.id,
+      intentId: intent.id,
+      poolId: pool.id,
+      reason: action.reason,
+      operationId: action.operationId,
+      releasedCents: membership.reservedCents,
+    },
+  });
+
+  return {
+    ...workspace,
+    ...event,
+    balances: {
+      ...workspace.balances,
+      [action.buyerId]: {
+        ...balance,
+        availableCents: balance.availableCents + membership.reservedCents,
+        reservedCents: balance.reservedCents - membership.reservedCents,
+      },
+    },
+    intents: {
+      ...workspace.intents,
+      [intent.id]: { ...intent, status: "expired" },
+    },
+    memberships: {
+      ...workspace.memberships,
+      [membership.id]: {
+        ...membership,
+        status: "released",
+        release,
+      },
+    },
+    pools: {
+      ...workspace.pools,
+      [pool.id]: { ...pool, status: "cancelled" },
+    },
+  };
+}
+
+/**
  * Applies a cleared market to one buyer's commitment.
  *
  * The capture is consumed from the reservation and the exact remainder returns
@@ -542,6 +793,13 @@ function settleProductPool(
     throw new ProductDomainError(
       "POOL_NOT_FOUND",
       `Pool ${membership.poolId} does not exist.`,
+    );
+  }
+  const settledAt = timestamp(action.at, "Settlement timestamp");
+  if (settledAt < timestamp(pool.cutoffAt, "Pool cutoff")) {
+    throw new ProductDomainError(
+      "POOL_CUTOFF_NOT_REACHED",
+      "A pool cannot settle before its published commitment cutoff.",
     );
   }
   const product = workspace.products[pool.productId];
@@ -623,6 +881,8 @@ export function reduceProductWorkspace(
       return joinProductPool(workspace, action);
     case "pool/leave":
       return leaveProductPool(workspace, action);
+    case "pool/release_after_outcome":
+      return releaseReservationAfterOutcome(workspace, action);
     case "pool/settle":
       return settleProductPool(workspace, action);
   }
@@ -639,6 +899,26 @@ export function assertProductWorkspaceInvariant(workspace: ProductWorkspace) {
   if (totalDepositedCents(workspace) > treasury.spendingPowerCents) {
     throw new Error("Workspace credits exceed the rail spending power.");
   }
+  for (const pool of Object.values(workspace.pools)) {
+    if (
+      !Number.isSafeInteger(pool.minimumCommittedUnitCount) ||
+      pool.minimumCommittedUnitCount <= 0
+    ) {
+      throw new Error(`Pool ${pool.id} minimum funded quantity is invalid.`);
+    }
+    if (
+      !Number.isSafeInteger(pool.committedUnitCount) ||
+      pool.committedUnitCount < 0
+    ) {
+      throw new Error(`Pool ${pool.id} committed quantity is invalid.`);
+    }
+    if (
+      timestamp(pool.cutoffAt, "Pool cutoff") <=
+      timestamp(pool.createdAt, "Pool creation timestamp")
+    ) {
+      throw new Error(`Pool ${pool.id} cutoff must be after its creation.`);
+    }
+  }
   for (const balance of Object.values(workspace.balances)) {
     const reconciled =
       balance.availableCents + balance.reservedCents + balance.capturedCents;
@@ -653,6 +933,36 @@ export function assertProductWorkspaceInvariant(workspace: ProductWorkspace) {
       .reduce((sum, membership) => sum + membership.reservedCents, 0);
     if (membershipReservations !== balance.reservedCents) {
       throw new Error(`Buyer ${balance.buyerId} pool reservations do not reconcile.`);
+    }
+  }
+  for (const membership of Object.values(workspace.memberships)) {
+    const pool = workspace.pools[membership.poolId];
+    if (!pool) {
+      throw new Error(`Membership ${membership.id} references a missing pool.`);
+    }
+    if (membership.status === "released") {
+      if (
+        !membership.release ||
+        membership.release.releasedCents !== membership.reservedCents ||
+        !membership.release.operationId.trim() ||
+        timestamp(membership.release.releasedAt, "Release timestamp") <
+          timestamp(pool.cutoffAt, "Pool cutoff") ||
+        (membership.release.reason === "execution_window_missed" &&
+          timestamp(membership.release.releasedAt, "Release timestamp") <
+            timestamp(pool.cutoffAt, "Pool cutoff") +
+              PRODUCT_POOL_BID_WINDOW_MS)
+      ) {
+        throw new Error(
+          `Membership ${membership.id} does not have a valid post-cutoff release.`,
+        );
+      }
+    } else if (membership.release) {
+      throw new Error(
+        `Membership ${membership.id} has release evidence without released status.`,
+      );
+    }
+    if (membership.status === "settled" && !membership.settlement) {
+      throw new Error(`Membership ${membership.id} is settled without settlement evidence.`);
     }
   }
   if (workspace.activity.at(-1)?.workspaceRevision !== workspace.revision) {

@@ -8,6 +8,13 @@ interface RateWindow {
 
 const windows = new Map<string, RateWindow>();
 
+const DEVELOPMENT_LOOPBACK_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+  "::1",
+]);
+
 export class RequestBoundaryError extends Error {
   readonly status: number;
   readonly code: string;
@@ -59,7 +66,11 @@ export function assertRateLimit(
   current.count += 1;
 }
 
-export function assertSameOriginJsonAction(request: Request, action: string) {
+export function assertSameOriginJsonAction(
+  request: Request,
+  action: string,
+  actionHeader = "x-pool-agent-action",
+) {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     throw new RequestBoundaryError(
       415,
@@ -68,7 +79,7 @@ export function assertSameOriginJsonAction(request: Request, action: string) {
     );
   }
 
-  if (request.headers.get("x-pool-agent-action") !== action) {
+  if (request.headers.get(actionHeader) !== action) {
     throw new RequestBoundaryError(
       403,
       "INVALID_ACTION_HEADER",
@@ -79,20 +90,41 @@ export function assertSameOriginJsonAction(request: Request, action: string) {
   const origin = request.headers.get("origin");
   if (!origin) return;
 
-  let requestOrigin: string;
+  let requestUrl: URL;
   try {
-    requestOrigin = new URL(request.url).origin;
+    requestUrl = new URL(request.url);
   } catch {
     throw new RequestBoundaryError(400, "INVALID_REQUEST_URL", "Invalid request URL.");
   }
 
-  if (origin !== requestOrigin) {
-    throw new RequestBoundaryError(
-      403,
-      "ORIGIN_REJECTED",
-      "Cross-origin agent actions are not allowed.",
-    );
+  if (origin === requestUrl.origin) return;
+
+  if (process.env.NODE_ENV === "development") {
+    try {
+      const originUrl = new URL(origin);
+      const isSerializedOrigin =
+        originUrl.pathname === "/" &&
+        originUrl.search === "" &&
+        originUrl.hash === "" &&
+        originUrl.username === "" &&
+        originUrl.password === "";
+      const isLoopbackAlias =
+        DEVELOPMENT_LOOPBACK_HOSTS.has(originUrl.hostname.toLowerCase()) &&
+        DEVELOPMENT_LOOPBACK_HOSTS.has(requestUrl.hostname.toLowerCase());
+      const hasSameTransport =
+        originUrl.protocol === requestUrl.protocol && originUrl.port === requestUrl.port;
+
+      if (isSerializedOrigin && isLoopbackAlias && hasSameTransport) return;
+    } catch {
+      // Invalid origins fall through to the same fail-closed rejection below.
+    }
   }
+
+  throw new RequestBoundaryError(
+    403,
+    "ORIGIN_REJECTED",
+    "Cross-origin agent actions are not allowed.",
+  );
 }
 
 export async function readLimitedJson(request: Request, maxBytes = 2_048): Promise<unknown> {
