@@ -19,6 +19,7 @@ export async function GET() {
         : "MONAD_STATUS_UNAVAILABLE";
     return NextResponse.json(
       {
+        readiness: "degraded",
         mode: "unavailable",
         state: "proof-unavailable",
         confirmation: "not-confirmed",
@@ -30,7 +31,11 @@ export async function GET() {
         code,
         message: "Monad proof could not be verified from finalized testnet state.",
       },
-      { status: 503, headers },
+      // This route is observational. A provider-read failure is evidence the
+      // proof is unavailable, not an HTTP failure of the page itself. Keeping
+      // the diagnostic transport at 200 avoids browser-console noise while
+      // the body remains explicit and fail-closed for every proof claim.
+      { status: 200, headers },
     );
   }
 }

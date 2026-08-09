@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import rainSandboxEvidence from "@/public/evidence/rain-sandbox-2026-08-09.json";
+import rainMonadEvidence from "@/public/evidence/rain-monad-testnet-2026-08-09.json";
 
 import styles from "./page.module.css";
 
@@ -71,9 +72,43 @@ type EvidenceRecord = {
 // marked `current`; the page's primary slot and archive layout update together.
 const evidenceRecords: readonly EvidenceRecord[] = [
   {
+    key: "rain-monad-testnet-2026-08-09",
+    state: "current",
+    label: "Rain sandbox + Monad Testnet finalized record",
+    recordedDate: rainMonadEvidence.recordedAt.slice(0, 10),
+    scenarioVersion: rainMonadEvidence.scenarioVersion,
+    provider: rainMonadEvidence.rain.provider,
+    environment: rainMonadEvidence.rain.environment,
+    realMoneyMoved: rainMonadEvidence.realMoneyMoved,
+    runKey: rainMonadEvidence.runKey,
+    ledger: {
+      name: rainMonadEvidence.fundingBoundary.ledger,
+      simulated: rainMonadEvidence.fundingBoundary.simulated,
+      reservedCents: rainMonadEvidence.fundingBoundary.reservedCents,
+      capturedCents: rainMonadEvidence.fundingBoundary.capturedCents,
+      releasedCents: rainMonadEvidence.fundingBoundary.releasedCents,
+    },
+    payments: rainMonadEvidence.rain.payments,
+    guardrail: rainMonadEvidence.rain.guardrail,
+    chain: {
+      name: rainMonadEvidence.monad.network,
+      status: "rain_settlement_attested",
+      mode: "monad-testnet",
+      testnetTransactionClaimed:
+        rainMonadEvidence.monad.testnetTransactionClaimed,
+      transactionId:
+        rainMonadEvidence.monad.settlementAttestation.transaction.hash,
+      explorerHref:
+        rainMonadEvidence.monad.settlementAttestation.transaction.explorerUrl,
+    },
+    redactions: rainMonadEvidence.redactions,
+    rawHref: "/evidence/rain-monad-testnet-2026-08-09.json",
+    screenshotHref: "/evidence/rain-monad-testnet-2026-08-09.png",
+  },
+  {
     key: "rain-sandbox-2026-08-09",
     state: "archived",
-    label: "Rain sandbox settlement rehearsal",
+    label: "Rain sandbox settlement record",
     recordedDate: rainSandboxEvidence.recordedDate,
     scenarioVersion: rainSandboxEvidence.scenarioVersion,
     provider: rainSandboxEvidence.provider,
@@ -359,7 +394,11 @@ function EvidenceRecordCard({ record }: { record: EvidenceRecord }) {
         <div className={styles.subhead}>
           <div>
             <span>04 / Provider boundary</span>
-            <h4 id={`${record.key}-providers`}>One provider proof. One explicit gap.</h4>
+            <h4 id={`${record.key}-providers`}>
+              {hasTestnetProof
+                ? "Two bounded evidence rails."
+                : "One provider proof. One explicit gap."}
+            </h4>
           </div>
         </div>
         <div className={styles.providerGrid}>
@@ -373,7 +412,7 @@ function EvidenceRecordCard({ record }: { record: EvidenceRecord }) {
             <span className={styles.provenTag}><Check size={12} aria-hidden="true" /> Proven in scope</span>
           </div>
           <div className={styles.monadProvider}>
-            <span className={styles.providerNumber}>M / 00</span>
+            <span className={styles.providerNumber}>M / {hasTestnetProof ? "01" : "00"}</span>
             <div>
               <p>{record.chain.name}</p>
               <strong>
@@ -387,6 +426,16 @@ function EvidenceRecordCard({ record }: { record: EvidenceRecord }) {
                   ? record.chain.transactionId ?? "transaction ID published in record"
                   : "no Testnet transaction claimed"}
               </small>
+              {hasTestnetProof && record.chain.explorerHref ? (
+                <a
+                  className={styles.chainLink}
+                  href={record.chain.explorerHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open finalized attestation <ArrowUpRight size={11} aria-hidden="true" />
+                </a>
+              ) : null}
             </div>
             <span className={hasTestnetProof ? styles.provenTag : styles.gapTag}>
               {hasTestnetProof ? (
@@ -455,9 +504,10 @@ export default function EvidencePage() {
             </h1>
             <p className={styles.intro}>
               POOL publishes the exact identifiers behind its demo claims and
-              says what each record cannot prove. The archive below covers a
-              fixed Rain sandbox run over a simulated ledger. Nothing on this
-              page represents real money movement.
+              says what each record cannot prove. The current record combines
+              Rain sandbox IDs with finalized Monad Testnet ordering over the
+              same simulated fixture ledger. Nothing here represents real
+              money movement.
             </p>
             <ul className={styles.heroFlags} aria-label="Evidence guarantees">
               <li><Check size={13} aria-hidden="true" /> Exact IDs</li>
@@ -470,7 +520,7 @@ export default function EvidencePage() {
 
         <section className={styles.archiveSection} id="archive" aria-labelledby="archive-title">
           <div className={styles.sectionHeading}>
-            <span>01 / Archived verification</span>
+            <span>01 / Published verification</span>
             <div>
               <h2 id="archive-title">Proof records</h2>
               <p>
@@ -510,7 +560,7 @@ export default function EvidencePage() {
               <ul>
                 <li>Production payment processing or movement of real money.</li>
                 <li>Buyer custody, deposits, or bank-account balances.</li>
-                <li>A Monad Testnet deployment, commitment, or settlement attestation.</li>
+                <li>That Monad independently verified Rain, custody, or the simulated buyer ledger.</li>
                 <li>Independent audit, merchant demand, or product-market fit.</li>
               </ul>
             </article>

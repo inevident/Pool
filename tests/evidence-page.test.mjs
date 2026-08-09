@@ -34,7 +34,7 @@ function renderedText(html) {
     .trim();
 }
 
-test("renders the public evidence registry with its current proof gap first", async () => {
+test("renders the finalized Rain plus Monad record in the current slot", async () => {
   const response = await renderEvidence();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -45,12 +45,14 @@ test("renders the public evidence registry with its current proof gap first", as
   assert.match(html, /<title>Evidence registry — POOL<\/title>/i);
   assert.match(html, /<main\b/i);
   assert.match(text, /Verify the claim\. Read the boundary\./i);
-  assert.match(text, /Current verification slot Not published/i);
+  assert.match(text, /Current verification slot Published/i);
   assert.match(
     text,
-    /No Rain \+ Monad Testnet record is published here yet\./i,
+    /Rain sandbox \+ Monad Testnet finalized record/i,
   );
-  assert.match(text, /Local-only; no Testnet transaction claimed/i);
+  assert.match(text, /3 settlement records · Monad Testnet rain settlement attested/i);
+  assert.match(text, /Two bounded evidence rails\./i);
+  assert.match(text, /Open finalized attestation/i);
   assert.match(text, /No real money/i);
 });
 
@@ -59,7 +61,7 @@ test("publishes the archived Rain sandbox IDs and exact fixture reconciliation",
   const html = await response.text();
   const text = renderedText(html);
 
-  assert.match(text, /Rain sandbox settlement rehearsal/i);
+  assert.match(text, /Rain sandbox settlement record/i);
   assert.match(text, /Rain sandbox only/i);
   assert.match(text, /Simulated fixture ledger/i);
   assert.match(text, /Reserved \$5,748 = Captured \$4,668 \+ Released \$1,080/i);
@@ -114,6 +116,55 @@ test("keeps the archived evidence source sanitized and its overclaims absent", a
     source,
     /(?:real money was moved|moved real money|production payment processing verified)/i,
   );
-  assert.doesNotMatch(source, /Monad Testnet (?:verified|live|finalized)/i);
   assert.match(source, /Independent audit, merchant demand, or product-market fit/);
+});
+
+test("publishes a sanitized finalized Monad record with the exact Rain receipt set", async () => {
+  const evidence = JSON.parse(
+    await readFile(
+      new URL(
+        "../public/evidence/rain-monad-testnet-2026-08-09.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+
+  assert.equal(evidence.realMoneyMoved, false);
+  assert.equal(evidence.fundingBoundary.simulated, true);
+  assert.equal(evidence.rain.sameDayIdempotentReplay, true);
+  assert.equal(evidence.rain.payments.length, 3);
+  assert.equal(evidence.monad.chainId, 10143);
+  assert.equal(evidence.monad.testnetTransactionClaimed, true);
+  assert.equal(evidence.monad.offerRegistrations.length, 6);
+  assert.equal(evidence.monad.settlementAttestation.rainTransactionCount, 3);
+  assert.equal(
+    evidence.fundingBoundary.reservedCents,
+    evidence.fundingBoundary.capturedCents +
+      evidence.fundingBoundary.releasedCents,
+  );
+
+  const settlementIds = evidence.rain.payments
+    .map((payment) => payment.transactionId)
+    .sort();
+  assert.deepEqual(settlementIds, [
+    "ddcdfd2c-9846-4b46-b0d4-60b86510a8c3",
+    "e2a24bda-512a-4460-8665-cb618df345d3",
+    "e98eea91-ca5e-43c0-896c-dd9e20da5c35",
+  ]);
+  assert.equal(
+    evidence.rain.guardrail.reason,
+    "scoped_card_mcc_not_allowed",
+  );
+
+  const serialized = JSON.stringify(evidence);
+  for (const forbidden of [
+    "cardId",
+    "cardLast4",
+    "RAIN_API_KEY",
+    "MONAD_PRIVATE_KEY",
+    "authorizationHeaders",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  }
 });

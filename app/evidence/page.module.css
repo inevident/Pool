@@ -964,6 +964,19 @@
   color: #747a76;
   font-size: 7px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.chainLink {
+  width: fit-content;
+  min-height: 32px;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #c5bcff;
+  font: 650 8px/1 var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
+  text-transform: uppercase;
 }
 
 .provenTag,

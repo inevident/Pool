@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "recordedAt": "2026-08-09T09:20:04.000Z",
+  "scenarioVersion": "monitor-pool-v1",
+  "sourceBranch": "overnight",
+  "sourceCommit": "246d81a",
+  "realMoneyMoved": false,
+  "runKey": "pool-monitor-pool-v1-20260809",
+  "evidenceMode": "rain-sandbox-plus-monad-testnet",
+  "fundingBoundary": {
+    "ledger": "POOL",
+    "simulated": true,
+    "reservedCents": 574800,
+    "capturedCents": 466800,
+    "releasedCents": 108000
+  },
+  "rain": {
+    "provider": "Rain",
+    "environment": "sandbox",
+    "sameDayIdempotentReplay": true,
+    "sharedSandboxCardholder": true,
+    "payments": [
+      {
+        "buyerId": "buyer-harbor",
+        "amountInCents": 116700,
+        "transactionId": "ddcdfd2c-9846-4b46-b0d4-60b86510a8c3",
+        "status": "settled"
+      },
+      {
+        "buyerId": "buyer-kernel",
+        "amountInCents": 194500,
+        "transactionId": "e98eea91-ca5e-43c0-896c-dd9e20da5c35",
+        "status": "settled"
+      },
+      {
+        "buyerId": "buyer-patchwork",
+        "amountInCents": 155600,
+        "transactionId": "e2a24bda-512a-4460-8665-cb618df345d3",
+        "status": "settled"
+      }
+    ],
+    "guardrail": {
+      "merchantCategoryCode": "7995",
+      "transactionId": "9b59b3b8-447b-4f85-bd97-a5090088d6b6",
+      "status": "declined",
+      "reason": "scoped_card_mcc_not_allowed"
+    }
+  },
+  "monad": {
+    "network": "Monad Testnet",
+    "chainId": 10143,
+    "confirmation": "finalized",
+    "testnetTransactionClaimed": true,
+    "operatorAddress": "0x070dd53f4FdF178E29df30e03FEAD90Cd300e6ed",
+    "registryAddress": "0xE1b75A905Cab4005623AA8912AF4a67b9c29b217",
+    "registryExplorerUrl": "https://testnet.monadvision.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217",
+    "deployment": {
+      "transactionHash": "0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48",
+      "blockNumber": 52198045,
+      "explorerUrl": "https://testnet.monadvision.com/tx/0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48"
+    },
+    "commitment": {
+      "id": "0x12f36512844ccc491ba01f4a909e2d5acf83761cc5bd5924d4f96c3c3778543f",
+      "termsHash": "0xea6829b062d514b1eaf52855594e40b474185aad862f0986b9023cb08f3dceeb",
+      "fundingRoot": "0xe72ab0b045394bc183b5d8a29a446d5a8dce8e94769e0c10cad81ae0d0551973",
+      "unitCount": 12,
+      "reservedCents": 574800,
+      "committedAt": "2026-08-09T09:18:56.000Z",
+      "bidClosesAt": "2026-08-11T00:00:00.000Z",
+      "transaction": {
+        "hash": "0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd",
+        "blockNumber": 52198213,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd"
+      }
+    },
+    "offerRegistrations": [
+      {
+        "hash": "0xa91ae669c02db0e454f36f4843c8b3042b371b7568981df1532a5bbfd9cc3bd4",
+        "blockNumber": 52198217,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0xa91ae669c02db0e454f36f4843c8b3042b371b7568981df1532a5bbfd9cc3bd4"
+      },
+      {
+        "hash": "0x1e6186075ebea350b80f64fe6c8bf3674baedf58a494179f6c35acf44c222564",
+        "blockNumber": 52198220,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0x1e6186075ebea350b80f64fe6c8bf3674baedf58a494179f6c35acf44c222564"
+      },
+      {
+        "hash": "0xc1524eac708850652f9cd53e6fef48b726ddd871b7a74ee588944b4062391b60",
+        "blockNumber": 52198225,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0xc1524eac708850652f9cd53e6fef48b726ddd871b7a74ee588944b4062391b60"
+      },
+      {
+        "hash": "0x498884cd4e032ffef9bccbef04d95ccd4018286309eee7c4e40082c68f40ea8c",
+        "blockNumber": 52198229,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0x498884cd4e032ffef9bccbef04d95ccd4018286309eee7c4e40082c68f40ea8c"
+      },
+      {
+        "hash": "0x6c616102cfa9c3e06dc16497a3047d36c658a9e27be9386a12b1063973d67f8b",
+        "blockNumber": 52198233,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0x6c616102cfa9c3e06dc16497a3047d36c658a9e27be9386a12b1063973d67f8b"
+      },
+      {
+        "hash": "0x4f4d0b86f9444a615b5618627f392bb3ae467d3a1c92e4b8de3d6fc6fee10d69",
+        "blockNumber": 52198238,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0x4f4d0b86f9444a615b5618627f392bb3ae467d3a1c92e4b8de3d6fc6fee10d69"
+      }
+    ],
+    "settlementAttestation": {
+      "acceptedOfferHash": "0xda4ec472e63dc16945704b51969c189ec65f78f6d4e8b7893cf039848029b89f",
+      "rainSettlementHash": "0x9a33bdab2019a7ab1b1d41365b86b5275bc3f54d808c78e9e3c04aa92bc1df3a",
+      "rainTransactionCount": 3,
+      "capturedCents": 466800,
+      "settledAt": "2026-08-09T09:20:04.000Z",
+      "transaction": {
+        "hash": "0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e",
+        "blockNumber": 52198437,
+        "explorerUrl": "https://testnet.monadvision.com/tx/0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e"
+      }
+    }
+  },
+  "proves": [
+    "The fixed coalition commitment finalized before the six offer-registration transactions.",
+    "The finalized settlement names one registered offer and binds a digest of the exact three Rain sandbox settlement IDs.",
+    "The Rain sandbox returned the exact scoped_card_mcc_not_allowed decline for MCC 7995.",
+    "The simulated POOL fixture ledger reconciles 574800 reserved cents into 466800 captured cents plus 108000 released cents."
+  ],
+  "doesNotProve": [
+    "real-money custody, deposits, escrow, or production payment processing",
+    "that an offchain bid did not exist before its hash was registered",
+    "merchant traction, buyer identity, inventory, fulfillment, returns, or a production order",
+    "that Monad independently verified Rain or the simulated buyer ledger"
+  ],
+  "redactions": [
+    "all credentials and authorization headers",
+    "card identifiers and card last-four values",
+    "raw provider responses and session cookies",
+    "the Monad operator private key"
+  ]
+}

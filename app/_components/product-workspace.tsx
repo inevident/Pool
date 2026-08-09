@@ -702,6 +702,16 @@ export default function ProductWorkspaceApp({
           <span>Rain + Monad proof</span>
           <ExternalLink size={11} />
         </Link>
+        <Link className={styles.proofLink} href="/evidence">
+          <ShieldCheck size={14} />
+          <span>Public evidence</span>
+          <ExternalLink size={11} />
+        </Link>
+        <Link className={styles.proofLink} href="/merchant">
+          <ShoppingBag size={14} />
+          <span>Seller pilot</span>
+          <ExternalLink size={11} />
+        </Link>
 
         <div className={styles.userBlock}>
           <span className={styles.avatar}>AM</span>

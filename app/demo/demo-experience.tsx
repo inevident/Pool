@@ -847,7 +847,8 @@ export default function DemoExperience() {
         </Link>
         <nav className="topnav" aria-label="Product navigation">
           <Link href="/">Product workspace</Link>
-          <a href="#judge-console">Technical inspector</a>
+          <Link href="/merchant">Seller pilot</Link>
+          <Link href="/evidence">Evidence registry</Link>
           <a href="#market">Evidence replay</a>
           <a href="#authority">Funds & authority</a>
           <a href="#outcome">Outcome</a>
@@ -953,9 +954,9 @@ export default function DemoExperience() {
                 <span>Rain bounded captures</span>
                 <strong>{FIXTURE_CAPTURE_COUNT} captures</strong>
                 <small>{rainSummaryState}</small>
-                <a href="/evidence/rain-sandbox-2026-08-09.png" target="_blank" rel="noopener noreferrer">
-                  Dated sandbox proof <Link2 size={10} aria-hidden="true" />
-                </a>
+                <Link href="/evidence">
+                  Verified evidence registry <Link2 size={10} aria-hidden="true" />
+                </Link>
               </div>
               <div className="proof-summary-stat is-monad">
                 <span>Monad commitment / attestation</span>
@@ -1413,7 +1414,7 @@ export default function DemoExperience() {
               outcomeMonadHref ? (
                 <a href={outcomeMonadHref} target="_blank" rel="noopener noreferrer"><Link2 size={13} /> {outcomeMonadTx ? "View attestation" : "View finalized registry state"} <span>{shortId(outcomeMonadTx ?? monadCommitmentId ?? monadContractAddress ?? undefined)}</span></a>
               ) : (
-                <span className="outcome-monad-state"><Check size={13} /> Finalized · {shortId(outcomeMonadTx)}</span>
+                <span className="outcome-monad-state"><Check size={13} /> Finalized · {shortId(outcomeMonadTx ?? outcomeMonad?.commitmentId ?? monadCommitmentId ?? monadContractAddress ?? undefined)}</span>
               )
             ) : outcomeMonadStatus === "attestation_pending" ? (
               <span className="outcome-monad-state"><Clock3 size={13} /> Confirmation pending</span>

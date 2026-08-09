@@ -187,7 +187,17 @@ export async function main() {
         "--network",
         "monadTestnet",
       ],
-      { encoding: "utf8", stdio: ["inherit", "pipe", "inherit"], env: process.env },
+      {
+        encoding: "utf8",
+        stdio: ["inherit", "pipe", "inherit"],
+        env: {
+          ...process.env,
+          // Running this setup command is the operator's explicit deployment
+          // confirmation. Without this flag, Ignition prompts inside a
+          // captured child process and exits before broadcasting anything.
+          HARDHAT_IGNITION_CONFIRM_DEPLOYMENT: "true",
+        },
+      },
     );
     console.log(output);
 

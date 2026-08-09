@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -46,5 +47,17 @@ test("Monad setup rejects nonsensical gas and fee inputs", () => {
         maxPriorityFeePerGas: 2n * GWEI,
       }),
     /must be positive/,
+  );
+});
+
+test("the one-command setup explicitly confirms its captured Ignition child", async () => {
+  const source = await readFile(
+    new URL("../scripts/monad-setup.mjs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /HARDHAT_IGNITION_CONFIRM_DEPLOYMENT:\s*"true"/,
   );
 });
