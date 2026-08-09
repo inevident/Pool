@@ -79,6 +79,15 @@ for (const item of source) {
   const seed = hash(id);
   const brand = (item.brand && String(item.brand).trim()) || titleCase(category);
 
+  // The UI renders "{brand} {name}", and source titles usually already begin
+  // with the brand. Strip the duplicate so cards read "Apple Airpods" rather
+  // than "Apple Apple Airpods".
+  const name =
+    brand && item.title.toLowerCase().startsWith(`${brand.toLowerCase()} `)
+      ? item.title.slice(brand.length + 1).trim()
+      : item.title;
+  if (!name) continue;
+
   // Merchant economics are private seller data in the domain model, so they are
   // derived deterministically per product rather than invented per render.
   // Floors sit far enough below MSRP that a 10+ unit pool can actually clear.
@@ -115,7 +124,7 @@ for (const item of source) {
   imported.push({
     id,
     slug,
-    name: item.title,
+    name,
     brand,
     category,
     msrpUnitCents,

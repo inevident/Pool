@@ -36,7 +36,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-amazon-echo-plus",
     "slug": "amazon-echo-plus",
-    "name": "Amazon Echo Plus",
+    "name": "Echo Plus",
     "brand": "Amazon",
     "category": "audio",
     "msrpUnitCents": 9999,
@@ -61,7 +61,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-annibale-colombo-bed",
     "slug": "annibale-colombo-bed",
-    "name": "Annibale Colombo Bed",
+    "name": "Bed",
     "brand": "Annibale Colombo",
     "category": "home",
     "msrpUnitCents": 189999,
@@ -86,7 +86,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-annibale-colombo-sofa",
     "slug": "annibale-colombo-sofa",
-    "name": "Annibale Colombo Sofa",
+    "name": "Sofa",
     "brand": "Annibale Colombo",
     "category": "home",
     "msrpUnitCents": 249999,
@@ -111,7 +111,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-airpods",
     "slug": "apple-airpods",
-    "name": "Apple Airpods",
+    "name": "Airpods",
     "brand": "Apple",
     "category": "audio",
     "msrpUnitCents": 12999,
@@ -136,7 +136,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-airpods-max-silver",
     "slug": "apple-airpods-max-silver",
-    "name": "Apple AirPods Max Silver",
+    "name": "AirPods Max Silver",
     "brand": "Apple",
     "category": "audio",
     "msrpUnitCents": 54999,
@@ -161,7 +161,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-airpower-wireless-charger",
     "slug": "apple-airpower-wireless-charger",
-    "name": "Apple Airpower Wireless Charger",
+    "name": "Airpower Wireless Charger",
     "brand": "Apple",
     "category": "audio",
     "msrpUnitCents": 7999,
@@ -186,7 +186,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-homepod-mini-cosmic-grey",
     "slug": "apple-homepod-mini-cosmic-grey",
-    "name": "Apple HomePod Mini Cosmic Grey",
+    "name": "HomePod Mini Cosmic Grey",
     "brand": "Apple",
     "category": "audio",
     "msrpUnitCents": 9999,
@@ -211,7 +211,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-macbook-pro-14-inch-space-grey",
     "slug": "apple-macbook-pro-14-inch-space-grey",
-    "name": "Apple MacBook Pro 14 Inch Space Grey",
+    "name": "MacBook Pro 14 Inch Space Grey",
     "brand": "Apple",
     "category": "computing",
     "msrpUnitCents": 199999,
@@ -236,7 +236,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-magsafe-battery-pack",
     "slug": "apple-magsafe-battery-pack",
-    "name": "Apple MagSafe Battery Pack",
+    "name": "MagSafe Battery Pack",
     "brand": "Apple",
     "category": "audio",
     "msrpUnitCents": 9999,
@@ -261,7 +261,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-apple-watch-series-4-gold",
     "slug": "apple-watch-series-4-gold",
-    "name": "Apple Watch Series 4 Gold",
+    "name": "Watch Series 4 Gold",
     "brand": "Apple",
     "category": "audio",
     "msrpUnitCents": 34999,
@@ -286,7 +286,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-asus-zenbook-pro-dual-screen-laptop",
     "slug": "asus-zenbook-pro-dual-screen-laptop",
-    "name": "Asus Zenbook Pro Dual Screen Laptop",
+    "name": "Zenbook Pro Dual Screen Laptop",
     "brand": "Asus",
     "category": "computing",
     "msrpUnitCents": 179999,
@@ -361,7 +361,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-huawei-matebook-x-pro",
     "slug": "huawei-matebook-x-pro",
-    "name": "Huawei Matebook X Pro",
+    "name": "Matebook X Pro",
     "brand": "Huawei",
     "category": "computing",
     "msrpUnitCents": 139999,
@@ -511,7 +511,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-knoll-saarinen-executive-conference-chair",
     "slug": "knoll-saarinen-executive-conference-chair",
-    "name": "Knoll Saarinen Executive Conference Chair",
+    "name": "Saarinen Executive Conference Chair",
     "brand": "Knoll",
     "category": "home",
     "msrpUnitCents": 49999,
@@ -536,7 +536,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-lenovo-yoga-920",
     "slug": "lenovo-yoga-920",
-    "name": "Lenovo Yoga 920",
+    "name": "Yoga 920",
     "brand": "Lenovo",
     "category": "computing",
     "msrpUnitCents": 109999,
@@ -611,7 +611,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-oppo-a57",
     "slug": "oppo-a57",
-    "name": "Oppo A57",
+    "name": "A57",
     "brand": "Oppo",
     "category": "computing",
     "msrpUnitCents": 24999,
@@ -636,7 +636,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-oppo-f19-pro-plus",
     "slug": "oppo-f19-pro-plus",
-    "name": "Oppo F19 Pro Plus",
+    "name": "F19 Pro Plus",
     "brand": "Oppo",
     "category": "computing",
     "msrpUnitCents": 39999,
@@ -661,7 +661,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-oppo-k1",
     "slug": "oppo-k1",
-    "name": "Oppo K1",
+    "name": "K1",
     "brand": "Oppo",
     "category": "computing",
     "msrpUnitCents": 29999,
@@ -686,7 +686,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-realme-c35",
     "slug": "realme-c35",
-    "name": "Realme C35",
+    "name": "C35",
     "brand": "Realme",
     "category": "computing",
     "msrpUnitCents": 14999,
@@ -711,7 +711,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-realme-x",
     "slug": "realme-x",
-    "name": "Realme X",
+    "name": "X",
     "brand": "Realme",
     "category": "computing",
     "msrpUnitCents": 29999,
@@ -736,7 +736,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-realme-xt",
     "slug": "realme-xt",
-    "name": "Realme XT",
+    "name": "XT",
     "brand": "Realme",
     "category": "computing",
     "msrpUnitCents": 34999,
@@ -761,7 +761,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-samsung-galaxy-s10",
     "slug": "samsung-galaxy-s10",
-    "name": "Samsung Galaxy S10",
+    "name": "Galaxy S10",
     "brand": "Samsung",
     "category": "computing",
     "msrpUnitCents": 69999,
@@ -786,7 +786,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-samsung-galaxy-s7",
     "slug": "samsung-galaxy-s7",
-    "name": "Samsung Galaxy S7",
+    "name": "Galaxy S7",
     "brand": "Samsung",
     "category": "computing",
     "msrpUnitCents": 29999,
@@ -811,7 +811,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-samsung-galaxy-s8",
     "slug": "samsung-galaxy-s8",
-    "name": "Samsung Galaxy S8",
+    "name": "Galaxy S8",
     "brand": "Samsung",
     "category": "computing",
     "msrpUnitCents": 49999,
@@ -836,7 +836,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-samsung-galaxy-tab-s8-plus-grey",
     "slug": "samsung-galaxy-tab-s8-plus-grey",
-    "name": "Samsung Galaxy Tab S8 Plus Grey",
+    "name": "Galaxy Tab S8 Plus Grey",
     "brand": "Samsung",
     "category": "computing",
     "msrpUnitCents": 59999,
@@ -861,7 +861,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-samsung-galaxy-tab-white",
     "slug": "samsung-galaxy-tab-white",
-    "name": "Samsung Galaxy Tab White",
+    "name": "Galaxy Tab White",
     "brand": "Samsung",
     "category": "computing",
     "msrpUnitCents": 34999,
@@ -911,7 +911,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-vivo-s1",
     "slug": "vivo-s1",
-    "name": "Vivo S1",
+    "name": "S1",
     "brand": "Vivo",
     "category": "computing",
     "msrpUnitCents": 24999,
@@ -936,7 +936,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-vivo-v9",
     "slug": "vivo-v9",
-    "name": "Vivo V9",
+    "name": "V9",
     "brand": "Vivo",
     "category": "computing",
     "msrpUnitCents": 29999,
@@ -961,7 +961,7 @@ export const IMPORTED_CATALOG: readonly ImportedCatalogEntry[] = [
   {
     "id": "product-vivo-x21",
     "slug": "vivo-x21",
-    "name": "Vivo X21",
+    "name": "X21",
     "brand": "Vivo",
     "category": "computing",
     "msrpUnitCents": 49999,
