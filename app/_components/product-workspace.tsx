@@ -589,7 +589,7 @@ export default function ProductWorkspaceApp({
       count: activeMemberships.length || undefined,
     },
     { href: "/wallet", label: "Wallet", view: "wallet", Icon: WalletCards },
-    { href: "/beta", label: "Mobile Beta", view: "beta", Icon: Smartphone },
+    { href: "/beta", label: "Mobile Preview", view: "beta", Icon: Smartphone },
   ];
 
   return (
@@ -1499,8 +1499,8 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
     <div className={styles.betaPage}>
       <section className={styles.betaHero}>
         <div className={styles.betaHeroCopy}>
-          <span className={styles.betaBadge}><span /> Mobile beta</span>
-          <h1>Coming soon<br />to <em>mobile.</em></h1>
+          <span className={styles.betaBadge}><span /> Mobile preview</span>
+          <h1>Coming soon<br />{" "}to <em>mobile.</em></h1>
           <p>Patient purchasing with fixed windows, fully funded commitments, and no enrollment caps.</p>
           <a href="#mobile-preview" className={styles.betaCta}>Preview the app <ArrowRight size={15} /></a>
         </div>
@@ -1603,7 +1603,7 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
         </PhoneFrame>
       </section>
 
-      <section className={styles.betaFooter}><span><BrandMark /> POOL MOBILE</span><h2>Worth the wait.</h2><p>The POOL mobile beta is coming soon.</p><Link href="/explore">Explore today’s pools <ArrowRight size={14} /></Link></section>
+      <section className={styles.betaFooter}><span><BrandMark /> POOL MOBILE</span><h2>Worth the wait.</h2><p>The POOL mobile experience is coming soon.</p><Link href="/explore">Explore today’s pools <ArrowRight size={14} /></Link></section>
     </div>
   );
 }

@@ -889,7 +889,7 @@
   line-height: 1.58;
 }
 
-/* Mobile beta landing page */
+/* Mobile preview landing page */
 .betaPage { margin: -32px clamp(-64px, -4vw, -26px) -72px; overflow: hidden; }
 .betaHero { min-height: 760px; padding: 84px clamp(36px, 7vw, 110px); display: grid; grid-template-columns: minmax(380px, .8fr) minmax(520px, 1.2fr); align-items: center; gap: 50px; background: radial-gradient(circle at 78% 20%, rgba(201,255,87,.2), transparent 28rem), var(--product-dark); color: #f7f5ec; }
 .betaHeroCopy { position: relative; z-index: 2; }

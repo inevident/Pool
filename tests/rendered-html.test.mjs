@@ -115,6 +115,9 @@ test("renders the mobile preview from current fixed-window pool fixtures", async
   assert.equal(response.status, 200);
   const html = await response.text();
   const text = renderedText(html);
+  assert.match(text, /Mobile Preview/);
+  assert.doesNotMatch(text, /Mobile Beta/);
+  assert.doesNotMatch(text, /soonto/);
   assert.match(text, /34 funded units/);
   assert.match(text, /\$379/);
   assert.match(text, /10-unit eligibility floor/);
