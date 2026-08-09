@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Smartphone,
   Users,
   WalletCards,
   X,
@@ -63,6 +64,7 @@ export type ProductWorkspaceView =
   | "explore"
   | "wallet"
   | "orders"
+  | "beta"
   | "pool";
 
 type ProductWorkspaceProps = {
@@ -518,6 +520,7 @@ export default function ProductWorkspaceApp({
       count: activeMemberships.length || undefined,
     },
     { href: "/wallet", label: "Wallet", view: "wallet", Icon: WalletCards },
+    { href: "/beta", label: "Mobile Beta", view: "beta", Icon: Smartphone },
   ];
 
   return (
@@ -623,6 +626,8 @@ export default function ProductWorkspaceApp({
             setModal={setModal}
           />
         ) : null}
+
+        {view === "beta" ? <BetaView /> : null}
 
         {view === "pool" ? (
           <PoolDetailView
@@ -739,13 +744,9 @@ function DashboardView({
           <h2>
             What are you willing to <em>wait for?</em>
           </h2>
-          <p>
-            Tell POOL what you want and when you need it. We organize fully funded
-            demand, then make merchants compete for the whole order.
-          </p>
           <form className={styles.quickIntent} onSubmit={openQuickIntent}>
             <label className={styles.quickIntentLabel} htmlFor="quick-intent">
-              Describe your next purchase
+              What do you want to buy?
             </label>
             <div className={styles.quickIntentControl}>
               <input
@@ -781,21 +782,18 @@ function DashboardView({
           <div className={styles.balanceTop}>
             <span className={styles.panelLabel}>Available to commit</span>
             <strong className={styles.balanceAmount}>{cents(balance.availableCents)}</strong>
-            <div className={styles.balanceSubline}>
-              <span>{hydrated ? "Saved on this device" : "Loading saved workspace…"}</span>
-              <strong>Test USD</strong>
-            </div>
+            <div className={styles.balanceSubline}><strong>Test USD</strong></div>
           </div>
           <div className={styles.balanceBreakdown}>
             <div>
               <span>Reserved</span>
               <strong>{cents(balance.reservedCents)}</strong>
-              <small>{activeMemberships.length} active commitments</small>
+              <small>{activeMemberships.length} active</small>
             </div>
             <div>
               <span>Deposited</span>
               <strong>{cents(balance.totalDepositedCents)}</strong>
-              <small>Sandbox credits only</small>
+              <small>Test funds</small>
             </div>
           </div>
           <div className={styles.balanceActions}>
@@ -812,22 +810,22 @@ function DashboardView({
           <SummaryMetric
             label="Active commitments"
             value={String(activeMemberships.length)}
-            hint="Full MSRP reserved"
+            hint="Fully reserved"
           />
           <SummaryMetric
             label="Potential savings"
             value={cents(potentialSavings)}
-            hint="At current pool targets"
+            hint="Current targets"
           />
           <SummaryMetric
             label="Open intents"
             value={String(openIntentCount)}
-            hint="Ready to match"
+            hint="Awaiting match"
           />
           <SummaryMetric
             label="Pools recruiting"
             value={String(pools.filter((pool) => pool.status === "forming").length)}
-            hint="Sample market"
+            hint="Open now"
           />
         </div>
       </section>
@@ -1330,6 +1328,118 @@ function ActivityLedger({ activity }: { activity: ProductActivityEntry[] }) {
   );
 }
 
+function PhoneFrame({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <div className={styles.phoneFrame} aria-label={label}>
+      <div className={styles.phoneIsland} />
+      <div className={styles.phoneStatus}><span>9:41</span><span>● ᯤ ▰</span></div>
+      <div className={styles.phoneScreen}>{children}</div>
+    </div>
+  );
+}
+
+function PhoneBrand({ title }: { title?: string }) {
+  return (
+    <div className={styles.phoneBrand}>
+      <span className={styles.phonePool}><BrandMark /> POOL</span>
+      {title ? <strong>{title}</strong> : <span className={styles.phoneAvatar}>AM</span>}
+    </div>
+  );
+}
+
+function PhoneTabs({ active }: { active: "home" | "discover" | "wallet" }) {
+  return (
+    <div className={styles.phoneTabs}>
+      <span className={active === "home" ? styles.phoneTabActive : undefined}><Home size={15} />Home</span>
+      <span className={active === "discover" ? styles.phoneTabActive : undefined}><Compass size={15} />Discover</span>
+      <span className={active === "wallet" ? styles.phoneTabActive : undefined}><WalletCards size={15} />Wallet</span>
+    </div>
+  );
+}
+
+function BetaView() {
+  return (
+    <div className={styles.betaPage}>
+      <section className={styles.betaHero}>
+        <div className={styles.betaHeroCopy}>
+          <span className={styles.betaBadge}><span /> Mobile beta</span>
+          <h1>Coming soon<br />to <em>mobile.</em></h1>
+          <p>Patient purchasing, built for the moments when you find something worth waiting for.</p>
+          <a href="#mobile-preview" className={styles.betaCta}>Preview the app <ArrowRight size={15} /></a>
+        </div>
+        <div className={styles.betaHeroPhones}>
+          <PhoneFrame label="POOL mobile discover screen">
+            <PhoneBrand />
+            <div className={styles.phoneGreeting}><small>GOOD AFTERNOON, ALEX</small><h3>Find your next<br /><em>better price.</em></h3></div>
+            <div className={styles.phoneSearch}><Search size={13} /> What are you looking for?</div>
+            <div className={styles.phoneSectionTitle}><strong>Popular pools</strong><span>See all</span></div>
+            <div className={styles.phoneProductCard}>
+              <span className={styles.phoneProductIcon}><Headphones size={28} /></span>
+              <small>SONY</small><strong>WH-1000XM6</strong>
+              <div><b>$389</b><span>18 buyers</span></div>
+            </div>
+            <PhoneTabs active="home" />
+          </PhoneFrame>
+          <PhoneFrame label="POOL mobile active commitment screen">
+            <PhoneBrand title="Active pool" />
+            <div className={styles.phoneCommitHero}><span><Headphones size={40} /></span><small>SONY</small><h3>WH-1000XM6</h3><p>Noise-canceling headphones</p></div>
+            <div className={styles.phoneProgress}><div><strong>18</strong><span>buyers joined</span></div><div><strong>$389</strong><span>target price</span></div><i><b /></i><small>72% to merchant bidding</small></div>
+            <div className={styles.phoneReserve}><span>YOUR COMMITMENT</span><strong>$449.99 reserved</strong><small>Release available for 8 more days</small></div>
+            <button className={styles.phoneButton}>View commitment <ChevronRight size={13} /></button>
+            <PhoneTabs active="discover" />
+          </PhoneFrame>
+        </div>
+      </section>
+
+      <section className={styles.betaStatement}>
+        <span>POOL IN YOUR POCKET</span>
+        <h2>Discover together.<br />Commit with confidence.</h2>
+      </section>
+
+      <section className={styles.betaFeature} id="mobile-preview">
+        <div className={styles.betaFeatureCopy}><span>01 · DISCOVER</span><h2>See the buying power building.</h2><p>Browse active pools, compare target prices, and know exactly how many buyers are already in.</p></div>
+        <PhoneFrame label="POOL mobile pool discovery list">
+          <PhoneBrand title="Discover" />
+          <div className={styles.phoneSearch}><Search size={13} /> Search products</div>
+          <div className={styles.phoneChips}><b>For you</b><span>Audio</span><span>Gaming</span></div>
+          {[[Headphones,"Sony WH-1000XM6","$389","18 joined"],[Gamepad2,"Steam Deck OLED","$499","31 joined"],[Laptop,"MacBook Air M4","$899","12 joined"]].map(([Icon,name,price,joined]) => {
+            const ItemIcon = Icon as LucideIcon;
+            return <div className={styles.phoneListItem} key={String(name)}><span><ItemIcon size={20} /></span><div><small>FORMING</small><strong>{String(name)}</strong><p>{String(joined)}</p></div><b>{String(price)}</b></div>;
+          })}
+          <PhoneTabs active="discover" />
+        </PhoneFrame>
+      </section>
+
+      <section className={classNames(styles.betaFeature, styles.betaFeatureReverse)}>
+        <PhoneFrame label="POOL mobile commitment confirmation">
+          <PhoneBrand title="Join pool" />
+          <div className={styles.phoneCommitHero}><span><Gamepad2 size={38} /></span><small>VALVE</small><h3>Steam Deck OLED</h3><p>512 GB · Black</p></div>
+          <div className={styles.phoneJoinFacts}><div><span>Reserve today</span><strong>$549.00</strong></div><div><span>Expected price</span><strong>$499.00</strong></div><div><span>Exit cutoff</span><strong>Aug 18</strong></div></div>
+          <div className={styles.phoneFine}><ShieldCheck size={15} /><span>Your full amount is reserved. You can leave before the cutoff.</span></div>
+          <button className={styles.phoneButton}>Commit $549.00</button>
+          <PhoneTabs active="discover" />
+        </PhoneFrame>
+        <div className={styles.betaFeatureCopy}><span>02 · COMMIT</span><h2>Every number, clear before you join.</h2><p>Target price, reserved amount, and exit date stay visible—no checkout surprises.</p></div>
+      </section>
+
+      <section className={styles.betaFeature}>
+        <div className={styles.betaFeatureCopy}><span>03 · TRACK</span><h2>Your purchasing power, at a glance.</h2><p>Follow reserved funds and active commitments without digging through transaction history.</p></div>
+        <PhoneFrame label="POOL mobile wallet screen">
+          <PhoneBrand title="Wallet" />
+          <div className={styles.phoneWallet}><small>AVAILABLE TO COMMIT</small><strong>$1,240.00</strong><button><Plus size={12} /> Add funds</button></div>
+          <div className={styles.phoneWalletStats}><div><span>Reserved</span><strong>$549.00</strong></div><div><span>Saved so far</span><strong>$50.00</strong></div></div>
+          <div className={styles.phoneSectionTitle}><strong>Recent activity</strong><span>View all</span></div>
+          <div className={styles.phoneActivity}><span><LockKeyhole size={15} /></span><div><strong>Steam Deck commitment</strong><small>Today · Reserved</small></div><b>−$549</b></div>
+          <div className={styles.phoneActivity}><span><ArrowDownLeft size={15} /></span><div><strong>Funds added</strong><small>Aug 9 · Test USD</small></div><b>+$1,000</b></div>
+          <PhoneTabs active="wallet" />
+        </PhoneFrame>
+      </section>
+
+      <section className={styles.betaFooter}><span><BrandMark /> POOL MOBILE</span><h2>Worth the wait.</h2><p>The POOL mobile beta is coming soon.</p><Link href="/explore">Explore today’s pools <ArrowRight size={14} /></Link></section>
+    </div>
+  );
+}
+
 function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps & {
   activeMemberships: PoolMembership[];
 }) {
@@ -1341,11 +1451,7 @@ function OrdersView({ workspace, activeMemberships, setModal }: SharedViewProps 
       <header className={styles.viewTitle}>
         <div>
           <span className={styles.pageEyebrow}>Commitments & orders</span>
-          <h1>From reserved demand to delivery.</h1>
-          <p>
-            Active reservations appear here immediately. Production fulfillment is not
-            connected; the Rain + Monad walkthrough demonstrates the settlement rail separately.
-          </p>
+          <h1>Your purchases, from commitment to delivery.</h1>
         </div>
         <Link href="/explore" className={styles.primaryButton}>
           <Compass size={15} /> Find a group buy
