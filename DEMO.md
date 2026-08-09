@@ -48,52 +48,57 @@ npm run dev
 
 Then:
 
-1. Preload `/demo`, `/`, and `/evidence#live-verifier` at desktop width. Keep `/merchant` closed or in a separate Q&A tab.
-2. On `/`, run one catalog-aware buyer-agent example in advance and leave its decision receipt visible. Do not click **Save buying intent** during the primary story.
-3. On `/evidence`, confirm the record names source commit `246d81a`, later runtime `8b1cee8`, chain `10143`, the registry, six offer registrations, the finalized attestation, and the release manifest. If **Run live verification** is present, test it once and confirm its response stays read-only.
-4. On `/demo`, confirm the first-frame proof summary is visible without scrolling and that the status cards use the evidence labels above.
-5. Run the fixed market once and reset it.
-6. If Rain is intended, confirm the UI offers **Settle in sandbox**. If it offers only **Run rehearsal**, present rehearsal mode without apology or overclaiming.
-7. Keep secrets out of the browser, terminal, slides, screenshots, and repository.
+1. Preload `/negotiate`, `/demo`, and `/evidence#live-verifier` at desktop width, in that tab order. Keep `/`, `/explore`, and `/merchant` closed or in a separate Q&A tab.
+2. Unlock provider actions: on `/demo`, enter the access code once and confirm the UI offers **Settle in sandbox** rather than only **Run rehearsal**. Every provider path fails closed without that session, so do this before the room is watching.
+3. On `/negotiate`, run the negotiation once end to end, confirm it clears at `$700` for 560 buyers, then reload so the curve is unclicked when you begin.
+4. On `/evidence`, confirm the record names source commit `246d81a`, chain `10143`, the registry, six offer registrations, the finalized attestation, and the release manifest. Click **Run live verification** once and confirm 15/15.
+5. On `/demo`, confirm the first-frame proof summary is visible without scrolling and that the status cards use the evidence labels above.
+6. Expect `MONAD_ATTESTATION_FAILED` on any settle after the first: the attestation already exists on chain and the registry refuses duplicate writes. Know the line for it before you present.
+7. Keep secrets out of the browser, terminal, slides, screenshots, and repository. The access code is not a slide.
 
 Current finalized record: registry [`0xE1b7…b217`](https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217) is deployed on Monad Testnet chain `10143`. Its deployment finalized at [block `52198045`](https://testnet.monadscan.com/tx/0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48); commitment [`0x12f3…543f`](https://testnet.monadscan.com/tx/0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd) finalized before six offer registrations; and the selected-offer/Rain-digest attestation finalized at [block `52198437`](https://testnet.monadscan.com/tx/0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e). The prior underfunded-signer snapshot is obsolete. No current balance is asserted; re-run preflight before any new write and never expose the private key.
 
 ## Primary 90-second story
 
-### 0:00–0:12 — Lead with buyer value
+The judging tracks ask for an agent that transacts autonomously **within predefined controls**. Lead with the agent doing exactly that. State the boundary immediately after — never before, or the work reads as unbuilt.
 
-Start on `/demo` before clicking anything. Point to `12` units, `$5,748` fixture-reserved, `$389` per unit, and `$1,080 / 18.8%` gross savings.
+### 0:00–0:14 — The problem, then the curve
 
-> “Patient buyers have fragmented bargaining power. In this fixed fixture, 12 funded units create a $5,748 order. Seller competition clears at $389 instead of $479, making $1,080 available again—an 18.8% improvement.”
+Start on `/negotiate` before clicking anything. Point to the three pledge rungs and `560 pledged buyers`.
 
-### 0:12–0:25 — Show consent before commitment
+> “A single price hides the demand sitting just below it. Here buyers don’t name one price — each pledges the most they’d pay. 300 at 10% off, 180 at 20%, 80 at 30%.”
 
-Switch to the preloaded buyer decision receipt at `/`. Point to the catalog match, mandate checks, and receipt footer.
+### 0:14–0:34 — The agent negotiates, and everyone wins the same price
 
-> “The buyer agent turns a request into a reviewable mandate, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only explicit Save creates local intent state.”
+Click **Close window & send the agents**. Let the transcript animate through the probes.
 
-### 0:25–0:43 — Let simulated sellers compete
+> “Our agent walks that curve down. At each rung it can promise a merchant exactly the volume that unlocks there — and deeper volume unlocks deeper discounts. It stops at the deepest price a merchant will actually honor. Every activated buyer then pays that single cleared price, including the 300 who would happily have paid $900.”
 
-Return to `/demo`, click **Replay the fixed market**, and point to the three simulated sealed sellers and the $389 winner.
+Point to **`$700` · 560 buyers · `$168,000` collective savings**, then the per-tier surplus table and the line reading *merchant floors stayed private throughout*.
 
-> “After demand freezes, three simulated sellers compete for the whole order without seeing buyer ceilings or one another’s private floors. Deterministic policy accepts only a complete offer inside every mandate.”
+### 0:34–0:52 — The agent buys it. This is the money moment.
 
-### 0:43–1:02 — Execute bounded authority
+Click **Send the agent to buy**. Wait for `RAIN SANDBOX · VERIFIED`, then read the receipt aloud — card last four, transaction ID, `settled`.
 
-When the market reaches **Rain receives scoped authority**, choose exactly one path:
+> “The agent now mints a Rain scoped card for exactly the cleared price, locked to the merchant’s category, then authorizes and settles on its own. Its spending authority is derived from the market outcome — not the other way around. It cannot spend a dollar more than the market cleared at, and it cannot spend it anywhere else.”
 
-- If **Settle in sandbox** is present, click it. After the UI shows `RAIN SANDBOX · VERIFIED`, point to the three provider IDs and the MCC `7995` decline.
-- Otherwise click **Run rehearsal** and say: “This is the labeled deterministic rehearsal; it creates no Rain or Monad transaction.”
+If the button is absent or the response says `REHEARSAL`, say: “Live execution is locked in this environment, so this is the labeled rehearsal — it issues no card and moves `$0`.” Do not improvise a stronger claim.
 
-Live-sandbox wording:
+### 0:52–1:10 — The guardrail, proven by a refusal
 
-> “Only after clearing does Rain receive three scoped-card requests derived from the agreed allocations, electronics MCC, and expiry. POOL admits only the exact charges. The MCC 7995 challenge returns Rain’s exact `scoped_card_mcc_not_allowed` decline before the three allocations settle. Today’s record reused those same Rain IDs through same-day idempotent replay; it created no new real-money movement.”
+Switch to `/demo` and click **Settle in sandbox**. Point to the MCC `7995` decline *before* the three settlements.
 
-### 1:02–1:18 — Verify the recorded sequence
+> “Scope is only real if it refuses. POOL deliberately attempts a blocked merchant category and Rain returns its exact `scoped_card_mcc_not_allowed` decline. Then the three allocations settle. Those three IDs are the same ones in our published record — same-day idempotent replay, so no new money moved.”
 
-Switch to `/evidence#live-verifier`. Point to proof source `246d81a`, later runtime `8b1cee8`, and the finalized sequence. Run the verifier only if the current release exposes it.
+**If Monad shows `MONAD_ATTESTATION_FAILED`, say this and move on — it is expected, not a failure:**
 
-> “The historical proof predates the later product runtime. On Monad Testnet, the coalition commitment finalized before six offer registrations; the post-Rain attestation binds the selected registered offer to the exact three-ID digest. This read-only check compares current chain state and recomputes that digest. It does not query Rain or write anything.”
+> “The attestation for this commitment already exists on chain from our published run, and the registry refuses duplicate writes. You’re watching the guarantee work: one commitment, one attestation, no rewriting history.”
+
+### 1:10–1:18 — Verify the recorded sequence
+
+Switch to `/evidence#live-verifier` and click **Run live verification**. Wait for 15/15.
+
+> “Don’t take our word for it. This reads current Monad Testnet state and recomputes the settlement digest live — commitment finalized before six offer registrations, attestation binding the selected offer to the exact three Rain IDs. Read-only: it queries no Rain, writes nothing, and requests no authorization.”
 
 ### 1:18–1:30 — Close on aligned economics
 
@@ -103,14 +108,18 @@ If Rain provider IDs are rendered, say: “The Rain sandbox record totals $4,668
 
 ## Exact click sequence
 
-1. Start on `/demo` and lead with the first-frame outcome.
-2. Switch to the preloaded receipt at `/`; point to catalog match, checks, explicit Save, and `$0` moved.
-3. Return to `/demo` and click **Replay the fixed market** once.
-4. Let autoplay reach **Market cleared**. Do not repeatedly click while Monad preparation is running.
-5. Click **Settle in sandbox** only if the button exists and the presenter intends a provider run; otherwise click **Run rehearsal**.
-6. At the outcome, point to the evidence-mode label first, then receipt IDs or simulated labels and the MCC result.
-7. Switch to `/evidence#live-verifier`; point to release lineage and finalized evidence. Run the live verifier only when available, and label it read-only.
-8. Return to the outcome, state the clearly hypothetical economics, and click **Reset the market**. Reset itself causes no provider operation.
+Unlock provider actions once before you present: open `/demo`, enter the access code, and confirm the UI offers **Settle in sandbox** rather than only **Run rehearsal**. Without that session every provider path correctly fails closed.
+
+1. Start on `/negotiate`, unclicked. Point to the three rungs and 560 pledged buyers.
+2. Click **Close window & send the agents**. Let the transcript finish.
+3. Point to `$700`, 560 activated, `$168,000` saved, the per-tier surplus table, and the private-floors line.
+4. Click **Send the agent to buy**. Read the card last four and transaction ID aloud once it shows `RAIN SANDBOX · VERIFIED`.
+5. Switch to `/demo`, click **Settle in sandbox**, and point to the MCC `7995` decline *before* the three settlements.
+6. If Monad reads `MONAD_ATTESTATION_FAILED`, deliver the duplicate-write line and keep moving. It is expected.
+7. Switch to `/evidence#live-verifier`, click **Run live verification**, and wait for 15/15.
+8. Close on the economics, labeling the fee split as an unvalidated hypothesis.
+
+Keep `/`, `/explore`, and `/merchant` closed unless asked. They are strong Q&A material and dead weight inside 90 seconds.
 
 ## Optional deep dive and Q&A
 

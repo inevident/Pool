@@ -66,13 +66,13 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 ## Verbatim 90-second talk track
 
-> “Patient buyers have fragmented bargaining power. In POOL’s fixed fixture, 12 funded units create a $5,748 order. Seller competition clears at $389 instead of $479, making $1,080 available again—an 18.8% improvement.
+> “A single price hides the demand sitting just below it. On POOL, buyers don’t name one price — each pledges the most they’d pay. Three hundred at ten percent off, one hundred eighty at twenty, eighty at thirty.
 >
-> The homepage buyer agent makes that demand programmable. It turns language into a catalog-aware decision receipt, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only explicit Save creates local intent state.
+> Our agent carries that whole curve to the merchants. At every rung it can promise exactly the volume that unlocks there, and deeper volume unlocks deeper discounts. It stops at the deepest price a merchant will actually honor — thirty percent off. Then all five hundred sixty activated buyers pay that one cleared price, including the three hundred who would gladly have paid nine hundred dollars. A hundred and sixty-eight thousand dollars back to buyers, and no human negotiated anything.
 >
-> After demand freezes, three simulated sellers compete without seeing buyer ceilings. Deterministic policy checks quantity, price, delivery, warranty, freshness, and every private mandate before selecting the complete $389 offer.
+> Then the agent buys it. It mints a Rain scoped card for exactly the cleared price, locked to that merchant’s category, and authorizes and settles on its own. Its spending authority is derived from the market outcome — not the other way around. It cannot spend a dollar more than the market cleared at, and it cannot spend it anywhere else.
 >
-> Only then does Rain receive three allocation-derived scoped-card requests. MCC 7995 returns the exact `scoped_card_mcc_not_allowed` decline before the legitimate sandbox allocations settle. The source-bound record reused the same three Rain IDs through same-day idempotent replay; no real money moved.
+> Scope is only real if it refuses, so we prove the refusal. POOL deliberately attempts a blocked merchant category and Rain returns its exact `scoped_card_mcc_not_allowed` decline before the legitimate allocations settle.
 >
 > The proof is inspectable. Commit `246d81a` produced the historical record; `8b1cee8` is the later product runtime. On Monad Testnet, the coalition commitment finalized before six offer registrations, and the post-Rain attestation binds the selected registered offer to the exact three-ID digest. The read-only verifier checks current chain state and recomputes that digest without querying Rain or writing anything.
 >
@@ -82,13 +82,16 @@ If the current demo run is rehearsal, replace the MCC sentence with: “The fixe
 
 ## Live click sequence
 
-1. Start on `/demo` before clicking anything. Lead with `12` units, `$5,748` reserved, `$389` per unit, and `$1,080 / 18.8%` gross savings.
-2. Switch briefly to the preloaded homepage receipt. Point to catalog match, mandate checks, explicit Save, and `$0` moved; do not Save during the story.
-3. Return to `/demo` and click **Replay the fixed market** once. Let it show 3 + 4 + 5 units, the incompatible request, the pre-bid freeze, and the three simulated seller offers.
-4. At bounded authority, click **Settle in sandbox** only if that button exists and a provider run is intended. Otherwise click **Run rehearsal**.
-5. On the outcome, read the evidence label first. Then point to provider IDs or simulated labels and the MCC `7995` result.
-6. Switch to `/evidence#live-verifier`. Point to proof source `246d81a`, later runtime `8b1cee8`, registry `0xE1b7…b217`, finalized sequence, release manifest, and claim boundary. Run the read-only check only if the current release exposes it.
-7. End on `$5,748 → $4,668 + $1,080`, state the clearly hypothetical 10%-of-savings case, then reset the market before the next run.
+Unlock provider actions before presenting: enter the access code on `/demo` once and confirm **Settle in sandbox** appears. Without that session every provider path correctly fails closed.
+
+1. Start on `/negotiate`, unclicked. Point to the three pledge rungs and 560 pledged buyers.
+2. Click **Close window & send the agents**. Let the transcript animate through the probes.
+3. Point to `$700`, 560 activated, `$168,000` collective savings, the per-tier surplus table, and the private-floors line.
+4. Click **Send the agent to buy**. Once it reads `RAIN SANDBOX · VERIFIED`, read the card last four and transaction ID aloud.
+5. Switch to `/demo`, click **Settle in sandbox**, and point to the MCC `7995` decline *before* the three settlements.
+6. If Monad reads `MONAD_ATTESTATION_FAILED`, say the attestation already exists on chain and the registry refuses duplicate writes — the guarantee working, not a break. Keep moving.
+7. Switch to `/evidence#live-verifier`, click **Run live verification**, wait for 15/15.
+8. End on `$5,748 → $4,668 + $1,080`, state the clearly hypothetical 10%-of-savings case.
 
 Do not open `/merchant` or the optional technical inspector during the 90-second story. Use them for Q&A: `/merchant` shows the blinded Seller Pilot Sandbox contract with zero live retailers and zero writes; the inspector exercises the fixed buyer/merchant APIs and policy traces.
 
@@ -105,6 +108,8 @@ Do not open `/merchant` or the optional technical inspector during the 90-second
 
 ### Best use of Rain
 
+- **The agent transacts autonomously at a price it derived itself.** After the demand curve clears, `POST /api/negotiation/purchase` re-derives the clearing server-side — never trusting a number the browser proposed — then mints a Rain scoped card for exactly that amount, locked to the winning merchant's category, and authorizes and settles without a human in the loop. Verified live on the deployment: `status: purchased`, `RAIN SANDBOX · VERIFIED`, settled, `idempotentReplay: false`.
+- This is the literal shape of "agents that can purchase goods or services within predefined controls": the scoped card *is* the predefined control, and its limit is a market outcome rather than a constant.
 - Rain sits after market clearing, where autonomous negotiation gains commercial consequence.
 - Three scoped cards map to the three fixture allocations under the event sandbox’s shared cardholder limitation.
 - Requested card scope, allowed electronics MCC, and stable expiry are derived from the cleared agreement; Rain’s documented 1.2× lifetime hold buffer is not buyer permission to overspend.
