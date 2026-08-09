@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
+import { createCanonicalProductWorkspace } from "@/lib/product";
 import ProductWorkspaceApp from "../../_components/product-workspace";
 
 type PoolPageProps = {
@@ -14,5 +16,9 @@ export const metadata: Metadata = {
 
 export default async function PoolPage({ params }: PoolPageProps) {
   const { poolId } = await params;
+  const workspace = createCanonicalProductWorkspace();
+  if (!workspace.pools[poolId]) {
+    notFound();
+  }
   return <ProductWorkspaceApp view="pool" poolId={poolId} />;
 }

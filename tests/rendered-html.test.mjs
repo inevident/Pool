@@ -86,6 +86,20 @@ test("server-renders every repeat-use product surface", async () => {
   }
 });
 
+test("unknown pool identifiers use the real 404 boundary", async () => {
+  // Regression: ISSUE-004 — missing pool IDs rendered an empty state with 200.
+  // Found by /qa on 2026-08-09.
+  const response = await render("/pools/not-a-real-pool");
+  assert.equal(response.status, 404);
+  const html = await response.text();
+  assert.match(html, /404 · Pool not found/);
+  assert.match(html, /This buying pool is not in the current workspace/);
+  assert.match(
+    html,
+    /<meta[^>]*(?:name="robots"[^>]*content="noindex"|content="noindex"[^>]*name="robots")[^>]*>/,
+  );
+});
+
 test("renders the mobile preview from current fixed-window pool fixtures", async () => {
   // Regression: ISSUE-003 — empty workspaces showed a fabricated reserved
   // commitment and the phone preview exposed dead button controls.
