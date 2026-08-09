@@ -16,6 +16,7 @@ import {
 import rainSandboxEvidence from "@/public/evidence/rain-sandbox-2026-08-09.json";
 import rainMonadEvidence from "@/public/evidence/rain-monad-testnet-2026-08-09.json";
 
+import LiveEvidenceVerifier from "./live-verifier";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -483,6 +484,7 @@ export default function EvidencePage() {
         </Link>
         <nav className={styles.nav} aria-label="Evidence navigation">
           <a href="#current">Current status</a>
+          <a href="#live-verifier">Live verifier</a>
           <a href="#archive">{currentRecord ? "Proof records" : "Archived proof"}</a>
           <a href="#boundaries">Claim boundary</a>
         </nav>
@@ -518,9 +520,11 @@ export default function EvidencePage() {
           <CurrentSlot record={currentRecord} />
         </section>
 
+        <LiveEvidenceVerifier />
+
         <section className={styles.archiveSection} id="archive" aria-labelledby="archive-title">
           <div className={styles.sectionHeading}>
-            <span>01 / Published verification</span>
+            <span>02 / Published verification</span>
             <div>
               <h2 id="archive-title">Proof records</h2>
               <p>
@@ -539,7 +543,7 @@ export default function EvidencePage() {
 
         <section className={styles.boundariesSection} id="boundaries" aria-labelledby="boundaries-title">
           <div className={styles.sectionHeading}>
-            <span>02 / Claim boundary</span>
+            <span>03 / Claim boundary</span>
             <div>
               <h2 id="boundaries-title">What this record means</h2>
               <p>A precise claim is stronger than an oversized one.</p>

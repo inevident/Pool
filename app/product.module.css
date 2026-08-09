@@ -575,6 +575,27 @@
   line-height: 1.45;
 }
 
+.agentSampleBoundary {
+  padding: 9px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(201, 255, 87, .055);
+}
+
+.agentSampleBoundary > span {
+  color: var(--product-lime);
+  font: 730 6.5px/1 var(--font-geist-mono);
+  letter-spacing: .08em;
+}
+
+.agentSampleBoundary p {
+  margin: 5px 0 0;
+  color: #8f958c;
+  font-size: 7px;
+  line-height: 1.45;
+}
+
+.agentSampleBoundary p strong { color: #eef3df; }
+
 .agentFlow {
   margin: 0;
   padding: 10px 11px;
@@ -646,6 +667,44 @@
   color: #ffaaa5;
   font-size: 7px;
   line-height: 1.55;
+}
+
+.agentProofBridge {
+  padding: 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  background: linear-gradient(110deg, rgba(154, 136, 255, .12), rgba(201, 255, 87, .04));
+}
+
+.agentProofBridge > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9adff;
+  font: 720 6.5px/1 var(--font-geist-mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.agentProofBridge p {
+  margin: 7px 0 0;
+  color: #a6aca3;
+  font-size: 7px;
+  line-height: 1.5;
+}
+
+.agentProofBridge p strong { color: #f4f1e8; }
+.agentProofBridge > div { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.agentProofBridge a {
+  min-height: 29px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 6px;
+  color: #f3f0e7;
+  font-size: 7px;
+  font-weight: 720;
 }
 
 .agentReceiptFooter {
@@ -866,6 +925,27 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+}
+
+.poolCardChips {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.referenceChip {
+  min-height: 24px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(105, 89, 155, .25);
+  border-radius: 999px;
+  background: rgba(154, 136, 255, .08);
+  color: #69599b;
+  font: 720 8px/1 var(--font-geist-mono);
+  text-transform: uppercase;
 }
 
 .productGlyph {
@@ -1276,6 +1356,61 @@
   grid-template-columns: repeat(5, 1fr);
   border-top: 1px solid var(--product-line);
 }
+
+.referenceBridge {
+  margin-top: 16px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 28px;
+  border: 1px solid rgba(105, 89, 155, .26);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(154, 136, 255, .18), transparent 18rem),
+    rgba(255, 255, 255, .62);
+}
+
+.referenceBridge > div:first-child > span {
+  color: #69599b;
+  font: 760 8px/1 var(--font-geist-mono);
+  letter-spacing: .1em;
+}
+
+.referenceBridge h2 {
+  margin: 10px 0 7px;
+  font-size: clamp(20px, 2.5vw, 31px);
+  letter-spacing: -.04em;
+}
+
+.referenceBridge p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--product-muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.referenceBridge p strong { color: var(--product-ink); }
+.referenceBridgeActions { min-width: 205px; display: grid; gap: 7px; }
+.referenceBridgeActions a {
+  min-height: 39px;
+  padding: 0 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--product-line-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .62);
+  font-size: 8px;
+  font-weight: 740;
+}
+
+.referenceBridgeActions a:first-child {
+  border-color: var(--product-dark);
+  background: var(--product-dark);
+  color: #fff;
+}
 .poolFact { padding: 18px; border-right: 1px solid var(--product-line); }
 .poolFact:last-child { border-right: 0; }
 .poolFact span,
@@ -1609,6 +1744,8 @@
   .intentItem { grid-template-columns: 1fr auto; gap: 10px; }
   .intentItem .rowMetric { display: none; }
   .poolDetailTop { grid-template-columns: 1fr; }
+  .referenceBridge { grid-template-columns: 1fr; }
+  .referenceBridgeActions { min-width: 0; }
   .poolDetailAction { min-width: 0; width: 100%; }
   .poolFacts { grid-template-columns: 1fr 1fr; }
   .poolFact:nth-child(2) { border-right: 0; }

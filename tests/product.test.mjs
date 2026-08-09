@@ -108,12 +108,20 @@ test("the versioned workspace seeds a product marketplace led by the Sony XM6 po
   assert.equal(state.schemaVersion, PRODUCT_WORKSPACE_SCHEMA_VERSION);
   assert.equal(state.seedVersion, PRODUCT_SEED_VERSION);
   assert.equal(state.revision, 0);
-  assert.equal(Object.keys(state.products).length, 4);
-  assert.equal(Object.keys(state.pools).length, 4);
+  assert.equal(Object.keys(state.products).length, 5);
+  assert.equal(Object.keys(state.pools).length, 5);
   assert.equal(state.products[SONY_PRODUCT_ID].name, "WH-1000XM6 Wireless Headphones");
   assert.equal(state.products[SONY_PRODUCT_ID].msrpUnitCents, SONY_MSRP_CENTS);
   assert.equal(state.pools[SONY_POOL_ID].committedUnitCount, 34);
   assert.equal(state.pools[SONY_POOL_ID].minimumCommittedUnitCount, 10);
+  assert.equal(
+    state.products["product-monitor-27-4k-usbc"].msrpUnitCents,
+    47_900,
+  );
+  assert.equal(
+    state.pools["pool-monitor-reference-august"].committedUnitCount,
+    12,
+  );
   assert.equal(
     state.pools[SONY_POOL_ID].cutoffAt,
     "2026-08-22T16:00:00.000Z",

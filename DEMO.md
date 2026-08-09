@@ -18,6 +18,8 @@ Open `/demo` and stop before clicking anything. The first frame must say **FIXED
 
 The organizations, buyer ledger, merchants, and orders in this fixture are fictional. No real money moves. The fixed fixture is separate from the repeat-use consumer product at `/`.
 
+The shared monitor product identity may also appear in the buyer workspace. That is continuity for discovery and explanation, not shared execution state: the buyer workspace remains a browser-local modeled-quote rehearsal, while the protected fixed fixture is the only complete Rain/Monad provider proof.
+
 ## Language that must stay exact
 
 Use the label shown in the UI, not a generic word such as “live.”
@@ -32,7 +34,9 @@ Use the label shown in the UI, not a generic word such as “live.”
 
 Never claim an actual Rain or Monad transaction unless the UI shows the corresponding provider ID or explorer evidence.
 
-For a no-secret backup, open [`public/evidence/rain-monad-testnet-2026-08-09.png`](./public/evidence/rain-monad-testnet-2026-08-09.png) or its [sanitized JSON](./public/evidence/rain-monad-testnet-2026-08-09.json). The record is bound to source commit `246d81a` and combines the same three Rain sandbox records, returned as same-day idempotent replays, with finalized Monad Testnet ordering. It proves no real-money movement, custody, live merchant participation, or independent Monad verification of Rain. The older Rain-only artifact remains an archive of its own local-only state.
+For a no-secret backup, open [`public/evidence/rain-monad-testnet-2026-08-09.png`](./public/evidence/rain-monad-testnet-2026-08-09.png) or its [sanitized JSON](./public/evidence/rain-monad-testnet-2026-08-09.json). The record is bound to source commit `246d81a` and combines the same three Rain sandbox records, returned as same-day idempotent replays, with finalized Monad Testnet ordering. The [release provenance manifest](./public/evidence/release-provenance-2026-08-09.json) separately names proof source `246d81a`, later product runtime `8b1cee8`, and recorded deployed/docs commit `88d75b5`; the historical proof predates the later runtime. These files prove no real-money movement, custody, live merchant participation, or independent Monad verification of Rain. The older Rain-only artifact remains an archive of its own local-only state.
+
+When the current runtime includes it, `/evidence#live-verifier` can run a no-store read of `/api/evidence/verify`. It checks current Monad state and recomputes the published digest; it does not query Rain, move money, authorize a transaction, verify balances, or prove real merchants. If the endpoint is absent or degraded, say so and use the static record plus explorer links.
 
 ## Before presenting
 
@@ -44,9 +48,9 @@ npm run dev
 
 Then:
 
-1. Preload `/`, `/evidence`, and `/demo` at desktop width. Keep `/merchant` closed or in a separate Q&A tab.
+1. Preload `/demo`, `/`, and `/evidence#live-verifier` at desktop width. Keep `/merchant` closed or in a separate Q&A tab.
 2. On `/`, run one catalog-aware buyer-agent example in advance and leave its decision receipt visible. Do not click **Save buying intent** during the primary story.
-3. On `/evidence`, confirm the current record names source commit `246d81a`, chain `10143`, the registry, six offer registrations, and the finalized attestation.
+3. On `/evidence`, confirm the record names source commit `246d81a`, later runtime `8b1cee8`, chain `10143`, the registry, six offer registrations, the finalized attestation, and the release manifest. If **Run live verification** is present, test it once and confirm its response stays read-only.
 4. On `/demo`, confirm the first-frame proof summary is visible without scrolling and that the status cards use the evidence labels above.
 5. Run the fixed market once and reset it.
 6. If Rain is intended, confirm the UI offers **Settle in sandbox**. If it offers only **Run rehearsal**, present rehearsal mode without apology or overclaiming.
@@ -56,37 +60,25 @@ Current finalized record: registry [`0xE1b7…b217`](https://testnet.monadscan.c
 
 ## Primary 90-second story
 
-### 0:00–0:10 — Show the buyer-agent boundary
+### 0:00–0:12 — Lead with buyer value
 
-Start on the preloaded buyer decision receipt at `/`. Point to the catalog match, mandate checks, and receipt footer.
+Start on `/demo` before clicking anything. Point to `12` units, `$5,748` fixture-reserved, `$389` per unit, and `$1,080 / 18.8%` gross savings.
 
-> “POOL’s buyer agent turns a request into a catalog-aware decision receipt. It recommends a mandate for review, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only the buyer’s explicit Save creates local intent state.”
+> “Patient buyers have fragmented bargaining power. In this fixed fixture, 12 funded units create a $5,748 order. Seller competition clears at $389 instead of $479, making $1,080 available again—an 18.8% improvement.”
 
-### 0:10–0:22 — Open the public evidence registry
+### 0:12–0:25 — Show consent before commitment
 
-Switch to `/evidence` and point to the current source-bound record.
+Switch to the preloaded buyer decision receipt at `/`. Point to the catalog match, mandate checks, and receipt footer.
 
-> “The proof is public and bounded: source commit `246d81a`, Monad Testnet chain 10143, one finalized commitment, six finalized offer registrations, and a finalized attestation binding the selected registered offer to the three Rain settlement IDs. This is operator-attested ordering, not custody or real-money proof.”
+> “The buyer agent turns a request into a reviewable mandate, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only explicit Save creates local intent state.”
 
-### 0:22–0:35 — Lead with the market outcome
+### 0:25–0:43 — Let simulated sellers compete
 
-Switch to `/demo`, point to the first-frame summary, then click **Replay the fixed market**.
+Return to `/demo`, click **Replay the fixed market**, and point to the three simulated sealed sellers and the $389 winner.
 
-> “In the fixed fixture, three compatible buyers reserve $5,748 across 12 units. A fourth request stays out because similarity is not permission. Competition clears at $389 per unit, making $1,080 available again in the simulated ledger.”
+> “After demand freezes, three simulated sellers compete for the whole order without seeing buyer ceilings or one another’s private floors. Deterministic policy accepts only a complete offer inside every mandate.”
 
-### 0:35–0:50 — Show why Monad is causal
-
-As the replay freezes demand, point to the finalized evidence state.
-
-> “The coalition commitment finalized before any of the six admitted offer hashes. After Rain, the attestation names one registered offer and binds the exact settlement-ID digest. Monad orders POOL’s recorded claims; it does not prove when an offchain bid first existed, what a seller saw, or that bank funds exist.”
-
-### 0:50–1:03 — Let simulated sellers compete
-
-Point to the three simulated sealed sellers and the $389 winner.
-
-> “Three simulated sellers compete for the whole order without seeing buyer ceilings or one another’s private floors. Deterministic policy accepts only a complete offer inside every mandate.”
-
-### 1:03–1:20 — Execute bounded authority
+### 0:43–1:02 — Execute bounded authority
 
 When the market reaches **Rain receives scoped authority**, choose exactly one path:
 
@@ -97,22 +89,28 @@ Live-sandbox wording:
 
 > “Only after clearing does Rain receive three scoped-card requests derived from the agreed allocations, electronics MCC, and expiry. POOL admits only the exact charges. The MCC 7995 challenge returns Rain’s exact `scoped_card_mcc_not_allowed` decline before the three allocations settle. Today’s record reused those same Rain IDs through same-day idempotent replay; it created no new real-money movement.”
 
-### 1:20–1:30 — Close on the product
+### 1:02–1:18 — Verify the recorded sequence
 
-Point to the evidence label and the `$5,748 → $4,668 + $1,080` fixture equation.
+Switch to `/evidence#live-verifier`. Point to proof source `246d81a`, later runtime `8b1cee8`, and the finalized sequence. Run the verifier only if the current release exposes it.
 
-If Rain provider IDs are rendered, say: “The Rain sandbox record totals $4,668, while the fixture ledger makes $1,080 available again.” If this run is rehearsal, say: “This replay models the same outcome and creates no provider transaction.” Then close: “We did not build AI that shops; we built a market where demand organizes itself.”
+> “The historical proof predates the later product runtime. On Monad Testnet, the coalition commitment finalized before six offer registrations; the post-Rain attestation binds the selected registered offer to the exact three-ID digest. This read-only check compares current chain state and recomputes that digest. It does not query Rain or write anything.”
+
+### 1:18–1:30 — Close on aligned economics
+
+Return to the `$5,748 → $4,668 + $1,080` fixture equation.
+
+If Rain provider IDs are rendered, say: “The Rain sandbox record totals $4,668, while the fixture ledger makes $1,080 available again.” If this run is rehearsal, say: “This replay models the same outcome and creates no provider transaction.” Then add: “The record has no fee. As one unvalidated hypothesis, keeping 10% of realized savings would be $108 before costs while buyers retain 16.9% versus MSRP. We built a market where demand organizes itself.”
 
 ## Exact click sequence
 
-1. Start on the preloaded decision receipt at `/`; point to catalog match, checks, explicit Save, and `$0` moved.
-2. Switch to `/evidence`; point to source `246d81a`, registry, finalized sequence, and claim boundary.
-3. Switch to `/demo` and hold on the proof summary.
-4. Click **Replay the fixed market** once.
-5. Let autoplay reach **Market cleared**. Do not repeatedly click while Monad preparation is running.
-6. Click **Settle in sandbox** only if the button exists and the presenter intends a provider run; otherwise click **Run rehearsal**.
-7. At the outcome, point to the evidence-mode label first, then the receipt IDs or simulated labels, then Monad evidence.
-8. Click **Reset the market** before the next presentation. Reset itself causes no provider operation.
+1. Start on `/demo` and lead with the first-frame outcome.
+2. Switch to the preloaded receipt at `/`; point to catalog match, checks, explicit Save, and `$0` moved.
+3. Return to `/demo` and click **Replay the fixed market** once.
+4. Let autoplay reach **Market cleared**. Do not repeatedly click while Monad preparation is running.
+5. Click **Settle in sandbox** only if the button exists and the presenter intends a provider run; otherwise click **Run rehearsal**.
+6. At the outcome, point to the evidence-mode label first, then receipt IDs or simulated labels and the MCC result.
+7. Switch to `/evidence#live-verifier`; point to release lineage and finalized evidence. Run the live verifier only when available, and label it read-only.
+8. Return to the outcome, state the clearly hypothetical economics, and click **Reset the market**. Reset itself causes no provider operation.
 
 ## Optional deep dive and Q&A
 

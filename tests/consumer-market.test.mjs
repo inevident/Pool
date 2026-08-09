@@ -14,6 +14,7 @@ const SONY = "product-sony-wh1000xm6";
 const SONY_TARGET = 37_900;
 const STEAM = "product-steam-deck-oled-512";
 const STEAM_TARGET = 49_400;
+const MONITOR = "product-monitor-27-4k-usbc";
 
 test("deeper volume tiers unlock strictly better prices", () => {
   const bpsByUnits = [5, 12, 30, 60, 150].map(volumeDiscountBps);
@@ -89,6 +90,21 @@ test("the cheapest eligible offer wins deterministically", () => {
 
   // Same inputs must always produce the same award.
   assert.deepEqual(run(), first);
+});
+
+test("the reference monitor market preserves the published fixture price shape", () => {
+  const clearing = clearConsumerMarket({
+    productId: MONITOR,
+    aggregateUnits: 12,
+    targetUnitPriceCents: 38_900,
+  });
+
+  assert.deepEqual(
+    clearing.offers.map((offer) => offer.unitPriceCents),
+    [40_100, 42_900, 38_900],
+  );
+  assert.equal(clearing.code, "cleared");
+  assert.equal(clearing.winner?.unitPriceCents, 38_900);
 });
 
 test("an under-funded pool refuses to buy and reports the clearing size", () => {

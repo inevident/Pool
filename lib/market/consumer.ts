@@ -103,6 +103,13 @@ const ECONOMICS: Readonly<
     "merchant-northstar": { openingUnitCents: 57_499, floorUnitCents: 51_500 },
     "merchant-signal": { openingUnitCents: 56_499, floorUnitCents: 51_900 },
   },
+  "product-monitor-27-4k-usbc": {
+    // At the 10+ unit tier these produce the same $401 / $429 / $389
+    // reference-market prices shown by the fixed technical fixture.
+    "merchant-keystone": { openingUnitCents: 41_771, floorUnitCents: 39_500 },
+    "merchant-northstar": { openingUnitCents: 44_688, floorUnitCents: 42_000 },
+    "merchant-signal": { openingUnitCents: 40_521, floorUnitCents: 37_900 },
+  },
 };
 
 export function merchantCategoryCodeFor(category: string) {

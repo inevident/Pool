@@ -28,11 +28,11 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 **Headline:** The public record shows commitment before offers.
 
-**Visual:** `/evidence` · source `246d81a` · chain `10143` · registry `0xE1b7…b217` · `1` commitment → `6` finalized offer registrations → `1` finalized post-Rain attestation.
+**Visual:** `/evidence` · proof source `246d81a` · later runtime `8b1cee8` · chain `10143` · registry `0xE1b7…b217` · `1` commitment → `6` finalized offer registrations → `1` finalized post-Rain attestation, plus the read-only `/evidence#live-verifier` check.
 
-**Say:** POOL published the exact, sanitized identifiers behind the fixed run. The commitment finalized before all six admitted offer registrations. After Rain, the finalized attestation names one registered offer and binds the digest of the exact three settlement IDs. Private buyer ceilings and merchant floors stay offchain.
+**Say:** POOL published the exact, sanitized identifiers behind the fixed run and a release manifest that distinguishes the historical proof source from the later product runtime. The commitment finalized before all six admitted offer registrations. After Rain, the finalized attestation names one registered offer and binds the digest of the exact three settlement IDs. The live verifier reads current Monad state and recomputes that published digest without a write.
 
-**Boundary:** This is operator-attested Testnet ordering, not custody, independent verification of Rain, offchain seller visibility, or real-money proof.
+**Boundary:** This is operator-attested Testnet ordering. The verifier does not query Rain, move money, authorize a transaction, verify balances, prove real merchants, or turn the static record into an independent audit.
 
 ### Slide 4 — Sellers compete for the whole order
 
@@ -56,38 +56,39 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 ### Slide 6 — The market outcome
 
-**Headline:** Fixture MSRP secured the commitment. Rain settled the deal price.
+**Headline:** Savings create room for an aligned business model.
 
-**Visual:** `$5,748 fixture-reserved → $4,668 Rain-settled + $1,080 fixture-available`, `18.8%` improvement, `0` human negotiation.
+**Visual:** `$5,748 fixture-reserved → $4,668 Rain-settled + $1,080 fixture-available`, then a clearly labeled savings-share sensitivity: `5% → $54 / 17.8% buyer net`, `10% → $108 / 16.9% buyer net`, `15% → $162 / 16.0% buyer net`.
 
-**Say:** This is a repeat-use product thesis, not a one-off checkout trick: more committed demand attracts more merchants, better outcomes attract more buyers, and the market improves.
+**Say:** The fixed record contains no fee. As a decision model, retaining 10% of realized savings would produce `$108` of revenue before costs while buyers keep `$972`, or `16.9%` versus MSRP. More committed demand can attract more merchants; better net outcomes can attract more buyers.
+
+**Boundary:** This is illustrative sensitivity, not implemented pricing, observed revenue, or merchant validation. It excludes tax, shipping, payment, custody, fraud, returns, support, and acquisition costs.
 
 ## Verbatim 90-second talk track
 
-> “Today, shopping agents optimize one buyer at a time. POOL creates a new market: patient buyers organize into demand, then merchants compete for the whole order.
+> “Patient buyers have fragmented bargaining power. In POOL’s fixed fixture, 12 funded units create a $5,748 order. Seller competition clears at $389 instead of $479, making $1,080 available again—an 18.8% improvement.
 >
-> First, the homepage buyer agent turns language into a catalog-aware decision receipt. It shows the product match, private mandate, and deterministic checks, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only explicit Save creates local intent state.
+> The homepage buyer agent makes that demand programmable. It turns language into a catalog-aware decision receipt, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only explicit Save creates local intent state.
 >
-> The public evidence registry is source-bound to commit `246d81a`. On Monad Testnet chain 10143, the coalition commitment finalized before all six offer registrations. After Rain, the finalized attestation names one registered offer and binds the three-ID settlement digest. That proves POOL’s recorded ordering, not custody, seller visibility, or real money.
+> After demand freezes, three simulated sellers compete without seeing buyer ceilings. Deterministic policy checks quantity, price, delivery, warranty, freshness, and every private mandate before selecting the complete $389 offer.
 >
-> In the fixed fixture, three compatible buyers reserve $5,748 across 12 monitors; the wrong ultrawide stays out. Three simulated sellers compete without seeing buyer ceilings, and deterministic policy selects $389 per unit, down from $479.
+> Only then does Rain receive three allocation-derived scoped-card requests. MCC 7995 returns the exact `scoped_card_mcc_not_allowed` decline before the legitimate sandbox allocations settle. The source-bound record reused the same three Rain IDs through same-day idempotent replay; no real money moved.
 >
-> Only after clearing does Rain receive three allocation-derived scoped-card requests. MCC 7995 returns the exact `scoped_card_mcc_not_allowed` decline before the legitimate allocations settle. The current record reused the same three Rain IDs through same-day idempotent replay; no real money moved.
+> The proof is inspectable. Commit `246d81a` produced the historical record; `8b1cee8` is the later product runtime. On Monad Testnet, the coalition commitment finalized before six offer registrations, and the post-Rain attestation binds the selected registered offer to the exact three-ID digest. The read-only verifier checks current chain state and recomputes that digest without querying Rain or writing anything.
 >
-> The Rain sandbox record totals $4,668, and the fixture ledger makes $1,080 available again—an 18.8% improvement with zero human negotiation. We did not build AI that shops. We built a market where demand organizes itself.”
+> The fixed record has no fee. As one aligned hypothesis, ten percent of realized savings would be $108 before costs while buyers still retain 16.9% versus MSRP. That model is unvalidated. We did not build AI that shops. We built a market where demand organizes itself.”
 
 If the current demo run is rehearsal, replace the MCC sentence with: “The fixed rehearsal shows the required exact decline path; this replay creates no provider transaction.” The separate `/evidence` record remains valid evidence of the already finalized source-bound run; do not imply that the rehearsal created it.
 
 ## Live click sequence
 
-1. Start on a preloaded homepage decision receipt. Point to catalog match, mandate checks, explicit Save, and `$0` moved; do not Save during the story.
-2. Switch to `/evidence`. Point to source `246d81a`, chain `10143`, registry `0xE1b7…b217`, six registrations, the finalized attestation, and the claim boundary.
-3. Switch to `/demo`. Point to **THE 90-SECOND PROOF** and **FIXED TECHNICAL EVIDENCE FIXTURE**.
-4. Click **Replay the fixed market** once.
-5. Let the replay show 3 + 4 + 5 units, the incompatible request, the pre-bid freeze, and the three simulated seller offers.
-6. When the market reaches bounded authority, click **Settle in sandbox** only if that button exists and a provider run is intended. Otherwise click **Run rehearsal**.
-7. On the outcome screen, read the evidence label first. Then point to provider IDs or simulated labels, the MCC `7995` result, and Monad evidence.
-8. End on `$5,748 → $4,668 + $1,080`, then click **Reset the market** before the next run.
+1. Start on `/demo` before clicking anything. Lead with `12` units, `$5,748` reserved, `$389` per unit, and `$1,080 / 18.8%` gross savings.
+2. Switch briefly to the preloaded homepage receipt. Point to catalog match, mandate checks, explicit Save, and `$0` moved; do not Save during the story.
+3. Return to `/demo` and click **Replay the fixed market** once. Let it show 3 + 4 + 5 units, the incompatible request, the pre-bid freeze, and the three simulated seller offers.
+4. At bounded authority, click **Settle in sandbox** only if that button exists and a provider run is intended. Otherwise click **Run rehearsal**.
+5. On the outcome, read the evidence label first. Then point to provider IDs or simulated labels and the MCC `7995` result.
+6. Switch to `/evidence#live-verifier`. Point to proof source `246d81a`, later runtime `8b1cee8`, registry `0xE1b7…b217`, finalized sequence, release manifest, and claim boundary. Run the read-only check only if the current release exposes it.
+7. End on `$5,748 → $4,668 + $1,080`, state the clearly hypothetical 10%-of-savings case, then reset the market before the next run.
 
 Do not open `/merchant` or the optional technical inspector during the 90-second story. Use them for Q&A: `/merchant` shows the blinded Seller Pilot Sandbox contract with zero live retailers and zero writes; the inspector exercises the fixed buyer/merchant APIs and policy traces.
 

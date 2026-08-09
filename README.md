@@ -6,7 +6,7 @@
 
 > **Deployment status, verified 2026-08-09:** `https://pool-overnight-yeayea.vercel.app` is the stable public Preview alias for the manually deployed `overnight` release. Desktop and 390px mobile canaries verified `/`, `/merchant`, `/evidence`, and `/demo`, including the buyer decision receipt, seller dry run, finalized public proof record, complete fixed replay, and rehearsal outcome. Vercel Git integration is not connected, so future pushes still require an explicit deploy. Preview has no Rain or Monad execution configuration; it correctly uses deterministic/rehearsal runtime behavior while `/evidence` publishes the sanitized, finalized source-bound record.
 
-POOL is a repeat-use group-buying product for people who are willing to wait for a better price. In the intended lifecycle, a buyer funds an account, describes what they want, and joins a compatible buying pool only when available balance covers the item’s full MSRP; POOL aggregates committed demand, lets merchants compete, captures the negotiated amount, and releases the difference. The current product surface models that lifecycle as a quote-only browser rehearsal. Only the protected fixed `/demo` can create labeled Rain sandbox settlement evidence.
+POOL is a repeat-use group-buying product for people who are willing to wait for a better price. In the intended lifecycle, a buyer funds an account, describes what they want, and joins a compatible buying pool only when available balance covers the item’s full MSRP; POOL aggregates committed demand, lets merchants compete, captures the negotiated amount, and releases the difference. The current product surface models that lifecycle as a quote-only browser rehearsal. Only two protected paths can create labeled Rain sandbox settlement evidence: the fixed `/demo`, and the `/negotiate` agent purchase. Both are gated identically behind `RAIN_LIVE_EXECUTION_ENABLED`, Rain configuration, and demo access; without all three they return a clearly labeled rehearsal and move `$0`.
 
 The default experience is a functioning product sandbox, not a scripted presentation. A catalog-aware buyer agent turns natural language into an inspectable decision receipt, but interpretation moves `$0` and saves nothing until the buyer explicitly chooses **Save buying intent**. Buyers can then add test funds, join and leave forming pools, inspect commitments, and follow balance activity. Product state persists in the browser across reloads.
 
@@ -24,6 +24,7 @@ Run the app and open `http://localhost:3000`:
 | `/orders` | Track commitments, exact releases, and the disclosed path to future fulfillment |
 | `/evidence` | Inspect the public, sanitized Rain sandbox + finalized Monad Testnet proof registry and its explicit claim boundaries |
 | `/merchant` | Dry-run the Seller Pilot Sandbox against a blinded fixture RFP; no live retailer, binding bid, traction claim, order, provider call, or external write |
+| `/negotiate` | Pledge along a demand curve and watch POOL's agent walk it down: deeper committed volume unlocks deeper merchant discounts, and every activated buyer pays the single cleared price |
 | `/demo` | Replay the protected fixed technical proof; it is the only route with the complete three-allocation provider flow |
 
 **The pool you join is the pool the product rehearses.** Each pool accepts every funded commitment submitted during its fixed two-week window. Ten funded units is the minimum needed to open the local merchant rehearsal, not a target or cap. At the close, POOL uses the actual fixture quantity and evaluates three simulated merchant offers against the buyer’s saved maximum and deadline. A qualifying result is a modeled quote only: the reservation stays untouched until the buyer explicitly releases it, and no aggregate order, payment, Rain mutation, or Monad mutation is created.
@@ -55,6 +56,10 @@ Presenters should use the editable [`POOL_PITCH.pptx`](./POOL_PITCH.pptx) deck w
 
 The current source-bound record is the [Rain + Monad evidence capture](./public/evidence/rain-monad-testnet-2026-08-09.png) with its [sanitized JSON](./public/evidence/rain-monad-testnet-2026-08-09.json), generated from `overnight@246d81a` and published in the verified `overnight` Preview. It records the same three Rain sandbox settlements as same-day idempotent replays, the exact MCC `7995` decline, and finalized Monad Testnet ordering on chain `10143`: registry [`0xE1b7…b217`](https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217), one finalized coalition commitment, six finalized offer registrations, and a finalized post-Rain attestation. No real money moved, and Monad did not independently verify Rain or the simulated ledger. The earlier Rain-only capture remains an archived record of its own local-only state.
 
+The [machine-readable release provenance manifest](./public/evidence/release-provenance-2026-08-09.json) separates three facts that should never be collapsed into one claim: the proof-producing source commit is `246d81a`, the later product runtime commit is `8b1cee8`, and the recorded deployed/docs commit is `88d75b5`. The historical proof therefore predates the later runtime. The manifest also records the stable Preview URL, evidence/deck SHA-256 digests, Rain IDs, Monad registry and transactions, and the explicit claim limits. It deliberately omits Vercel deployment identifiers, which are not recoverable from this repository; the manifest records only facts it can source. It is provenance disclosure, not a signature or independent audit.
+
+`GET /api/evidence/verify` is the designated read-only verifier path in runtimes that include it. A successful response may recompute the published digest and compare current Monad Testnet state with the static record; it requests no financial authorization, creates no Rain call, and performs no external write. Do not infer that the endpoint is deployed merely because the manifest names it—check the current URL and response. It is not a fresh Rain execution or an independent Rain oracle.
+
 ## Commitment model
 
 POOL’s fixture ledger uses a full-MSRP reservation to make every participant credible demand:
@@ -73,6 +78,16 @@ Step 8 is the intended provider-backed lifecycle, not current product-page behav
 All money in the domain model is represented as integer cents. State transitions are fail-closed and idempotent: a buyer cannot double-commit funds, leave twice, or settle for more than the reservation.
 
 In the current product workspace, this ledger is a deterministic local sandbox. A production version requires authenticated identities and a durable double-entry ledger backed by an appropriate regulated custody, banking, or payments partner.
+
+## Demand-curve negotiation at `/negotiate`
+
+A single price hides how much demand exists just below it. At `/negotiate`, buyers instead pledge along a curve — "I'd buy at 10% off", "at 20% off", "at 30% off" — where each pledge is the *highest* price that buyer will accept.
+
+When the window closes, POOL's agent walks the curve down. At every rung it can credibly promise a merchant the exact volume that unlocks there: every buyer whose ceiling sits at or above that price. Deeper rungs promise more units, and more units unlock deeper merchant discounts. The agent keeps the deepest level a merchant will actually honor, and then **every activated buyer pays that single clearing price — including the buyers who would happily have paid far more.**
+
+The clearing is pure and deterministic in [`lib/negotiation/demand-curve.ts`](./lib/negotiation/demand-curve.ts): the same pledges and merchant roster always clear at the same price, so the server re-derives the outcome rather than trusting a number the browser proposed, and a reviewer can replay it. Merchant floors and maximum discounts are private seller economics — they produce a quote and are never serialized into a public projection.
+
+`POST /api/negotiation/purchase` is the only non-`/demo` path that can create a Rain authorization or settlement; the wallet's separately session-gated Rain balance read is read-only and moves nothing. After clearing, the agent mints a Rain scoped card for exactly the cleared amount, locked to the merchant's category, then authorizes and settles, reversing on any failure. The card is scoped so the agent cannot spend more than the cleared amount or at an off-policy category: its authority is derived from the market outcome, not the other way around. Unless `RAIN_LIVE_EXECUTION_ENABLED`, Rain configuration, and demo access are all present, it returns a labeled `REHEARSAL` plan and no card is issued.
 
 ### Fixed-window rehearsal authority
 
@@ -115,6 +130,18 @@ Three simulated merchants compete, moving the public price from **$479 to $389 p
 - Negotiated POOL total: **$4,668**
 - Savings released: **$1,080 / 18.8%**
 - Human negotiation: **none**
+
+### Illustrative unit economics
+
+POOL has not implemented or validated a fee. One incentive-aligned hypothesis is to charge only when buyers realize savings and retain a share of those savings. Applied to the fixed fixture's `$1,080` gross savings:
+
+| Illustrative POOL share of realized savings | Revenue before costs | Buyer savings retained | Net buyer savings vs. `$5,748` MSRP |
+| ---: | ---: | ---: | ---: |
+| `5%` | `$54` | `$1,026` | `17.8%` |
+| `10%` | `$108` | `$972` | `16.9%` |
+| `15%` | `$162` | `$918` | `16.0%` |
+
+This is sensitivity analysis, not observed revenue, pricing, or merchant validation. The fixed evidence record contains no fee. Tax, shipping, payment, custody, fraud, returns, support, and acquisition costs are excluded; a real pilot must measure them before choosing a model.
 
 The walkthrough can advance automatically or one event at a time. Resetting it never triggers a financial operation. Its monitor market is a fixed technical fixture and is intentionally separate from the buyer product’s broader catalog.
 

@@ -86,6 +86,25 @@ test("server-renders every repeat-use product surface", async () => {
   }
 });
 
+test("the buyer catalog bridges the reference monitor to separately bounded proof", async () => {
+  const explore = await render("/explore");
+  assert.equal(explore.status, 200);
+  const exploreHtml = await explore.text();
+  assert.match(exploreHtml, /POOL Reference/);
+  assert.match(exploreHtml, /27-inch 4K USB-C Monitor/);
+  assert.match(exploreHtml, /Proof-linked/);
+
+  const detail = await render("/pools/pool-monitor-reference-august");
+  assert.equal(detail.status, 200);
+  const detailHtml = await detail.text();
+  assert.match(detailHtml, /PRODUCT ↔ TECHNICAL FIXTURE/);
+  assert.match(detailHtml, /DISPLAY-27-4K-IPS-USBC/);
+  assert.match(detailHtml, /This page rehearses the 14-day buyer lifecycle/);
+  assert.match(detailHtml, /href="\/evidence"/);
+  assert.match(detailHtml, /href="\/demo"/);
+  assert.match(detailHtml, /href="\/merchant"/);
+});
+
 test("does not present the shared Rain sandbox ceiling as buyer funds", async () => {
   const source = await readFile(
     new URL("../app/_components/product-workspace.tsx", import.meta.url),

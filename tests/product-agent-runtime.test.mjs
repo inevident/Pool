@@ -42,6 +42,15 @@ const catalogCases = [
     maxUnitPriceCents: 55_000,
     msrpCoverageCents: 179_997,
   },
+  {
+    intent:
+      "I need 2 color-accurate 27-inch 4K USB-C monitors under $430 each and can wait 30 days.",
+    productId: "product-monitor-27-4k-usbc",
+    poolId: "pool-monitor-reference-august",
+    quantity: 2,
+    maxUnitPriceCents: 43_000,
+    msrpCoverageCents: 95_800,
+  },
 ];
 
 for (const example of catalogCases) {
@@ -98,7 +107,7 @@ test("missing price, quantity, and patience fail closed without invented default
 
 test("unsupported and ambiguous product requests require clarification", async () => {
   const unsupported = await runProductIntentAgent(
-    "I need 1 4K monitor under $500 and can wait 30 days.",
+    "I need 1 road bicycle under $500 and can wait 30 days.",
     { apiKey: null, now: evaluationTime },
   );
   assert.equal(unsupported.status, "needs_clarification");
@@ -112,6 +121,25 @@ test("unsupported and ambiguous product requests require clarification", async (
   assert.equal(ambiguous.status, "needs_clarification");
   assert.equal(ambiguous.match, null);
   assert.match(ambiguous.decision.clarifications[0], /exactly one/i);
+});
+
+test("the reference monitor match exposes identity continuity without claiming execution", async () => {
+  const run = await runProductIntentAgent(
+    "I need 1 27-inch 4K USB-C monitor under $430 and can wait 30 days.",
+    { apiKey: null, now: evaluationTime },
+  );
+
+  assert.equal(run.status, "ready_for_review");
+  assert.deepEqual(run.match?.technicalFixture, {
+    scenarioVersion: "monitor-pool-v1",
+    productSku: "DISPLAY-27-4K-IPS-USBC",
+    demoHref: "/demo",
+    evidenceHref: "/evidence",
+    sellerHref: "/merchant",
+    boundary: "separate_fixed_fixture",
+  });
+  assert.equal(run.decision.financialAuthorization, "not_requested");
+  assert.equal(run.decision.interpretationMovedCents, 0);
 });
 
 test("prompt injection and money-operation instructions are blocked", async () => {

@@ -11,6 +11,10 @@ import {
 const DAY_MS = 86_400_000;
 export const DEFAULT_PRODUCT_SEED_TIME = "2026-08-08T16:00:00.000Z";
 export const PRODUCT_POOL_COMMITMENT_WINDOW_DAYS = 14;
+export const TECHNICAL_FIXTURE_PRODUCT_ID = "product-monitor-27-4k-usbc";
+export const TECHNICAL_FIXTURE_POOL_ID = "pool-monitor-reference-august";
+export const TECHNICAL_FIXTURE_SCENARIO_VERSION = "monitor-pool-v1";
+export const TECHNICAL_FIXTURE_PRODUCT_SKU = "DISPLAY-27-4K-IPS-USBC";
 
 /**
  * Offline spend ceiling used before the live Rain sandbox balance is read.
@@ -77,6 +81,18 @@ const seededProducts: readonly ProductListing[] = [
     currency: "USD",
     description:
       "Connected multi-styler with personalized curling sequences and six attachments.",
+  },
+  {
+    id: TECHNICAL_FIXTURE_PRODUCT_ID,
+    slug: "27-inch-4k-usb-c-monitor",
+    name: "27-inch 4K USB-C Monitor",
+    brand: "POOL Reference",
+    category: "computing",
+    imageUrl: "/og.png",
+    msrpUnitCents: 47_900,
+    currency: "USD",
+    description:
+      "The same generic display specification used by POOL's public Rain and Monad technical fixture.",
   },
 ] as const;
 
@@ -147,6 +163,16 @@ export function createSeededProductWorkspace(
       minimumCommittedUnitCount: 10,
       committedUnitCount: 27,
       estimatedUnitPriceCents: 52_500,
+      createdAt,
+    },
+    {
+      id: TECHNICAL_FIXTURE_POOL_ID,
+      productId: TECHNICAL_FIXTURE_PRODUCT_ID,
+      status: "forming",
+      cutoffAt: isoAfterDays(createdAt, PRODUCT_POOL_COMMITMENT_WINDOW_DAYS),
+      minimumCommittedUnitCount: 10,
+      committedUnitCount: 12,
+      estimatedUnitPriceCents: 38_900,
       createdAt,
     },
   ] as const;

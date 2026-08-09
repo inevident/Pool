@@ -26,6 +26,7 @@ import {
   ShoppingBag,
   Sparkles,
   Smartphone,
+  TrendingDown,
   Users,
   WalletCards,
   X,
@@ -45,6 +46,9 @@ import {
 import {
   PRODUCT_SEED_VERSION,
   PRODUCT_WORKSPACE_SCHEMA_VERSION,
+  TECHNICAL_FIXTURE_PRODUCT_ID,
+  TECHNICAL_FIXTURE_PRODUCT_SKU,
+  TECHNICAL_FIXTURE_SCENARIO_VERSION,
   ProductDomainError,
   assertProductWorkspaceInvariant,
   createCanonicalProductWorkspace,
@@ -332,6 +336,10 @@ function ProductGlyph({ product, size = 21 }: { product: ProductListing; size?: 
   );
 }
 
+function isTechnicalFixtureProduct(product: ProductListing) {
+  return product.id === TECHNICAL_FIXTURE_PRODUCT_ID;
+}
+
 function BrandMark() {
   return (
     <span className={styles.brandMark} aria-hidden="true">
@@ -617,6 +625,41 @@ export default function ProductWorkspaceApp({
     }
   }
 
+  async function replayProductAgentSample(sampleId: string, rawIntent: string) {
+    const intent = rawIntent.trim();
+    setQuickIntent(intent);
+    setProductAgentError(null);
+    setProductAgentRun(null);
+    productAgentRequestRef.current?.abort();
+    const controller = new AbortController();
+    productAgentRequestRef.current = controller;
+    setProductAgentLoading(true);
+
+    try {
+      const response = await fetch(`/api/agent/product-sample/${sampleId}`, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      const body: unknown = await response.json();
+      if (!response.ok || !isProductIntentRun(body)) {
+        throw new Error("The release-built agent sample was unavailable.");
+      }
+      setProductAgentRun(body);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setProductAgentError(
+        error instanceof Error
+          ? error.message
+          : "The release-built agent sample was unavailable.",
+      );
+    } finally {
+      if (productAgentRequestRef.current === controller) {
+        productAgentRequestRef.current = null;
+        setProductAgentLoading(false);
+      }
+    }
+  }
+
   function updateQuickIntent(value: string) {
     setQuickIntent(value);
     setProductAgentRun(null);
@@ -697,6 +740,11 @@ export default function ProductWorkspaceApp({
           </button>
         </section>
 
+        <Link className={styles.proofLink} href="/negotiate">
+          <TrendingDown size={14} />
+          <span>Demand-curve negotiation</span>
+          <ExternalLink size={11} />
+        </Link>
         <Link className={styles.proofLink} href="/demo">
           <Zap size={14} />
           <span>Rain + Monad proof</span>
@@ -746,7 +794,7 @@ export default function ProductWorkspaceApp({
             quickIntent={quickIntent}
             setQuickIntent={updateQuickIntent}
             openQuickIntent={openQuickIntent}
-            interpretProductIntent={interpretProductIntent}
+            replayProductAgentSample={replayProductAgentSample}
             productAgentRun={productAgentRun}
             productAgentError={productAgentError}
             productAgentLoading={productAgentLoading}
@@ -845,7 +893,7 @@ function DashboardView({
   quickIntent,
   setQuickIntent,
   openQuickIntent,
-  interpretProductIntent,
+  replayProductAgentSample,
   productAgentRun,
   productAgentError,
   productAgentLoading,
@@ -860,7 +908,7 @@ function DashboardView({
   quickIntent: string;
   setQuickIntent: (value: string) => void;
   openQuickIntent: (event: FormEvent<HTMLFormElement>) => void;
-  interpretProductIntent: (intent: string) => Promise<void>;
+  replayProductAgentSample: (sampleId: string, intent: string) => Promise<void>;
   productAgentRun: ProductIntentRun | null;
   productAgentError: string | null;
   productAgentLoading: boolean;
@@ -933,20 +981,30 @@ function DashboardView({
           <div className={styles.exampleRow} aria-label="Example purchases">
             {[
               {
+                id: "sony-xm6",
                 label: "Sony XM6",
                 intent: "I want 1 Sony XM6 under $400 and can wait 30 days.",
               },
               {
+                id: "steam-deck-oled",
                 label: "Steam Deck OLED",
                 intent: "I want 1 Steam Deck OLED under $520 and can wait 30 days.",
               },
               {
+                id: "macbook-air-m4",
                 label: "MacBook Air M4",
                 intent: "I want 1 MacBook Air M4 under $950 and can wait 30 days.",
               },
               {
+                id: "dyson-airwrap",
                 label: "Dyson Airwrap",
                 intent: "I want 1 Dyson Airwrap under $550 and can wait 30 days.",
+              },
+              {
+                id: "reference-monitor",
+                label: "4K USB-C monitor",
+                intent:
+                  "I want 1 27-inch 4K USB-C monitor under $430 and can wait 30 days.",
               },
             ].map((example) => (
                 <button
@@ -954,7 +1012,7 @@ function DashboardView({
                   type="button"
                   onClick={() => {
                     setQuickIntent(example.intent);
-                    void interpretProductIntent(example.intent);
+                    void replayProductAgentSample(example.id, example.intent);
                   }}
                 >
                   {example.label}
@@ -1158,14 +1216,29 @@ function ProductAgentReceipt({
         <div>
           <strong>{receiptStatus}</strong>
           <small>
-            {run.mode === "openai_responses"
-              ? "Protected AI extraction"
-              : "Deterministic catalog parser"}
+            {run.sampleProvenance
+              ? run.mode === "openai_responses"
+                ? "Release-built OpenAI sample"
+                : "Release-built deterministic sample"
+              : run.mode === "openai_responses"
+                ? "Protected AI extraction"
+                : "Deterministic catalog parser"}
           </small>
         </div>
       </header>
 
       <p className={styles.agentSource}>“{run.rawIntent}”</p>
+
+      {run.sampleProvenance ? (
+        <div className={styles.agentSampleBoundary}>
+          <span>ALLOWLISTED BUILD ARTIFACT</span>
+          <p>
+            Generated once during the release build from this fixed sample. Visitor requests make{" "}
+            <strong>{run.sampleProvenance.runtimeCallsPerVisitor} model calls</strong>; custom text
+            uses the bounded runtime separately.
+          </p>
+        </div>
+      ) : null}
 
       <ol className={styles.agentFlow}>
         {run.trace.map((step) => (
@@ -1229,6 +1302,28 @@ function ProductAgentReceipt({
             <li key={clarification}>{clarification}</li>
           ))}
         </ul>
+      ) : null}
+
+      {run.match?.technicalFixture ? (
+        <div className={styles.agentProofBridge}>
+          <span>
+            <ShieldCheck size={13} /> Technical identity continuity
+          </span>
+          <p>
+            This catalog match shares SKU <strong>{run.match.technicalFixture.productSku}</strong>
+            {" "}with fixed scenario <strong>{run.match.technicalFixture.scenarioVersion}</strong>.
+            The buyer workspace remains a zero-write rehearsal; the separate fixture carries the
+            published Rain + Monad evidence.
+          </p>
+          <div>
+            <Link href={run.match.technicalFixture.evidenceHref}>
+              Verify evidence <ExternalLink size={10} />
+            </Link>
+            <Link href={run.match.technicalFixture.demoHref}>
+              Replay fixture <ArrowRight size={10} />
+            </Link>
+          </div>
+        </div>
       ) : null}
 
       <footer className={styles.agentReceiptFooter}>
@@ -1397,7 +1492,14 @@ function PoolCard({
     <article className={classNames(styles.poolCard, featured && styles.poolCardFeatured)}>
       <div className={styles.poolCardTop}>
         <ProductGlyph product={product} />
-        <span className={styles.statusChip}>{statusLabel(pool)}</span>
+        <div className={styles.poolCardChips}>
+          {isTechnicalFixtureProduct(product) ? (
+            <Link className={styles.referenceChip} href="/evidence">
+              Proof-linked
+            </Link>
+          ) : null}
+          <span className={styles.statusChip}>{statusLabel(pool)}</span>
+        </div>
       </div>
       <h3>
         <Link href={poolHref(pool)} aria-label={`Review ${product.brand} ${product.name} group-buy terms`}>
@@ -2143,6 +2245,33 @@ function PoolDetailView({ workspace, poolId, setModal }: SharedViewProps & { poo
         </div>
       </section>
 
+      {isTechnicalFixtureProduct(product) ? (
+        <section className={styles.referenceBridge} aria-labelledby="reference-bridge-title">
+          <div>
+            <span>PRODUCT ↔ TECHNICAL FIXTURE</span>
+            <h2 id="reference-bridge-title">One specification. Two honestly separated surfaces.</h2>
+            <p>
+              This buyer pool and POOL&apos;s fixed technical fixture share product SKU{" "}
+              <strong>{TECHNICAL_FIXTURE_PRODUCT_SKU}</strong>. This page rehearses the 14-day
+              buyer lifecycle and creates no provider transaction. The separate{" "}
+              <strong>{TECHNICAL_FIXTURE_SCENARIO_VERSION}</strong> fixture publishes the
+              three-allocation Rain sandbox record and finalized Monad ordering proof.
+            </p>
+          </div>
+          <div className={styles.referenceBridgeActions}>
+            <Link href="/evidence">
+              <ShieldCheck size={14} /> Inspect public evidence
+            </Link>
+            <Link href="/demo">
+              <Zap size={14} /> Replay technical fixture
+            </Link>
+            <Link href="/merchant">
+              <ShoppingBag size={14} /> Test seller contract
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <div className={styles.detailGrid}>
         <section className={styles.detailPanel}>
           <div className={styles.detailPanelHeader}>
@@ -2502,6 +2631,7 @@ function IntentForm({
     if (normalized.includes("steam") || normalized.includes("game")) return "product-steam-deck-oled-512";
     if (normalized.includes("mac") || normalized.includes("laptop")) return "product-macbook-air-m4-13";
     if (normalized.includes("dyson") || normalized.includes("airwrap")) return "product-dyson-airwrap-id";
+    if (normalized.includes("monitor") || normalized.includes("display")) return TECHNICAL_FIXTURE_PRODUCT_ID;
     return "product-sony-wh1000xm6";
   }, [initialProductId, quickText]);
   const [productId, setProductId] = useState(inferredProductId);

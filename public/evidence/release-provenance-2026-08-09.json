@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "release_provenance_manifest",
+  "recordedAt": "2026-08-09T09:20:04.000Z",
+  "summary": "Release lineage for POOL's published Rain + Monad Testnet proof. This manifest is provenance disclosure, not a signature, attestation, or independent audit.",
+  "lineage": {
+    "note": "These three commits are distinct facts and must never be collapsed into one claim. The historical proof predates the later product runtime.",
+    "proofSource": {
+      "commit": "246d81a",
+      "committedAt": "2026-08-09T05:12:23-04:00",
+      "subject": "feat(agent): add buyer decision receipts",
+      "role": "The source commit the published Rain + Monad evidence record was generated from."
+    },
+    "productRuntime": {
+      "commit": "8b1cee8",
+      "committedAt": "2026-08-09T05:49:34-04:00",
+      "subject": "feat(submission): publish verified sponsor proof",
+      "role": "A later product runtime commit. It did not produce the proof record."
+    },
+    "deployedDocs": {
+      "commit": "88d75b5",
+      "committedAt": "2026-08-09T07:50:08-04:00",
+      "subject": "docs: record verified overnight deployment",
+      "role": "The commit whose deployment and documentation state was recorded."
+    },
+    "sourceBranch": "overnight"
+  },
+  "deployment": {
+    "previewUrl": "https://pool-overnight-yeayea.vercel.app",
+    "aliasKind": "stable_preview_alias",
+    "gitIntegrationConnected": false,
+    "note": "Deploys are manual, so a push does not imply the alias moved. Vercel deployment identifiers are deliberately omitted: they are not recoverable from this repository, and this manifest records only facts it can source."
+  },
+  "digests": {
+    "algorithm": "sha256",
+    "note": "Computed over the files as published in this commit.",
+    "files": {
+      "public/evidence/rain-monad-testnet-2026-08-09.json": "401231acaca71bae1f12066ca52dc7739ec802723479ec9782739082fd00e027",
+      "public/evidence/rain-monad-testnet-2026-08-09.png": "0dae98ade057334efd288a9246490eadbce01e5b1dc4df77dea10556d4a5b624",
+      "public/evidence/rain-sandbox-2026-08-09.json": "17f59be915deffa5ca42be8a78661b6a38e91fed3326c27b5b5e3a36b35bc409",
+      "public/evidence/rain-sandbox-2026-08-09.png": "b7d2aff611b4d3bb70c0041112b19dda5de732d1f4ef5d52be0aae45c22c1a50",
+      "POOL_PITCH.pptx": "059145ccbfc322c572d388f56f3a0c1a32ffbcb2a4d745687f384de0b5c6a6e5"
+    }
+  },
+  "record": {
+    "scenarioVersion": "monitor-pool-v1",
+    "runKey": "pool-monitor-pool-v1-20260809",
+    "evidenceMode": "rain-sandbox-plus-monad-testnet",
+    "realMoneyMoved": false,
+    "path": "/evidence/rain-monad-testnet-2026-08-09.json",
+    "verifierPath": "/api/evidence/verify"
+  },
+  "rain": {
+    "provider": "Rain",
+    "environment": "sandbox",
+    "settlementCount": 3,
+    "capturedCents": 466800,
+    "transactionIds": [
+      "ddcdfd2c-9846-4b46-b0d4-60b86510a8c3",
+      "e98eea91-ca5e-43c0-896c-dd9e20da5c35",
+      "e2a24bda-512a-4460-8665-cb618df345d3"
+    ],
+    "note": "Same-day idempotent replays of the same three sandbox settlements. No new real-money movement was created."
+  },
+  "monad": {
+    "network": "Monad Testnet",
+    "chainId": 10143,
+    "confirmation": "finalized",
+    "registryAddress": "0xE1b75A905Cab4005623AA8912AF4a67b9c29b217",
+    "operatorAddress": "0x070dd53f4FdF178E29df30e03FEAD90Cd300e6ed",
+    "commitmentId": "0x12f36512844ccc491ba01f4a909e2d5acf83761cc5bd5924d4f96c3c3778543f",
+    "deploymentTransactionHash": "0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48",
+    "commitmentTransactionHash": "0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd",
+    "settlementAttestationTransactionHash": "0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e",
+    "offerRegistrationCount": 6
+  },
+  "fundingBoundary": {
+    "ledger": "POOL",
+    "simulated": true,
+    "reservedCents": 574800,
+    "capturedCents": 466800,
+    "releasedCents": 108000
+  },
+  "proves": [
+    "Which source commit produced the published evidence record, and that two later commits did not.",
+    "That the named evidence and deck files hash to the recorded SHA-256 digests at this commit.",
+    "That the published record names the listed Rain sandbox settlement IDs and finalized Monad Testnet transactions."
+  ],
+  "doesNotProve": [
+    "real-money custody, deposits, escrow, or production payment processing",
+    "that the recorded Preview alias currently serves this commit, since deploys are manual",
+    "merchant traction, buyer identity, inventory, fulfillment, returns, or a production order",
+    "that Monad independently verified Rain or the simulated buyer ledger",
+    "that this manifest was signed, notarized, or independently audited"
+  ],
+  "redactions": [
+    "all credentials and authorization headers",
+    "card identifiers and card last-four values",
+    "raw provider responses and session cookies",
+    "the Monad operator private key",
+    "Vercel project and organization identifiers"
+  ]
+}
