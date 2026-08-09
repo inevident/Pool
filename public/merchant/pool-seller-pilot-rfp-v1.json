@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "artifact": {
+    "kind": "product_integration_artifact",
+    "label": "Seller pilot sandbox",
+    "liveRetailerConnected": false,
+    "tractionClaimed": false,
+    "binding": false,
+    "externalWrites": false,
+    "statement": "This contract demonstrates a blinded seller workflow against deterministic fixture demand. It is not merchant validation, a binding bid, or evidence of a live marketplace."
+  },
+  "rfp": {
+    "id": "pool-dev-displays-001",
+    "version": 2,
+    "status": "sandbox_fixture",
+    "title": "Twelve-unit development display order",
+    "product": {
+      "sku": "DISPLAY-27-4K-IPS-USBC",
+      "label": "27-inch 4K development monitor",
+      "publicMsrpUnitCents": 47900,
+      "currency": "USD",
+      "specifications": {
+        "formFactor": "flat-panel",
+        "diagonalInches": 27,
+        "resolution": "4K UHD",
+        "panelTechnology": "ips",
+        "ports": ["usb-c", "displayport", "hdmi"],
+        "usbPowerDeliveryWatts": 90,
+        "vesaMount": true
+      }
+    },
+    "committedQuantity": 12,
+    "demandEvidence": {
+      "kind": "simulated_full_msrp_reservations",
+      "reservedCents": 574800,
+      "currency": "USD",
+      "custodyClaimed": false,
+      "description": "Twelve deterministic fixture units have modeled full-MSRP reservations. No buyer funds are held by this repository."
+    },
+    "fulfillment": {
+      "destinationScope": "Three Northeast U.S. fixture destinations",
+      "destinationCountry": "US",
+      "deliveryWithinDays": 8,
+      "minimumWarrantyMonths": 24,
+      "shippingAssumption": "Included in the submitted unit price for this fixture"
+    },
+    "hiddenFromSeller": [
+      "buyer identities",
+      "buyer maximum prices",
+      "buyer total-spend limits",
+      "competing offers",
+      "sandbox supplier floor"
+    ]
+  },
+  "bidContract": {
+    "endpoint": "/api/merchant/pilot",
+    "method": "POST",
+    "contentType": "application/json",
+    "actionHeader": {
+      "name": "X-Pool-Agent-Action",
+      "value": "evaluate-seller-pilot"
+    },
+    "accepts": ["unitPriceCents", "deliveryDays", "warrantyMonths"],
+    "serverPinned": [
+      "RFP identity and version",
+      "committed quantity",
+      "prequalified sandbox supplier profile",
+      "bid issue and expiry window"
+    ],
+    "responseGuarantees": [
+      "No buyer identity or private ceiling",
+      "No competing offer or relative rank",
+      "No financial authorization",
+      "No Rain or Monad contact",
+      "No aggregate order"
+    ]
+  }
+}
