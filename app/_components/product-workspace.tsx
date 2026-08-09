@@ -1473,6 +1473,59 @@ function ExploreView({ workspace, pools, setModal }: SharedViewProps & { pools: 
   );
 }
 
+function countdownParts(cutoffAt: string, now: number) {
+  const remainingMs = Date.parse(cutoffAt) - now;
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
+  const totalSeconds = Math.floor(remainingMs / 1_000);
+  return {
+    days: Math.floor(totalSeconds / 86_400),
+    hours: Math.floor((totalSeconds % 86_400) / 3_600),
+    minutes: Math.floor((totalSeconds % 3_600) / 60),
+    seconds: totalSeconds % 60,
+    remainingHours: remainingMs / 3_600_000,
+  };
+}
+
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
+/**
+ * Live commitment-window countdown.
+ *
+ * `useNow` returns 0 during server rendering, so the server emits the fixed
+ * cutoff date instead of a duration measured from the epoch. The ticking value
+ * appears once the client takes over.
+ */
+function PoolCountdown({ cutoffAt }: { cutoffAt: string }) {
+  const now = useNow(1_000);
+
+  if (now === 0) {
+    return (
+      <span className={styles.countdownStatic}>
+        Closes {shortDate.format(new Date(cutoffAt))}
+      </span>
+    );
+  }
+
+  const parts = countdownParts(cutoffAt, now);
+  if (!parts) {
+    return <span className={styles.countdownClosed}>Commitment window closed</span>;
+  }
+
+  return (
+    <span
+      className={styles.countdownValue}
+      data-urgent={parts.remainingHours <= 48 ? "true" : undefined}
+      aria-label={`This group buy closes in ${parts.days} days, ${parts.hours} hours, ${parts.minutes} minutes`}
+    >
+      <Clock3 size={11} aria-hidden="true" />
+      <span>
+        {parts.days > 0 ? `${parts.days}d ` : ""}
+        {pad2(parts.hours)}:{pad2(parts.minutes)}:{pad2(parts.seconds)}
+      </span>
+    </span>
+  );
+}
+
 function PoolCard({
   workspace,
   pool,
@@ -1487,6 +1540,9 @@ function PoolCard({
   const eligibility = poolEligibility(pool);
   const joinIsOpen = canLeavePool(pool, now);
   const savings = Math.max(0, product.msrpUnitCents - pool.estimatedUnitPriceCents);
+  const discountPercent = product.msrpUnitCents
+    ? Math.round((savings / product.msrpUnitCents) * 100)
+    : 0;
 
   return (
     <article className={classNames(styles.poolCard, featured && styles.poolCardFeatured)}>
@@ -1507,17 +1563,26 @@ function PoolCard({
         </Link>
       </h3>
       <p className={styles.poolSubtitle}>{product.description}</p>
+
+      <div className={styles.dealBlock}>
+        <span className={styles.dealBadge}>Group deal</span>
+        <span className={styles.dealPercent}>-{discountPercent}%</span>
+      </div>
       <div className={styles.priceRow}>
         <div>
           <span>Estimated group price</span>
           <strong>{cents(pool.estimatedUnitPriceCents)}</strong>
-          <small>MSRP {cents(product.msrpUnitCents)}</small>
+          <small>
+            MSRP <s>{cents(product.msrpUnitCents)}</s> · save {cents(savings)}
+          </small>
         </div>
-        <small className={styles.savingsText}>
-          {cents(savings)}
-          <br />potential savings
-        </small>
       </div>
+
+      <div className={styles.countdownRow}>
+        <span className={styles.countdownLabel}>This group buy ends in</span>
+        <PoolCountdown cutoffAt={pool.cutoffAt} />
+      </div>
+
       <div className={styles.progressBlock}>
         <div className={styles.progressCopy}>
           <span><strong>{pool.committedUnitCount}</strong> funded units</span>

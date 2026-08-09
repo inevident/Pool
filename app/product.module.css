@@ -1032,9 +1032,86 @@
 .priceRow strong,
 .priceRow small { display: block; }
 .priceRow span { color: var(--product-muted); font-size: 8px; }
-.priceRow strong { margin-top: 5px; font-size: 20px; letter-spacing: -.04em; }
-.priceRow small { margin-top: 2px; color: var(--product-muted); font-size: 7px; }
+.priceRow strong { margin-top: 5px; font-size: 26px; letter-spacing: -.045em; color: #b12704; }
+.priceRow small { margin-top: 3px; color: var(--product-muted); font-size: 8px; }
+.priceRow small s { color: #8a8a80; }
 .savingsText { color: var(--product-positive) !important; text-align: right; }
+
+/* Retail-style deal row: a discount badge and the percentage off MSRP. */
+.dealBlock {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dealBadge {
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #cc0c39;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 720;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.dealPercent {
+  color: #cc0c39;
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: -.02em;
+}
+
+/* Live commitment-window countdown. */
+.countdownRow {
+  margin-top: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(204, 12, 57, .22);
+  border-radius: 8px;
+  background: rgba(204, 12, 57, .045);
+}
+
+.countdownLabel {
+  color: var(--product-muted);
+  font-size: 8px;
+  letter-spacing: .01em;
+}
+
+.countdownValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #b12704;
+  font: 720 12px/1 var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+/* Under two days left, the countdown pulses to signal a closing window. */
+.countdownValue[data-urgent="true"] {
+  animation: countdownPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes countdownPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdownValue[data-urgent="true"] { animation: none; }
+}
+
+.countdownStatic,
+.countdownClosed {
+  color: var(--product-muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
 
 .progressBlock { margin-top: 16px; }
 .progressCopy { margin-bottom: 7px; display: flex; justify-content: space-between; gap: 12px; color: var(--product-muted); font-size: 8px; }
@@ -1223,10 +1300,16 @@
 .searchControl input { width: 100%; min-width: 0; min-height: 44px; border: 0; outline: 0; background: transparent; font-size: 10px; }
 .filterSelect { padding: 0 30px 0 10px; border-color: var(--product-line); color: var(--product-muted) !important; font-size: 9px; }
 
+/* Retail catalog density: cards reflow by width rather than a fixed column
+   count, so the grid stays legible from a phone up to a wide desktop. */
 .exploreGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .exploreGrid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .walletHero {
