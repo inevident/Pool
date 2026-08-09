@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default async function PoolPage({ params }: PoolPageProps) {
   const { poolId } = await params;
   const workspace = createCanonicalProductWorkspace();
-  if (!workspace.pools[poolId]) {
+  if (!Object.hasOwn(workspace.pools, poolId)) {
     notFound();
   }
   return <ProductWorkspaceApp view="pool" poolId={poolId} />;
