@@ -48,6 +48,7 @@ import {
   ProductDomainError,
   assertProductWorkspaceInvariant,
   createCanonicalProductWorkspace,
+  createResetProductWorkspace,
   evaluateProductPoolFunding,
   evaluateProductExecutionWindow,
   productExecutionSchedule,
@@ -560,7 +561,7 @@ export default function ProductWorkspaceApp({
   }
 
   function resetWorkspace() {
-    const next = createCanonicalProductWorkspace();
+    const next = createResetProductWorkspace(workspace);
     setWorkspace(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));

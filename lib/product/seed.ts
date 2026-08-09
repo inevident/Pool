@@ -216,3 +216,26 @@ export function createCanonicalProductWorkspace(
     now: DEFAULT_PRODUCT_SEED_TIME,
   });
 }
+
+/**
+ * Reset buyer-authored sandbox state without rewriting the last observed rail
+ * capacity. A reset clears deposits, intents, memberships, and local activity;
+ * it does not make a successful Rain read retroactively become "unavailable."
+ */
+export function createResetProductWorkspace(
+  current: Pick<
+    ProductWorkspace,
+    "id" | "name" | "owner" | "treasury"
+  >,
+): ProductWorkspace {
+  const reset = createCanonicalProductWorkspace({
+    workspaceId: current.id,
+    workspaceName: current.name,
+    owner: current.owner,
+  });
+
+  return {
+    ...reset,
+    treasury: { ...current.treasury },
+  };
+}

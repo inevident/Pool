@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertProductWorkspaceInvariant,
+  createResetProductWorkspace,
   createSeededProductWorkspace,
   hasProductPoolMetMinimum,
   LOCAL_TREASURY_FIXTURE_CENTS,
@@ -82,6 +83,24 @@ const releaseSonyAfterOutcome = (state, overrides = {}) =>
     operationId: "pool-settle-operation-sony",
     ...overrides,
   });
+
+test("reset clears buyer state without relabeling a successful Rain observation", () => {
+  const synced = syncRailTreasury(createSeededProductWorkspace({ now: T0 }));
+  const funded = deposit(synced, 50_000);
+  const reset = createResetProductWorkspace(funded);
+
+  assert.deepEqual(reset.treasury, synced.treasury);
+  assert.equal(reset.balances[BUYER_ID].totalDepositedCents, 0);
+  assert.equal(reset.balances[BUYER_ID].availableCents, 0);
+  assert.deepEqual(reset.intents, {});
+  assert.deepEqual(reset.memberships, {});
+  assert.equal(reset.revision, 0);
+  assert.deepEqual(
+    reset.activity.map((entry) => entry.kind),
+    ["workspace.seeded"],
+  );
+  assert.doesNotThrow(() => assertProductWorkspaceInvariant(reset));
+});
 
 test("the versioned workspace seeds a product marketplace led by the Sony XM6 pool", () => {
   const state = createSeededProductWorkspace({ now: T0 });
