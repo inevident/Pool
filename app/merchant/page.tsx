@@ -57,7 +57,7 @@ export default function MerchantPage() {
           <div className={styles.heroStats} aria-label="Seller pilot fixture summary">
             <div><span>SIMULATED RESERVED UNITS</span><strong>{rfp.committedQuantity}</strong><small>Server-pinned quantity</small></div>
             <div><span>MODELED MSRP COVERAGE</span><strong>{wholeMoney.format(rfp.demandEvidence.reservedCents / 100)}</strong><small>Fixture credits, not custody</small></div>
-            <div><span>PRIVATE CEILINGS EXPOSED</span><strong>0</strong><small>Aggregate verdict only</small></div>
+            <div><span>NUMERIC CEILINGS RETURNED</span><strong>0</strong><small>Repeated probes can infer policy bands</small></div>
             <div><span>EXTERNAL WRITES</span><strong>0</strong><small>No provider or order call</small></div>
           </div>
         </section>
@@ -128,8 +128,12 @@ export default function MerchantPage() {
 
             <article className={styles.privateCard}>
               <div className={styles.cardKicker}><EyeOff size={14} aria-hidden="true" /> DELIBERATELY WITHHELD</div>
-              <h3>Competition stays blinded.</h3>
-              <p>A seller receives one aggregate decision, never the thresholds needed to reverse-engineer it.</p>
+              <h3>Literal values stay withheld.</h3>
+              <p>
+                Each response omits numeric ceilings. Because this public deterministic endpoint
+                is repeatable, comparing verdicts can infer fixture eligibility bands; it is not a
+                production privacy boundary.
+              </p>
               <ul>
                 {rfp.hiddenFromSeller.map((field) => <li key={field}><EyeOff size={12} aria-hidden="true" /> {field}</li>)}
               </ul>
@@ -152,7 +156,7 @@ export default function MerchantPage() {
             <article>
               <strong>What this proves</strong>
               <ul>
-                <li>A judge can inspect the blinded RFP without buyer ceilings.</li>
+                <li>A judge can inspect the RFP without literal numeric buyer ceilings in the payload.</li>
                 <li>Quantity and fixture identity stay server-owned.</li>
                 <li>Terms receive deterministic pass/reject checks and a fingerprint.</li>
                 <li>The same response names its zero-write boundary.</li>
@@ -163,6 +167,7 @@ export default function MerchantPage() {
               <ul>
                 <li>No retailer has validated pricing, operations, or willingness to participate.</li>
                 <li>No bid is binding and no aggregate order is placed.</li>
+                <li>Repeated probing can infer fixture policy bands; production privacy controls remain future work.</li>
                 <li>Merchant identity, KYB, inventory feeds, tax, shipping, returns, and payouts are future work.</li>
                 <li>Fixture reservations are not customer funds or custody.</li>
               </ul>

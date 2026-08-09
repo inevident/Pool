@@ -114,6 +114,10 @@ test("a fitting pilot bid returns a fingerprint and a categorical zero-write bou
     assert.equal(body.aggregateOrderPlaced, false);
     assert.equal(body.providerBoundary.rain, "not_contacted");
     assert.equal(body.providerBoundary.monad, "not_contacted");
+    assert.equal(body.policyDisclosure.literalNumericThresholdReturned, false);
+    assert.equal(body.policyDisclosure.repeatedProbingCanInferEligibilityBands, true);
+    assert.equal(body.policyDisclosure.productionPrivacyBoundary, false);
+    assert.match(body.message, /repeated probing can infer fixture eligibility bands/i);
 
     const serialized = JSON.stringify(body);
     for (const forbidden of [
@@ -135,7 +139,7 @@ test("a fitting pilot bid returns a fingerprint and a categorical zero-write bou
   }
 });
 
-test("blinded policy rejection reveals no private threshold and performs no write", async () => {
+test("policy rejection withholds literal numeric thresholds, discloses probe inference, and performs no write", async () => {
   const response = await POST(
     pilotRequest({
       unitPriceCents: 52_900,
@@ -150,7 +154,10 @@ test("blinded policy rejection reveals no private threshold and performs no writ
   assert.equal(body.status, "rejected");
   assert.equal(body.externalWrites, false);
   assert.equal(body.financialAuthorization, "not_requested");
-  assert.match(body.message, /no private threshold was disclosed/i);
+  assert.equal(body.policyDisclosure.literalNumericThresholdReturned, false);
+  assert.equal(body.policyDisclosure.repeatedProbingCanInferEligibilityBands, true);
+  assert.equal(body.policyDisclosure.productionPrivacyBoundary, false);
+  assert.match(body.message, /repeated probing can infer fixture eligibility bands/i);
   assert.equal(serialized.includes("UNIT_PRICE_LIMIT"), false);
   assert.equal(serialized.includes("42000"), false);
   assert.equal(serialized.includes("40500"), false);
@@ -172,7 +179,27 @@ test("the browser cannot choose merchant identity, quantity, or RFP version", as
   assert.equal(response.status, 400);
   assert.equal(body.code, "INVALID_PILOT_BID");
   assert.equal(body.externalWrites, false);
+  assert.equal(body.policyDisclosure.repeatedProbingCanInferEligibilityBands, true);
+  assert.equal(body.policyDisclosure.productionPrivacyBoundary, false);
   assert.match(body.message, /cannot be supplied by the browser/i);
+});
+
+test("repeatable public verdicts demonstrate why fixture policy bands are inferable", async () => {
+  const [fittingResponse, rejectedResponse] = await Promise.all([
+    POST(pilotRequest({ unitPriceCents: 38_900, deliveryDays: 7, warrantyMonths: 36 })),
+    POST(pilotRequest({ unitPriceCents: 52_900, deliveryDays: 7, warrantyMonths: 36 })),
+  ]);
+  const [fitting, rejected] = await Promise.all([
+    fittingResponse.json(),
+    rejectedResponse.json(),
+  ]);
+
+  assert.equal(fitting.status, "eligible");
+  assert.equal(rejected.status, "rejected");
+  assert.equal(fitting.policyDisclosure.repeatedProbingCanInferEligibilityBands, true);
+  assert.equal(rejected.policyDisclosure.repeatedProbingCanInferEligibilityBands, true);
+  assert.equal(fitting.externalWrites, false);
+  assert.equal(rejected.externalWrites, false);
 });
 
 test("the route has a structural no-provider boundary and the page states its limits", async () => {
@@ -191,4 +218,7 @@ test("the route has a structural no-provider boundary and the page states its li
   assert.match(pageSource, /No live retailer is connected\./);
   assert.match(pageSource, /product integration artifact—not merchant traction/i);
   assert.match(pageSource, /non-binding and never creates an order/i);
+  assert.match(pageSource, /comparing verdicts can infer fixture eligibility bands/i);
+  assert.match(pageSource, /not a\s+production privacy boundary/i);
+  assert.doesNotMatch(pageSource, /never the thresholds needed to reverse-engineer it/i);
 });

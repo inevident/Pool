@@ -138,6 +138,18 @@ test("publishes a sanitized finalized Monad record with the exact Rain receipt s
   assert.equal(evidence.monad.testnetTransactionClaimed, true);
   assert.equal(evidence.monad.offerRegistrations.length, 6);
   assert.equal(evidence.monad.settlementAttestation.rainTransactionCount, 3);
+  assert.match(
+    evidence.monad.registryExplorerUrl,
+    /^https:\/\/testnet\.monadscan\.com\/address\//,
+  );
+  for (const explorerUrl of [
+    evidence.monad.deployment.explorerUrl,
+    evidence.monad.commitment.transaction.explorerUrl,
+    ...evidence.monad.offerRegistrations.map((offer) => offer.explorerUrl),
+    evidence.monad.settlementAttestation.transaction.explorerUrl,
+  ]) {
+    assert.match(explorerUrl, /^https:\/\/testnet\.monadscan\.com\/tx\//);
+  }
   assert.equal(
     evidence.fundingBoundary.reservedCents,
     evidence.fundingBoundary.capturedCents +

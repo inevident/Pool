@@ -17,12 +17,12 @@ export const MONAD_TESTNET = defineChain({
   },
   blockExplorers: {
     default: {
-      name: "MonadVision",
-      url: "https://testnet.monadvision.com",
-    },
-    monadscan: {
       name: "Monadscan",
       url: "https://testnet.monadscan.com",
+    },
+    monadvision: {
+      name: "MonadVision",
+      url: "https://testnet.monadvision.com",
     },
   },
   testnet: true,

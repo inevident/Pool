@@ -831,12 +831,12 @@ export default function DemoExperience() {
         ? "Commitment finalized"
         : monadIsConfigured
           ? "Testnet ready"
-          : "Local proof only";
+          : "Published finalized record";
   const monadSummaryDetail = monadCommitmentIsOnchain
     ? `${monadChainName ?? "Monad Testnet"} · ${shortId(commitmentTx ?? monadCommitmentId ?? undefined)}`
     : monadIsConfigured
       ? `${monadChainName ?? "Monad Testnet"} · awaiting commitment`
-      : "No testnet transaction claimed";
+      : "Runtime not connected · open evidence";
 
   return (
     <main className={`app-shell stage-${stage}`}>
@@ -976,7 +976,11 @@ export default function DemoExperience() {
                   <a href={commitmentProofHref} target="_blank" rel="noopener noreferrer" aria-label="Open Monad commitment evidence">
                     Explorer <Link2 size={12} />
                   </a>
-                ) : <span className="proof-state-pill">Evidence only</span>}
+                ) : (
+                  <Link className="proof-state-pill" href="/evidence">
+                    Published record
+                  </Link>
+                )}
               </div>
             </div>
           </aside>

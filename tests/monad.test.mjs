@@ -12,6 +12,11 @@ import {
 import { HERO_DEMO } from "../lib/market/index.ts";
 import { clearRuntimeMonadPreparation } from "../lib/monad/runtime.ts";
 import {
+  MONAD_TESTNET,
+  monadExplorerAddressUrl,
+  monadExplorerTransactionUrl,
+} from "../lib/monad/registry.ts";
+import {
   attestSettledRainTransactionsOnMonad,
   getStableHeroBidWindow,
   prepareHeroMarketOnMonad,
@@ -25,6 +30,24 @@ const fakeTransaction = (label) => ({
   status: "success",
   confirmation: "finalized",
   explorerUrl: `https://testnet.monadvision.com/tx/${label}`,
+});
+
+test("public Monad proof links use the reachable Monadscan explorer", () => {
+  const address = "0xE1b75A905Cab4005623AA8912AF4a67b9c29b217";
+  const hash = keccak256(toBytes("published-transaction"));
+
+  assert.equal(
+    MONAD_TESTNET.blockExplorers.default.url,
+    "https://testnet.monadscan.com",
+  );
+  assert.equal(
+    monadExplorerAddressUrl(address),
+    `https://testnet.monadscan.com/address/${address}`,
+  );
+  assert.equal(
+    monadExplorerTransactionUrl(hash),
+    `https://testnet.monadscan.com/tx/${hash}`,
+  );
 });
 
 function fakeAdapter(calls) {

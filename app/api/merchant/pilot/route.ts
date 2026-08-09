@@ -32,6 +32,12 @@ const noWriteBoundary = {
   },
 } as const;
 
+const policyDisclosure = {
+  literalNumericThresholdReturned: false,
+  repeatedProbingCanInferEligibilityBands: true,
+  productionPrivacyBoundary: false,
+} as const;
+
 function rejectedResponse(
   status: number,
   code: string,
@@ -42,6 +48,7 @@ function rejectedResponse(
       status: "invalid_request",
       code,
       message,
+      policyDisclosure,
       ...noWriteBoundary,
     },
     { status, headers: noStoreHeaders },
@@ -77,8 +84,9 @@ export async function POST(request: NextRequest) {
         status: eligible ? "eligible" : "rejected",
         mode: "seller_pilot_fixture",
         message: eligible
-          ? "These terms fit the blinded fixture policy and would be eligible for ranking. They were not submitted, recorded onchain, or authorized."
-          : "One or more blinded fixture policies rejected these terms. No private threshold was disclosed and no external action occurred.",
+          ? "These terms fit the fixture policy and would be eligible for ranking. No offer was submitted, recorded onchain, or authorized. This response returns no literal numeric threshold, but repeated probing can infer fixture eligibility bands."
+          : "One or more fixture policies rejected these terms. This response returns no literal numeric threshold, but repeated probing can infer fixture eligibility bands. No external action occurred.",
+        policyDisclosure,
         evidence: {
           kind: "product_integration_artifact",
           tractionClaimed: false,

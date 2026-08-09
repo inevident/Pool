@@ -38,7 +38,7 @@ Before a published commitment cutoff, leaving releases the reservation. After th
 9. **Settle** — The negotiated amount is captured and the difference is released as savings.
 10. **Track** — The buyer follows fulfillment, receipt, delivery, returns, and any dispute from the order view.
 
-The current repository implements the buyer-facing journey only through deterministic, mandate-aware merchant clearing after the published cutoff. Product commit and settle routes are rehearsal-only: they return a modeled quote or no-buy outcome, place no aggregate order, and cannot contact Rain or Monad in any environment. Browser-local state and fixture merchants keep this a product sandbox rather than a production commerce backend. The protected technical walkthrough at `/demo` is the only complete three-allocation provider proof.
+The current repository implements the buyer-facing journey only through catalog-aware intent interpretation and deterministic, mandate-aware merchant clearing after the published cutoff. The buyer agent produces a decision receipt but moves `$0`; only an explicit **Save buying intent** creates browser-local state. Product commit and settle routes are rehearsal-only: they return a modeled quote or no-buy outcome, place no aggregate order, and cannot contact Rain or Monad in any environment. Browser-local state and fixture merchants keep this a product sandbox rather than a production commerce backend. The protected technical walkthrough at `/demo` is the only complete three-allocation provider proof.
 
 ## Deliverables that work now
 
@@ -54,7 +54,7 @@ The default route is a product home rather than a judge presentation. It surface
 
 ### Structured buying intents
 
-A buyer can create an intent with product requirements, quantity, price ceiling, and patience window. Intent creation produces visible product state instead of a decorative success screen.
+A buyer can describe a purchase in natural language. The buyer agent extracts product, quantity, price ceiling, and patience, matches only against the seeded catalog, runs deterministic mandate checks, and returns a visible decision receipt. The receipt states whether OpenAI extraction or the deterministic catalog parser was used, shows the full-MSRP coverage that would be required if the buyer later joined, and records `financialAuthorization: not_requested`. Interpretation moves `$0`, reserves nothing, and saves nothing. Only the buyer's explicit **Save buying intent** action creates browser-local intent state.
 
 ### Full-MSRP-reserved pool membership
 
@@ -74,6 +74,8 @@ Workspace state is versioned and stored locally in the browser. It survives page
 | `/explore` | Browse realistic seeded group buys and evaluate commitment terms |
 | `/wallet` | Add test funds and inspect available, reserved, released, and spent movements |
 | `/orders` | Review active commitments, exact releases, and the future fulfillment lifecycle without fabricating purchases |
+| `/evidence` | Inspect the sanitized, source-bound Rain sandbox + finalized Monad Testnet proof registry and its claim boundary |
+| `/merchant` | Inspect and dry-run the Seller Pilot Sandbox against one blinded fixture RFP; no live retailer, traction, binding bid, order, or external write |
 | `/demo` | Run the protected fixed Rain + Monad market and three-allocation settlement proof |
 
 ### Deterministic commerce domain
@@ -105,7 +107,7 @@ The protected `/demo` route provides the only complete proof that the proposed p
 - deterministic buyer and market policy;
 - compatible-intent coalition formation;
 - private merchant floors and quantity tiers;
-- tamper-evident funding and offer commitments on Monad Testnet only when finalized explorer evidence is rendered;
+- one published, finalized Monad Testnet record on chain `10143`, source-bound to `246d81a`, with the coalition commitment preceding six offer registrations and the post-Rain attestation naming one registered offer;
 - server-only Rain scoped-card authorization and settlement only when verified provider IDs are rendered;
 - an enforced off-list MCC `7995` challenge that requires Rain’s exact `scoped_card_mcc_not_allowed` decline;
 - three exact Rain sandbox settlement amounts plus fixture-ledger savings reconciliation;
@@ -120,11 +122,14 @@ The product is deliberately honest about what is and is not live.
 | Buyer balance | Versioned browser-local test ledger | Bank balance, stored value, stablecoin custody, or insured deposit |
 | Add funds | Deterministic sandbox credit | ACH, wire, card, virtual account, or onchain on-ramp |
 | Products and pools | Seeded fixtures for repeatable interaction | Live catalog, real merchant inventory, or binding public offer |
-| Buying intent | Persistent local structured state | Authenticated, server-side mandate shared across devices |
+| Buyer agent | Catalog-aware decision receipt with deterministic mandate checks; interpretation moves `$0` and requires explicit Save | Payment authority, autonomous commitment, or a live retailer search |
+| Buying intent | Explicitly saved local structured state | Authenticated, server-side mandate shared across devices |
 | Reservation | Enforced by the sandbox domain | Legal escrow or production custody hold |
 | Orders | Simulated product states | Merchant fulfillment, shipment, returns, taxes, or warranty service |
 | Rain | Fixed `/demo` can create real event-sandbox records behind an explicit protected gate; the wider workspace may perform a separately gated balance read | Product commit/settle mutation, production card program, or buyer account ledger |
-| Monad | Fixed `/demo` can use the Testnet commitment/offer/attestation workflow when configured | Product commit/settle mutation, mainnet settlement, proof of bank funds, or independent oracle truth |
+| Monad | Fixed `/demo` can use the Testnet workflow; the current public record shows finalized commitment, six offer registrations, and attestation on chain `10143` | Product commit/settle mutation, mainnet settlement, proof of bank funds, or independent oracle truth |
+| Public evidence | Sanitized static Rain/Monad record with explorer links and explicit limits | Independent audit, real-money proof, merchant demand, or product-market fit |
+| Seller pilot | Blinded fixture RFP and deterministic zero-write bid dry run | Live retailer, merchant traction, binding offer, inventory, order, payout, or provider mutation |
 | Identity | Fictional product personas | KYC/KYB, sanctions screening, age verification, or account recovery |
 
 The app should never call the sandbox balance a real bank account, suggest that funds are insured, or imply that a testnet hash independently proves custody. External IDs shown in rehearsal mode must remain labeled **REHEARSAL · SIMULATED**.
@@ -153,7 +158,7 @@ The intended market mechanism is a sealed competition:
 - Deterministic policy rejects incomplete, stale, over-budget, or incompatible offers.
 - The winning offer becomes immutable before any payment authorization.
 
-Merchant onboarding and a production bidding console are launch deliverables, not features of the current buyer sandbox.
+The current `/merchant` Seller Pilot Sandbox makes that contract inspectable: a seller can download one public fixture RFP and dry-run terms against server-owned quantity and deterministic checks. It deliberately reports zero live merchants and zero external writes. It is a product integration artifact, not merchant onboarding, retailer validation, traction, a binding bid, inventory, or an order. Those remain launch deliverables.
 
 ## Production launch gaps
 
@@ -184,7 +189,7 @@ Merchant onboarding and a production bidding console are launch deliverables, no
 ### 4. Supply and fulfillment
 
 - Onboard real merchants and verify inventory, pricing authority, fulfillment capacity, and return terms.
-- Build the merchant RFP and sealed-bid workflow.
+- Replace the fixture Seller Pilot contract with authenticated merchant onboarding, verified inventory, and a durable sealed-bid workflow.
 - Normalize products, variants, shipping regions, taxes, fees, warranties, and delivery promises.
 - Establish order routing, shipment tracking, cancellation, return, refund, and dispute ownership.
 - Prevent counterfeit, substitution, inventory, and concentration risk.

@@ -53,11 +53,11 @@
     "testnetTransactionClaimed": true,
     "operatorAddress": "0x070dd53f4FdF178E29df30e03FEAD90Cd300e6ed",
     "registryAddress": "0xE1b75A905Cab4005623AA8912AF4a67b9c29b217",
-    "registryExplorerUrl": "https://testnet.monadvision.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217",
+    "registryExplorerUrl": "https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217",
     "deployment": {
       "transactionHash": "0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48",
       "blockNumber": 52198045,
-      "explorerUrl": "https://testnet.monadvision.com/tx/0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48"
+      "explorerUrl": "https://testnet.monadscan.com/tx/0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48"
     },
     "commitment": {
       "id": "0x12f36512844ccc491ba01f4a909e2d5acf83761cc5bd5924d4f96c3c3778543f",
@@ -70,39 +70,39 @@
       "transaction": {
         "hash": "0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd",
         "blockNumber": 52198213,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd"
       }
     },
     "offerRegistrations": [
       {
         "hash": "0xa91ae669c02db0e454f36f4843c8b3042b371b7568981df1532a5bbfd9cc3bd4",
         "blockNumber": 52198217,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0xa91ae669c02db0e454f36f4843c8b3042b371b7568981df1532a5bbfd9cc3bd4"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0xa91ae669c02db0e454f36f4843c8b3042b371b7568981df1532a5bbfd9cc3bd4"
       },
       {
         "hash": "0x1e6186075ebea350b80f64fe6c8bf3674baedf58a494179f6c35acf44c222564",
         "blockNumber": 52198220,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0x1e6186075ebea350b80f64fe6c8bf3674baedf58a494179f6c35acf44c222564"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0x1e6186075ebea350b80f64fe6c8bf3674baedf58a494179f6c35acf44c222564"
       },
       {
         "hash": "0xc1524eac708850652f9cd53e6fef48b726ddd871b7a74ee588944b4062391b60",
         "blockNumber": 52198225,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0xc1524eac708850652f9cd53e6fef48b726ddd871b7a74ee588944b4062391b60"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0xc1524eac708850652f9cd53e6fef48b726ddd871b7a74ee588944b4062391b60"
       },
       {
         "hash": "0x498884cd4e032ffef9bccbef04d95ccd4018286309eee7c4e40082c68f40ea8c",
         "blockNumber": 52198229,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0x498884cd4e032ffef9bccbef04d95ccd4018286309eee7c4e40082c68f40ea8c"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0x498884cd4e032ffef9bccbef04d95ccd4018286309eee7c4e40082c68f40ea8c"
       },
       {
         "hash": "0x6c616102cfa9c3e06dc16497a3047d36c658a9e27be9386a12b1063973d67f8b",
         "blockNumber": 52198233,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0x6c616102cfa9c3e06dc16497a3047d36c658a9e27be9386a12b1063973d67f8b"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0x6c616102cfa9c3e06dc16497a3047d36c658a9e27be9386a12b1063973d67f8b"
       },
       {
         "hash": "0x4f4d0b86f9444a615b5618627f392bb3ae467d3a1c92e4b8de3d6fc6fee10d69",
         "blockNumber": 52198238,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0x4f4d0b86f9444a615b5618627f392bb3ae467d3a1c92e4b8de3d6fc6fee10d69"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0x4f4d0b86f9444a615b5618627f392bb3ae467d3a1c92e4b8de3d6fc6fee10d69"
       }
     ],
     "settlementAttestation": {
@@ -114,7 +114,7 @@
       "transaction": {
         "hash": "0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e",
         "blockNumber": 52198437,
-        "explorerUrl": "https://testnet.monadvision.com/tx/0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e"
+        "explorerUrl": "https://testnet.monadscan.com/tx/0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e"
       }
     }
   },

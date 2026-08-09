@@ -14,33 +14,35 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 **Say:** Patient buyers can trade urgency for leverage. POOL aggregates compatible demand before asking merchants to compete.
 
-### Slide 2 — Interest becomes credible demand
+### Slide 2 — The buyer agent explains before anything moves
 
-**Headline:** Full MSRP first. Market second.
+**Headline:** Interpret first. Save only with consent.
 
-**Visual:** `$5,748 available → reserved`, split across 3 + 4 + 5 monitor allocations; one incompatible ultrawide intent remains outside.
+**Visual:** A catalog-aware decision receipt: product match, private mandate, deterministic checks, later MSRP coverage, explicit **Save buying intent**, and `financialAuthorization: not_requested · $0 moved`.
 
-**Say:** A buyer joins only with `MSRP × quantity` available. Joining makes that money unavailable elsewhere; leaving before cutoff releases it exactly once.
+**Say:** The buyer agent interprets language and recommends a structured mandate for review. It cannot save an intent, reserve funds, or authorize payment. Only explicit Save creates browser-local intent state; joining remains a separate later action.
 
-**Boundary:** The current buyer ledger is browser-local sandbox state. It is not custody, escrow, or a bank account.
+**Boundary:** Catalog-aware does not mean retailer-connected. The catalog is seeded, the receipt is advisory, and interpretation moves `$0`.
 
 ### Slide 3 — Monad makes the sequence credible
 
-**Headline:** Reserved fixture terms are fixed before offer registration.
+**Headline:** The public record shows commitment before offers.
 
-**Visual:** `funding root + public terms → finalized commitment → registered sealed-offer set → Rain settlement → selected-offer receipt attestation`.
+**Visual:** `/evidence` · source `246d81a` · chain `10143` · registry `0xE1b7…b217` · `1` commitment → `6` finalized offer registrations → `1` finalized post-Rain attestation.
 
-**Say:** POOL reconstructs the exact fixture coalition and finalizes its commitment before registering the admitted sealed-offer hashes. After Rain settles, the attestation names one registered offer as accepted and binds the receipt-ID set. Private buyer ceilings and merchant floors stay offchain.
+**Say:** POOL published the exact, sanitized identifiers behind the fixed run. The commitment finalized before all six admitted offer registrations. After Rain, the finalized attestation names one registered offer and binds the digest of the exact three settlement IDs. Private buyer ceilings and merchant floors stay offchain.
 
-**Boundary:** Claim a Testnet transaction only when the UI renders finalized explorer evidence. Monad orders POOL’s recorded claims; it does not prove when an offchain bid first existed, what a seller saw, or that bank funds exist.
+**Boundary:** This is operator-attested Testnet ordering, not custody, independent verification of Rain, offchain seller visibility, or real-money proof.
 
 ### Slide 4 — Sellers compete for the whole order
 
 **Headline:** Volume converts patience into price pressure.
 
-**Visual:** Three simulated sealed merchants move from `$401` to a winning `$389`; quantity remains server-pinned at 12.
+**Visual:** Three simulated sealed sellers move from `$401` to a winning `$389`; quantity remains server-pinned at 12. A Seller Pilot Sandbox artifact exposes the blinded fixture RFP and zero-write bid contract.
 
-**Say:** Sellers receive the anonymized request only after demand freezes. Deterministic policy checks price, delivery, warranty, quantity, freshness, and every private mandate.
+**Say:** Sellers receive the anonymized request only after demand freezes. Deterministic policy checks price, delivery, warranty, quantity, freshness, and every private mandate. The `/merchant` artifact is Q&A proof of the integration contract, not a live retailer or traction claim.
+
+**Boundary:** Live retailers `0`; external writes `0`; no binding bid, inventory, order, payment, Rain call, or Monad call.
 
 ### Slide 5 — Rain receives bounded execution, not a blank check
 
@@ -48,7 +50,7 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 **Visual:** Three scoped-card requests derived from the allocations, exact settled amounts, electronics MCC `5732`, expiry, and a red `MCC 7995 DECLINED` proof.
 
-**Say:** Rain receives scoped authority derived from the already-cleared allocations. Its documented 1.2× lifetime hold buffer is not permission to overspend; POOL admits only the exact agreed charges, and the dated sandbox evidence shows those exact settled amounts. The off-policy attempt tests the MCC bound first.
+**Say:** Rain receives scoped authority derived from the already-cleared allocations. Its documented 1.2× lifetime hold buffer is not permission to overspend; POOL admits only the exact agreed charges. The current source-bound record reused the same three sandbox IDs through same-day idempotent replay and preserves the exact MCC decline.
 
 **Boundary:** Rain applies a documented 1.2× lifetime authorization buffer to a scoped card; POOL still admits only the exact agreed charges. Say “Rain sandbox settled” only when the UI shows `RAIN SANDBOX · VERIFIED` and provider IDs. Otherwise say “labeled deterministic rehearsal.”
 
@@ -62,38 +64,39 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 ## Verbatim 90-second talk track
 
-> “Today, shopping agents optimize one buyer at a time. POOL creates a new market: patient buyers organize into full-MSRP-reserved demand, then merchants compete for the whole order.
+> “Today, shopping agents optimize one buyer at a time. POOL creates a new market: patient buyers organize into demand, then merchants compete for the whole order.
 >
-> In this fixed technical evidence fixture, three compatible buyers want 12 development monitors. They reserve the full $5,748 MSRP before POOL registers any seller offer. A fourth ultrawide request is excluded because similarity is not permission: hard constraints still win.
+> First, the homepage buyer agent turns language into a catalog-aware decision receipt. It shows the product match, private mandate, and deterministic checks, but interpretation saves nothing, authorizes nothing, and moves zero dollars. Only explicit Save creates local intent state.
 >
-> POOL freezes the exact fixture terms before registering admitted offers. When Monad Testnet is configured, the funding commitment finalizes first and the sealed-offer hash set is registered next. After Rain settles, the attestation names the selected registered offer and binds the receipt-ID set. The chain makes POOL’s recorded ordering tamper-evident; it does not prove when offchain bids first existed, what sellers saw, or that bank funds exist.
+> The public evidence registry is source-bound to commit `246d81a`. On Monad Testnet chain 10143, the coalition commitment finalized before all six offer registrations. After Rain, the finalized attestation names one registered offer and binds the three-ID settlement digest. That proves POOL’s recorded ordering, not custody, seller visibility, or real money.
 >
-> Three simulated merchants now compete for the aggregate order without seeing buyer ceilings or one another’s private floors. Deterministic policy selects Signal at $389 per unit, down from $479.
+> In the fixed fixture, three compatible buyers reserve $5,748 across 12 monitors; the wrong ultrawide stays out. Three simulated sellers compete without seeing buyer ceilings, and deterministic policy selects $389 per unit, down from $479.
 >
-> Only after clearing does Rain receive three scoped-card requests derived from the agreed allocations, electronics MCC, and expiry. Rain permits a documented 1.2× lifetime hold buffer, while POOL admits only the exact agreed charges. We challenge MCC 7995 and require Rain’s exact `scoped_card_mcc_not_allowed` decline before the three allocations settle at their exact amounts.
+> Only after clearing does Rain receive three allocation-derived scoped-card requests. MCC 7995 returns the exact `scoped_card_mcc_not_allowed` decline before the legitimate allocations settle. The current record reused the same three Rain IDs through same-day idempotent replay; no real money moved.
 >
-> The dated Rain sandbox evidence settles $4,668, and the fixture ledger makes $1,080 available again—an 18.8% improvement with zero human negotiation. We did not build AI that shops. We built a market where demand organizes itself.”
+> The Rain sandbox record totals $4,668, and the fixture ledger makes $1,080 available again—an 18.8% improvement with zero human negotiation. We did not build AI that shops. We built a market where demand organizes itself.”
 
-If the current run is rehearsal, replace the MCC sentence with: “the fixed rehearsal shows the required exact decline path; this run creates no provider transaction.” If Monad has no explorer evidence, replace the Monad sentence with: “POOL reconstructs the exact commitment locally; this run makes no Testnet transaction claim.”
+If the current demo run is rehearsal, replace the MCC sentence with: “The fixed rehearsal shows the required exact decline path; this replay creates no provider transaction.” The separate `/evidence` record remains valid evidence of the already finalized source-bound run; do not imply that the rehearsal created it.
 
 ## Live click sequence
 
-1. Open `/demo`. Do not click yet. Point to **THE 90-SECOND PROOF** and **FIXED TECHNICAL EVIDENCE FIXTURE**.
-2. Say the first two sentences while showing `12 units`, `$1,080`, `3 fixed allocations`, and the Monad evidence state.
-3. Click **Replay the fixed market** once.
-4. Let the replay show 3 + 4 + 5 units, the incompatible request, the pre-bid freeze, and the three merchant offers.
-5. When the market reaches bounded authority, click **Settle in sandbox** only if that button exists and a provider run is intended. Otherwise click **Run rehearsal**.
-6. On the outcome screen, read the evidence label first. Then point to provider IDs or simulated labels, the MCC `7995` result, and any Monad explorer evidence.
-7. End on `$5,748 → $4,668 + $1,080`, then click **Reset the market** before the next run.
+1. Start on a preloaded homepage decision receipt. Point to catalog match, mandate checks, explicit Save, and `$0` moved; do not Save during the story.
+2. Switch to `/evidence`. Point to source `246d81a`, chain `10143`, registry `0xE1b7…b217`, six registrations, the finalized attestation, and the claim boundary.
+3. Switch to `/demo`. Point to **THE 90-SECOND PROOF** and **FIXED TECHNICAL EVIDENCE FIXTURE**.
+4. Click **Replay the fixed market** once.
+5. Let the replay show 3 + 4 + 5 units, the incompatible request, the pre-bid freeze, and the three simulated seller offers.
+6. When the market reaches bounded authority, click **Settle in sandbox** only if that button exists and a provider run is intended. Otherwise click **Run rehearsal**.
+7. On the outcome screen, read the evidence label first. Then point to provider IDs or simulated labels, the MCC `7995` result, and Monad evidence.
+8. End on `$5,748 → $4,668 + $1,080`, then click **Reset the market** before the next run.
 
-Do not open the optional technical inspector during the 90-second story. Use it for Q&A to run a custom buyer intent, submit the `$389` merchant bid, or inspect policy traces.
+Do not open `/merchant` or the optional technical inspector during the 90-second story. Use them for Q&A: `/merchant` shows the blinded Seller Pilot Sandbox contract with zero live retailers and zero writes; the inspector exercises the fixed buyer/merchant APIs and policy traces.
 
 ## Backup sequence
 
 1. Keep one already-loaded `/demo` tab at the first-frame proof summary.
-2. If Rain is unavailable, use the dated [`Rain sandbox outcome capture`](./public/evidence/rain-sandbox-2026-08-09.png) as the provider-record backup, or run **Run rehearsal** and say that replay creates no provider transaction.
+2. If Rain is unavailable, use the source-bound [`Rain + Monad evidence capture`](./public/evidence/rain-monad-testnet-2026-08-09.png) as the already-recorded proof, or run **Run rehearsal** and say that replay creates no provider transaction.
 3. If OpenAI is unavailable, show `deterministic_fallback`; the model has no payment authority and the money policy is unchanged.
-4. If Monad is unavailable or the signer lacks gas, show local commitment reconstruction and contract tests. Do not claim a Testnet transaction.
+4. If the current Monad operator environment is unavailable, use `/evidence` for the already finalized Testnet record. Do not imply that the current session performed a new write.
 5. If a Rain attempt fails or partially settles, stop. Show the failure/reconciliation state; do not replace it with a simulated success or claim an immediate refund.
 6. If the network fails, narrate from the fixed first frame and the loaded evidence replay. Name each state as local, rehearsal, Rain sandbox, or Monad Testnet.
 
@@ -111,9 +114,10 @@ Do not open the optional technical inspector during the 90-second story. Use it 
 ### Monad bounty
 
 - Monad is a causal gate, not a decorative transaction badge.
-- The funding root and public terms finalize before admitted sealed-offer hashes are registered.
+- The published source-bound run uses registry [`0xE1b7…b217`](https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217) on chain `10143`.
+- Commitment [`0x12f3…543f`](https://testnet.monadscan.com/tx/0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd) finalized before six admitted sealed-offer registrations.
 - The registered offer set is verified before Rain execution; `acceptedOfferHash` is assigned only in the post-Rain attestation.
-- The exact Rain settlement-ID set is hashed and attested against the selected registered offer afterward.
+- The [finalized attestation](https://testnet.monadscan.com/tx/0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e) names one registered offer and binds the exact Rain settlement-ID-set digest.
 - Settlement reconstructs finalized state from chain on a cold start instead of trusting process memory.
 - Buyer ceilings and merchant floors remain offchain; a Testnet claim requires rendered explorer evidence.
 
@@ -123,7 +127,10 @@ Do not open the optional technical inspector during the 90-second story. Use it 
 No. The consumer balance is a browser-local sandbox ledger. Rain creates real sandbox records only when the UI shows provider IDs. No real money moves in this repository.
 
 **Then what has actually been built?**
-A repeat-use consumer sandbox, tested local reservation/release domain, strict mandate-aware quote-rehearsal APIs, deterministic merchant clearing, and a protected fixed demo with a Rain sandbox adapter plus Monad commitment/offer/attestation state machine. The product rehearsal never books a capture or creates an order. Production identity, custody, database, merchants, and fulfillment remain explicit gaps.
+A repeat-use consumer sandbox with catalog-aware buyer decision receipts, tested local reservation/release, strict mandate-aware quote-rehearsal APIs, a public sanitized evidence registry, a zero-write Seller Pilot Sandbox, and a protected fixed demo with Rain sandbox plus finalized Monad Testnet evidence. The product rehearsal never books a capture or creates an order. Production identity, custody, database, merchants, and fulfillment remain explicit gaps.
+
+**Is the Seller Pilot a merchant integration or traction?**
+It is an inspectable blinded fixture RFP and deterministic zero-write bid contract. No live retailer is connected, no seller has validated the economics, no bid is binding, and no order, payment, Rain call, or Monad call is created. It proves a product integration shape, not merchant traction.
 
 **Can the browser forge a membership?**
 Yes. The current browser membership, maximum price, and deadline are not authenticated, so they are not production authority. Product routes strictly validate them against the fixture catalog and withhold mandates from merchant responses, but remain rehearsal-only and perform no provider or chain mutation. The protected fixed `/demo` uses a separate access session for provider actions. Production still needs authenticated sessions and durable server-side mandates, memberships, and ledger state.
@@ -150,7 +157,7 @@ The fixed demo says Rain settled and attestation is pending. It does not claim f
 It makes changes to POOL’s recorded funding commitment, admitted offer set, selected offer, and receipt digest detectable in their onchain order. It does not prove when an offchain bid first existed or what a seller saw, and it does not remove the need to disclose and reconcile the underlying records.
 
 **What does AI decide?**
-AI interprets language and can suggest matches or strategy. Deterministic code controls timing, accounting, compatibility hard constraints, offer admission, payment amount, and settlement.
+AI can extract a catalog-aware mandate and suggest a match. The decision receipt saves nothing and moves `$0`; only explicit Save creates local intent state. Deterministic code controls timing, accounting, compatibility hard constraints, offer admission, payment amount, and settlement.
 
 **What is the path to a real product?**
 Authenticated adults, a regulated custody/payment partner, transactional double-entry ledger, provider webhooks and reconciliation, real merchant contracts, durable pool jobs, fulfillment, returns, disputes, and legal/risk operations.

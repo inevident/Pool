@@ -24,6 +24,11 @@ type PilotResponse = {
   code?: string;
   message: string;
   mode?: string;
+  policyDisclosure: {
+    literalNumericThresholdReturned: false;
+    repeatedProbingCanInferEligibilityBands: true;
+    productionPrivacyBoundary: false;
+  };
   serverPinned?: {
     rfpId: string;
     rfpVersion: number;
@@ -231,8 +236,9 @@ export default function MerchantPilot({
             {submission.kind === "submitting" ? "Evaluating terms…" : "Evaluate fixture bid"}
           </button>
           <p className={styles.formBoundary}>
-            This dry run cannot enroll a merchant, submit an offer, create an order, move money,
-            or contact Rain or Monad.
+            This public deterministic endpoint is repeatable, so comparing verdicts can infer
+            fixture policy bands. It is not a production privacy boundary. The dry run still cannot
+            enroll a merchant, submit an offer, create an order, move money, or contact Rain or Monad.
           </p>
         </form>
 

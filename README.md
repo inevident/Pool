@@ -4,11 +4,11 @@
 
 [Open the public `main` baseline](https://pool-agentic-market-preview-20260808-yeayea.vercel.app) · [Open its fixed technical demo](https://pool-agentic-market-preview-20260808-yeayea.vercel.app/demo)
 
-> **Deployment status, verified 2026-08-09:** these public links served `main@9b12002` when checked. No `overnight` deployment has been verified, Vercel Git integration is not connected, and no future deployment URL is being guessed here. The Vercel Preview environment contained only `OPENAI_API_KEY`; without Rain or Monad configuration, that environment must present provider activity as rehearsal or unavailable.
+> **Deployment status, verified 2026-08-09:** these public links served `main@9b12002` when checked. The current `overnight` source and evidence record are bound to `246d81a`, but that branch has not yet been redeployed or verified at a new Vercel URL. Vercel Git integration is not connected, and no future deployment URL is guessed here. The last recorded Vercel Preview environment contained only `OPENAI_API_KEY`; without Rain or Monad configuration, a Preview must present provider activity as rehearsal or unavailable.
 
 POOL is a repeat-use group-buying product for people who are willing to wait for a better price. In the intended lifecycle, a buyer funds an account, describes what they want, and joins a compatible buying pool only when available balance covers the item’s full MSRP; POOL aggregates committed demand, lets merchants compete, captures the negotiated amount, and releases the difference. The current product surface models that lifecycle as a quote-only browser rehearsal. Only the protected fixed `/demo` can create labeled Rain sandbox settlement evidence.
 
-The default experience is a functioning product sandbox, not a scripted presentation. Buyers can add test funds, create buying intents, join and leave forming pools, inspect commitments, and follow balance activity. Product state persists in the browser across reloads.
+The default experience is a functioning product sandbox, not a scripted presentation. A catalog-aware buyer agent turns natural language into an inspectable decision receipt, but interpretation moves `$0` and saves nothing until the buyer explicitly chooses **Save buying intent**. Buyers can then add test funds, join and leave forming pools, inspect commitments, and follow balance activity. Product state persists in the browser across reloads.
 
 > **Sandbox notice:** every balance, pool, product, order, and merchant shown in the product workspace is test data. POOL does not provide a real bank account, accept real deposits, custody customer funds, or place production orders from this repository.
 
@@ -18,10 +18,12 @@ Run the app and open `http://localhost:3000`:
 
 | Route | Product job |
 | --- | --- |
-| `/` | Buyer home: available and reserved balances, active commitments, matching pools, and recent activity |
+| `/` | Buyer home: catalog-aware buyer-agent decision receipts, available and reserved balances, active commitments, matching pools, and recent activity |
 | `/explore` | Discover group buys and inspect their price target, fixture committed units, minimum, and two-week close |
 | `/wallet` | Add sandbox funds, optionally label a ceiling from a session-gated Rain sandbox balance read, and audit local activity |
 | `/orders` | Track commitments, exact releases, and the disclosed path to future fulfillment |
+| `/evidence` | Inspect the public, sanitized Rain sandbox + finalized Monad Testnet proof registry and its explicit claim boundaries |
+| `/merchant` | Dry-run the Seller Pilot Sandbox against a blinded fixture RFP; no live retailer, binding bid, traction claim, order, provider call, or external write |
 | `/demo` | Replay the protected fixed technical proof; it is the only route with the complete three-allocation provider flow |
 
 **The pool you join is the pool the product rehearses.** Each pool accepts every funded commitment submitted during its fixed two-week window. Ten funded units is the minimum needed to open the local merchant rehearsal, not a target or cap. At the close, POOL uses the actual fixture quantity and evaluates three simulated merchant offers against the buyer’s saved maximum and deadline. A qualifying result is a modeled quote only: the reservation stays untouched until the buyer explicitly releases it, and no aggregate order, payment, Rain mutation, or Monad mutation is created.
@@ -29,6 +31,8 @@ Run the app and open `http://localhost:3000`:
 The product workspace supports these complete sandbox interactions:
 
 - Add test funds to the available balance.
+- Ask the catalog-aware buyer agent to extract product, quantity, maximum price, and patience into a decision receipt with catalog match and deterministic mandate checks.
+- Review the receipt's explicit `financialAuthorization: not_requested` / `$0` boundary; only **Save buying intent** creates browser-local product state.
 - Create a structured buying intent with a product, maximum price, quantity, and patience window.
 - Join a forming pool only when the full MSRP commitment is available.
 - Atomically move a joined commitment from `available` to `reserved`.
@@ -49,7 +53,7 @@ New engineers and coding agents should begin with [`handoff.md`](./handoff.md), 
 
 Presenters should use the editable [`POOL_PITCH.pptx`](./POOL_PITCH.pptx) deck with [`PITCH.md`](./PITCH.md) for the verbatim 90-second talk track, then [`DEMO.md`](./DEMO.md) for the exact operator flow and fallbacks.
 
-The current `overnight` worktree includes a dated [Rain sandbox outcome capture](./public/evidence/rain-sandbox-2026-08-09.png) and [sanitized outcome record](./public/evidence/rain-sandbox-2026-08-09.json) from the fixed fixture. They show three provider-settled sandbox records and the rejected MCC `7995` probe. Both explicitly label Monad as local-only; they are not evidence of a Testnet transaction and no real money moved. The public `main@9b12002` baseline must not be cited as hosting these branch artifacts until a new deployment is verified.
+The current source-bound record is the [Rain + Monad evidence capture](./public/evidence/rain-monad-testnet-2026-08-09.png) with its [sanitized JSON](./public/evidence/rain-monad-testnet-2026-08-09.json), generated from `overnight@246d81a`. It records the same three Rain sandbox settlements as same-day idempotent replays, the exact MCC `7995` decline, and finalized Monad Testnet ordering on chain `10143`: registry [`0xE1b7…b217`](https://testnet.monadscan.com/address/0xE1b75A905Cab4005623AA8912AF4a67b9c29b217), one finalized coalition commitment, six finalized offer registrations, and a finalized post-Rain attestation. No real money moved, Monad did not independently verify Rain or the simulated ledger, and the public `main@9b12002` baseline must not be cited as hosting these branch artifacts until `overnight` is explicitly redeployed and checked. The earlier Rain-only capture remains an archived record of its own local-only state.
 
 ## Commitment model
 
@@ -103,7 +107,7 @@ The preflight reports which integrations are live without printing secret values
 
 ## Technical proof at `/demo`
 
-The cinematic walkthrough is the only surface with the complete three-allocation provider architecture. It runs a deterministic coalition of three fictional businesses buying 12 compatible development displays, while a fourth incompatible intent stays out of the pool.
+The cinematic walkthrough is the only surface with the complete three-allocation provider architecture. It runs a deterministic coalition of three fictional businesses buying 12 compatible development displays, while a fourth incompatible intent stays out of the pool. The separate public [`/evidence`](./app/evidence/page.tsx) registry publishes a sanitized, source-bound record of the verified run; it is evidence disclosure, not an independent audit.
 
 Three simulated merchants compete, moving the public price from **$479 to $389 per unit**:
 
@@ -143,7 +147,9 @@ Keep that flag disabled unless `npm run demo:preflight` passes. Production live 
 
 Monad is causal, not decorative, in the fixed competition flow. POOL finalizes the funding commitment before registering the admitted sealed-offer hash set. After Rain settles each buyer allocation, `attestRainSettlement` names one previously registered offer as accepted and binds it to the complete Rain transaction-ID-set digest. The contract therefore orders POOL’s recorded claims; it does not prove when an offchain bid first existed or what a seller saw.
 
-Buyer ceilings and merchant prices are not posted onchain in plaintext. The contract timestamps POOL’s claims and makes them tamper-evident, but it cannot inspect bank balances or authenticate Rain’s API by itself. An observer can verify the claims only when the corresponding reservation proofs and Rain receipts are disclosed and reconciled against the onchain roots and digests. The repository builds those commitments and receipt digests; it does not ship a third-party disclosure portal.
+Buyer ceilings and merchant prices are not posted onchain in plaintext. The contract timestamps POOL’s claims and makes them tamper-evident, but it cannot inspect bank balances or authenticate Rain’s API by itself. An observer can verify the claims only when the corresponding reservation proofs and Rain receipts are disclosed and reconciled against the onchain roots and digests. The repository now ships a sanitized public evidence registry for the fixed fixture; it is not a third-party audit or a general disclosure portal.
+
+The current record finalized on Monad Testnet chain `10143` from source commit `246d81a`. The registry deployment finalized at [block `52198045`](https://testnet.monadscan.com/tx/0x926f2aba82b9d28d116b1cec8d023ae576c145efe3b4bd58b0ed5f40c02ebc48). The coalition commitment [`0x12f3…543f`](https://testnet.monadscan.com/tx/0xf22b02b9988a1583634154677e0499f9859fcef24a1697f50e1cd7859519dfcd) finalized before six offer registrations. The post-Rain attestation finalized at [block `52198437`](https://testnet.monadscan.com/tx/0x9abec12dded847e9466074a7c37f984b7fd5ca3315b80e6d74137adf2bc9807e), naming one registered offer and binding the digest of the exact three Rain settlement IDs. These are operator-attested ordering claims, not proof of custody, offchain seller visibility, merchant participation, or real-money settlement.
 
 Claim a Monad Testnet write only when the UI shows finalized transaction evidence or an explorer link. `local proof`, `evidence only`, and pending states are not onchain-success claims.
 
@@ -163,9 +169,14 @@ A protected fixed-demo provider action requires the documented Monad configurati
 
 ```text
 Buyer product workspace (browser-local rehearsal)
+  ├─ natural language → catalog-aware decision receipt → explicit Save; interpretation moves $0
   ├─ structured buying intent + full-MSRP fixture reservation
   ├─ deterministic, mandate-aware merchant clearing after cutoff
   └─ modeled quote → explicit full local release; no order, payment, or provider write
+
+Public evidence + seller artifacts
+  ├─ /evidence → sanitized Rain + finalized Monad record with explicit limits
+  └─ /merchant → blinded fixture RFP dry run; no live retailer, traction, or writes
 
 Protected fixed /demo (three complete allocations)
   └─ funding commitment → registered sealed-offer set
