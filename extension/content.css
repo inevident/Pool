@@ -1,0 +1,93 @@
+#pool-banner {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 380px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: #111313;
+  color: #f3f1e9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  transform: translateY(140%);
+  opacity: 0;
+  transition: transform 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.42s ease;
+}
+#pool-banner.pool-banner-in {
+  transform: translateY(0);
+  opacity: 1;
+}
+#pool-banner .pool-banner-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  width: 22px;
+  height: 18px;
+  color: #c9ff57;
+}
+#pool-banner .pool-banner-mark > span {
+  display: block;
+  width: 5px;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+}
+#pool-banner .pool-banner-mark > span:nth-child(1) { height: 9px; }
+#pool-banner .pool-banner-mark > span:nth-child(2) { height: 14px; }
+#pool-banner .pool-banner-mark > span:nth-child(3) { height: 18px; background: currentColor; }
+#pool-banner .pool-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#pool-banner .pool-banner-body strong {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c9ff57;
+}
+#pool-banner .pool-banner-body span {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#pool-banner .pool-banner-body small {
+  font-size: 11px;
+  color: #b9b9b0;
+}
+#pool-banner .pool-banner-cta {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: #c9ff57;
+  color: #0a0b0b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#pool-banner .pool-banner-cta:hover { filter: brightness(1.05); }
+#pool-banner .pool-banner-close {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #b9b9b0;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+#pool-banner .pool-banner-close:hover { color: #f3f1e9; }

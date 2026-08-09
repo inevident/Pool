@@ -1,0 +1,115 @@
+:root {
+  --ink: #0a0b0b;
+  --panel: #151717;
+  --line: rgba(255, 255, 255, 0.1);
+  --paper: #f3f1e9;
+  --muted: #b9b9b0;
+  --lime: #c9ff57;
+  --rain: #ff37ab;
+  --monad: #8f7cff;
+}
+* { box-sizing: border-box; }
+body {
+  width: 340px;
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.pop-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: 0.16em; font-size: 14px; }
+.pop-mark { display: inline-flex; gap: 2px; align-items: flex-end; width: 20px; height: 16px; color: var(--lime); }
+.pop-mark > span { display: block; width: 4px; border: 2px solid currentColor; border-bottom: 0; border-radius: 5px 5px 0 0; }
+.pop-mark > span:nth-child(1) { height: 8px; }
+.pop-mark > span:nth-child(2) { height: 12px; }
+.pop-mark > span:nth-child(3) { height: 16px; background: currentColor; }
+.pop-link { border: 0; background: transparent; color: var(--lime); font-size: 11px; cursor: pointer; padding: 0; }
+.pop-link:hover { text-decoration: underline; }
+
+.pop-status { padding: 16px; border-bottom: 1px solid var(--line); }
+.pop-status-loading { color: var(--muted); font-size: 13px; }
+.pop-match-kicker { color: var(--lime); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+.pop-nomatch-kicker { color: var(--muted); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+.pop-match-name { margin: 8px 0 4px; font-size: 15px; font-weight: 700; }
+.pop-match-meta { color: var(--muted); font-size: 12px; }
+.pop-progress { margin: 12px 0 10px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.pop-progress > i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #86ad2f, var(--lime)); }
+.pop-cta {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pop-cta:hover { filter: brightness(1.05); }
+
+.pop-request { padding: 16px; border-bottom: 1px solid var(--line); }
+.pop-request h2 { margin: 0 0 4px; font-size: 14px; }
+.pop-request p { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.pop-request label { display: block; margin-bottom: 5px; font-size: 11px; color: var(--muted); }
+.pop-optional { opacity: 0.7; }
+.pop-request input {
+  width: 100%;
+  margin-bottom: 11px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  background: rgba(7, 8, 8, 0.6);
+  color: var(--paper);
+  font-size: 13px;
+}
+.pop-request input:focus { outline: 2px solid var(--lime); outline-offset: 1px; }
+#request-submit {
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--rain);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#request-submit:hover { filter: brightness(1.05); }
+#request-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.pop-result { margin-top: 11px; padding: 10px 11px; border-radius: 9px; font-size: 12px; line-height: 1.4; }
+.pop-result-ok { border: 1px solid rgba(201, 255, 87, 0.4); background: rgba(201, 255, 87, 0.07); color: var(--paper); }
+.pop-result-info { border: 1px solid rgba(143, 124, 255, 0.4); background: rgba(143, 124, 255, 0.08); color: var(--paper); }
+.pop-result-err { border: 1px solid rgba(255, 113, 106, 0.4); background: rgba(255, 113, 106, 0.08); color: #ffd7d4; }
+
+.pop-foot { padding: 14px 16px; }
+.pop-foot label { display: block; margin-bottom: 6px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.pop-foot-row { display: flex; gap: 8px; }
+.pop-foot-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(7, 8, 8, 0.6);
+  color: var(--paper);
+  font-size: 12px;
+}
+.pop-foot-row button {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--paper);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pop-foot-row button:hover { border-color: var(--lime); color: var(--lime); }
+.pop-saved { display: inline-block; margin-top: 7px; color: var(--lime); font-size: 11px; }
