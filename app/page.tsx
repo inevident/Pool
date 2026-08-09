@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import ProductWorkspaceApp from "./_components/product-workspace";
 
 export const metadata: Metadata = {
-  title: "POOL — Turn patience into bargaining power",
+  title: "POOL — Democratize Buying Power",
   description:
     "Fund a test balance, declare what you want, and join fully committed group buys in the POOL product sandbox.",
 };

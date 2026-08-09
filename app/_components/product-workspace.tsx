@@ -946,10 +946,15 @@ function DashboardView({
 
       <section className={styles.dashboardGrid} aria-label="Buyer overview">
         <div className={styles.intentCard}>
-          <span className={styles.intentKicker}>Patient purchasing</span>
+          <span className={styles.intentKicker}>Democratize buying power</span>
           <h2>
             What are you willing to <em>wait for?</em>
           </h2>
+          <p className={styles.intentPhilosophy}>
+            Volume discounts have always existed — they were just reserved for
+            whoever could commit a warehouse at a time. Pool your demand with
+            other buyers and the same leverage is yours.
+          </p>
           <form className={styles.quickIntent} onSubmit={openQuickIntent}>
             <label className={styles.quickIntentLabel} htmlFor="quick-intent">
               What do you want to buy?

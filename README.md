@@ -1,6 +1,8 @@
 # POOL
 
-**Turn patience into bargaining power.**
+**Democratize Buying Power.**
+
+Volume discounts have always existed. They were just reserved for whoever could commit a warehouse at a time. POOL gives that leverage to everyone else: patient buyers pool fully funded demand, agents carry the whole demand curve to merchants, and every activated buyer pays the single price the market clears at — including the ones who would have paid more.
 
 [Open the `overnight` product](https://pool-overnight-yeayea.vercel.app) · [Inspect the public evidence](https://pool-overnight-yeayea.vercel.app/evidence) · [Replay the fixed technical demo](https://pool-overnight-yeayea.vercel.app/demo)
 

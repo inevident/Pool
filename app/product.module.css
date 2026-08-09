@@ -409,6 +409,17 @@
   text-transform: uppercase;
 }
 
+/* Brand philosophy, stated where a first-time visitor actually lands. */
+.intentPhilosophy {
+  position: relative;
+  z-index: 1;
+  max-width: 46ch;
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, .62);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
 .intentCard h2 {
   position: relative;
   z-index: 1;

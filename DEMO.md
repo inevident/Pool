@@ -66,7 +66,7 @@ The judging tracks ask for an agent that transacts autonomously **within predefi
 
 Start on `/negotiate` before clicking anything. Point to the three pledge rungs and `560 pledged buyers`.
 
-> “A single price hides the demand sitting just below it. Here buyers don’t name one price — each pledges the most they’d pay. 300 at 10% off, 180 at 20%, 80 at 30%.”
+> “Volume discounts have always existed. They were just reserved for whoever could commit a warehouse at a time. POOL democratizes that buying power. Here buyers don’t name one price — each pledges the most they’d pay. 300 at 10% off, 180 at 20%, 80 at 30%.”
 
 ### 0:14–0:34 — The agent negotiates, and everyone wins the same price
 

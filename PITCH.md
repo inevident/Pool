@@ -1,5 +1,11 @@
 # POOL pitch
 
+## Brand philosophy
+
+**Democratize Buying Power.**
+
+Volume discounts have always existed — they were just reserved for whoever could commit a warehouse at a time. POOL gives that leverage to everyone else.
+
 ## One-line thesis
 
 POOL turns patient, full-MSRP-reserved purchase intent into private seller competition and, in the protected fixed proof, gives the winning agreement bounded payment authority.
@@ -66,7 +72,7 @@ POOL turns patient, full-MSRP-reserved purchase intent into private seller compe
 
 ## Verbatim 90-second talk track
 
-> “A single price hides the demand sitting just below it. On POOL, buyers don’t name one price — each pledges the most they’d pay. Three hundred at ten percent off, one hundred eighty at twenty, eighty at thirty.
+> “Volume discounts have always existed. They were just reserved for whoever could commit a warehouse at a time. POOL democratizes that buying power. On POOL, buyers don’t name one price — each pledges the most they’d pay. Three hundred at ten percent off, one hundred eighty at twenty, eighty at thirty.
 >
 > Our agent carries that whole curve to the merchants. At every rung it can promise exactly the volume that unlocks there, and deeper volume unlocks deeper discounts. It stops at the deepest price a merchant will actually honor — thirty percent off. Then all five hundred sixty activated buyers pay that one cleared price, including the three hundred who would gladly have paid nine hundred dollars. A hundred and sixty-eight thousand dollars back to buyers, and no human negotiated anything.
 >

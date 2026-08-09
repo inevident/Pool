@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const title = "POOL — Turn patience into bargaining power";
+const title = "POOL — Democratize Buying Power";
 const description =
-  "Declare what you want, fully fund your commitment, and join patient buyers who make merchants compete for the whole order.";
+  "Big buyers have always had leverage. POOL gives it to everyone else: patient buyers pool committed demand, agents carry the whole curve to merchants, and every buyer pays the one price the market clears at.";
 
 const PRODUCTION_ORIGIN_FALLBACK =
   "https://pool-agentic-market-preview-20260808-yeayea.vercel.app";

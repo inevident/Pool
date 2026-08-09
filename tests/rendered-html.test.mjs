@@ -33,7 +33,7 @@ test("server-renders the functional POOL buyer product", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>POOL — Turn patience into bargaining power<\/title>/i);
+  assert.match(html, /<title>POOL — Democratize Buying Power<\/title>/i);
   assert.match(html, /What are you willing to/);
   assert.match(html, /Product sandbox/i);
   assert.match(html, /Available to commit/);
