@@ -86,6 +86,15 @@ test("server-renders every repeat-use product surface", async () => {
   }
 });
 
+test("does not present the shared Rain sandbox ceiling as buyer funds", async () => {
+  const source = await readFile(
+    new URL("../app/_components/product-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /not buyer funds/i);
+  assert.match(source, /not buyer custody, backing, or an available balance/i);
+});
+
 test("unknown pool identifiers use the real 404 boundary", async () => {
   // Regression: ISSUE-004 — missing pool IDs rendered an empty state with 200.
   // Found by /qa on 2026-08-09.

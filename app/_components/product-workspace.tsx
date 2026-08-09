@@ -1342,13 +1342,13 @@ function WalletView({ workspace, balance, setModal }: SharedViewProps & {
         <div className={styles.walletMain}>
           <span>
             {workspace.treasury.source === "rain-sandbox"
-              ? "Rain sandbox spending power"
+              ? "Shared Rain sandbox team capacity — not buyer funds"
               : "Offline ceiling (Rain unavailable)"}
           </span>
           <strong>{cents(workspace.treasury.spendingPowerCents)}</strong>
           <small>
             {workspace.treasury.source === "rain-sandbox"
-              ? `Live from GET /issuing/balances${
+              ? `Read-only provider ceiling from GET /issuing/balances${
                   workspace.treasury.syncedAt
                     ? ` · read ${shortDate.format(new Date(workspace.treasury.syncedAt))}`
                     : ""
@@ -1357,12 +1357,12 @@ function WalletView({ workspace, balance, setModal }: SharedViewProps & {
           </small>
         </div>
         <div className={styles.walletMetric}>
-          <span>Rail credit limit</span>
+          <span>Shared rail credit limit</span>
           <strong>{cents(workspace.treasury.creditLimitCents)}</strong>
           <small>Total sandbox capacity</small>
         </div>
         <div className={styles.walletMetric}>
-          <span>Already charged</span>
+          <span>Shared rail posted charges</span>
           <strong>{cents(workspace.treasury.postedChargesCents)}</strong>
           <small>Settled on the rail</small>
         </div>
@@ -1373,10 +1373,11 @@ function WalletView({ workspace, balance, setModal }: SharedViewProps & {
         <span>
           {workspace.treasury.source === "rain-sandbox" ? (
             <>
-              <strong>Rail-bounded sandbox:</strong> credits on this surface cannot exceed
-              Rain’s live sandbox spending power, read directly from the provider. Reading
-              that ceiling is the only Rain call the product workspace makes — no card,
-              ACH, wire, crypto, or Monad transaction occurs here, and no real money moves.
+              <strong>Capacity reference only:</strong> this shared team sandbox figure is
+              not buyer custody, backing, or an available balance. POOL uses it only as a
+              conservative ceiling on browser-local test credits. Reading that ceiling is
+              the only Rain call the product workspace makes — no card, ACH, wire, crypto,
+              or Monad transaction occurs here, and no real money moves.
             </>
           ) : (
             <>
@@ -2153,7 +2154,7 @@ function FundForm({
         <p className={styles.modalIntro}>
           Credit this workspace to exercise POOL’s funding and reservation rules.
           {fromRain
-            ? " Credits are capped by the payment rail’s real remaining spending power."
+            ? " For demo hygiene, local credits are capped by a read-only shared Rain sandbox ceiling; they are not funded or backed by Rain."
             : " Rain is unavailable, so a labeled offline ceiling applies."}
           {" "}This does not move real money.
         </p>
@@ -2172,7 +2173,7 @@ function FundForm({
           <div className={styles.fieldHint}>
             {cents(headroomCents)} still creditable ·{" "}
             {fromRain
-              ? "live Rain sandbox spending power"
+              ? "shared Rain sandbox ceiling · not buyer funds"
               : "labeled local ceiling"}
           </div>
         </div>
@@ -2196,7 +2197,7 @@ function FundForm({
           <span>
             <strong>Sandbox only.</strong>{" "}
             {fromRain
-              ? `Bounded by Rain's live ${cents(treasury.spendingPowerCents)} sandbox spending power. Reading that ceiling is the only Rain call; no card, on-ramp, or Monad write occurs here.`
+              ? `The browser-local credit is capped at Rain's read-only shared ${cents(treasury.spendingPowerCents)} sandbox ceiling. It is not provider-backed buyer money. No card, on-ramp, or Monad write occurs here.`
               : "No on-ramp, bank account, card, stablecoin, Rain request, or Monad write occurs."}
           </span>
         </div>
