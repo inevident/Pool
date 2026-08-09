@@ -1488,6 +1488,10 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
   const windowProgress = commitmentWindowProgress(featuredPool, now);
   const eligibility = poolEligibility(featuredPool);
   const previewPools = pools.slice(0, 3);
+  const featuredMembership = Object.values(workspace.memberships).find(
+    (membership) =>
+      membership.poolId === featuredPool.id && membership.status === "active",
+  );
   const FeaturedIcon = categoryMeta[featuredProduct.category].Icon;
   const CommitmentIcon = categoryMeta[commitmentProduct.category].Icon;
 
@@ -1513,8 +1517,14 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
             </div>
             <PhoneTabs active="home" />
           </PhoneFrame>
-          <PhoneFrame label="POOL mobile active commitment screen">
-            <PhoneBrand title="Active pool" />
+          <PhoneFrame
+            label={
+              featuredMembership
+                ? "POOL mobile active commitment screen"
+                : "POOL mobile commitment preview screen"
+            }
+          >
+            <PhoneBrand title={featuredMembership ? "Active pool" : "Pool preview"} />
             <div className={styles.phoneCommitHero}><span><FeaturedIcon size={40} /></span><small>{featuredProduct.brand.toUpperCase()}</small><h3>{featuredProduct.name}</h3><p>{featuredProduct.description}</p></div>
             <div className={styles.phoneProgress}>
               <div><strong>{featuredPool.committedUnitCount}</strong><span>funded units</span></div>
@@ -1524,8 +1534,22 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
               </i>
               <small>{Math.round(windowProgress)}% of {windowDays}-day window elapsed · {featuredPool.minimumCommittedUnitCount}-unit eligibility floor {eligibility.eligible ? "met" : "pending"} · no enrollment cap</small>
             </div>
-            <div className={styles.phoneReserve}><span>YOUR COMMITMENT</span><strong>{cents(featuredProduct.msrpUnitCents)} reserved</strong><small>Release available until {shortDate.format(new Date(featuredPool.cutoffAt))}</small></div>
-            <button className={styles.phoneButton}>View commitment <ChevronRight size={13} /></button>
+            <div className={styles.phoneReserve}>
+              <span>{featuredMembership ? "YOUR COMMITMENT" : "EXAMPLE COMMITMENT"}</span>
+              <strong>
+                {featuredMembership
+                  ? `${cents(featuredMembership.reservedCents)} reserved`
+                  : `${cents(featuredProduct.msrpUnitCents)} full-MSRP coverage`}
+              </strong>
+              <small>
+                {featuredMembership
+                  ? `Release available until ${shortDate.format(new Date(featuredPool.cutoffAt))}`
+                  : "Review before reserving · no funds are locked in this preview"}
+              </small>
+            </div>
+            <Link className={styles.phoneButton} href={poolHref(featuredPool)}>
+              {featuredMembership ? "View commitment" : "Review group buy"} <ChevronRight size={13} />
+            </Link>
             <PhoneTabs active="discover" />
           </PhoneFrame>
         </div>
@@ -1558,7 +1582,9 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
           <div className={styles.phoneCommitHero}><span><CommitmentIcon size={38} /></span><small>{commitmentProduct.brand.toUpperCase()}</small><h3>{commitmentProduct.name}</h3><p>{commitmentProduct.description}</p></div>
           <div className={styles.phoneJoinFacts}><div><span>Reserve today</span><strong>{cents(commitmentProduct.msrpUnitCents)}</strong></div><div><span>Estimated price</span><strong>{cents(commitmentPool.estimatedUnitPriceCents)}</strong></div><div><span>Exit cutoff</span><strong>{shortDate.format(new Date(commitmentPool.cutoffAt))}</strong></div></div>
           <div className={styles.phoneFine}><ShieldCheck size={15} /><span>Your full amount is reserved. You can leave before the cutoff.</span></div>
-          <button className={styles.phoneButton}>Reserve {cents(commitmentProduct.msrpUnitCents)}</button>
+          <Link className={styles.phoneButton} href={poolHref(commitmentPool)}>
+            Review {cents(commitmentProduct.msrpUnitCents)} reservation
+          </Link>
           <PhoneTabs active="discover" />
         </PhoneFrame>
         <div className={styles.betaFeatureCopy}><span>02 · COMMIT</span><h2>Every number, clear before you join.</h2><p>Estimated price, reserved amount, eligibility floor, and exit date stay visible—no checkout surprises.</p></div>
@@ -1568,7 +1594,7 @@ function BetaView({ workspace }: { workspace: ProductWorkspace }) {
         <div className={styles.betaFeatureCopy}><span>03 · TRACK</span><h2>Your purchasing power, at a glance.</h2><p>Follow reserved funds and active commitments without digging through transaction history.</p></div>
         <PhoneFrame label="POOL mobile wallet screen">
           <PhoneBrand title="Wallet" />
-          <div className={styles.phoneWallet}><small>AVAILABLE TO COMMIT</small><strong>{cents(balance?.availableCents ?? 0)}</strong><button><Plus size={12} /> Add test funds</button></div>
+          <div className={styles.phoneWallet}><small>AVAILABLE TO COMMIT</small><strong>{cents(balance?.availableCents ?? 0)}</strong><Link className={styles.phoneWalletAction} href="/wallet"><Plus size={12} /> Add test funds</Link></div>
           <div className={styles.phoneWalletStats}><div><span>Reserved</span><strong>{cents(balance?.reservedCents ?? 0)}</strong></div><div><span>Captured</span><strong>{cents(balance?.capturedCents ?? 0)}</strong></div></div>
           <div className={styles.phoneSectionTitle}><strong>Recent activity</strong><span>View all</span></div>
           <div className={styles.phoneActivity}><span><LockKeyhole size={15} /></span><div><strong>Fixed-window policy</strong><small>{windowDays} days · no enrollment cap</small></div><b>ON</b></div>

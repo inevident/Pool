@@ -87,6 +87,9 @@ test("server-renders every repeat-use product surface", async () => {
 });
 
 test("renders the mobile preview from current fixed-window pool fixtures", async () => {
+  // Regression: ISSUE-003 — empty workspaces showed a fabricated reserved
+  // commitment and the phone preview exposed dead button controls.
+  // Found by /qa on 2026-08-09.
   const response = await render("/beta");
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -96,6 +99,12 @@ test("renders the mobile preview from current fixed-window pool fixtures", async
   assert.match(text, /10-unit eligibility floor/);
   assert.match(text, /14-day window elapsed/);
   assert.match(text, /no enrollment cap/);
+  assert.match(text, /EXAMPLE COMMITMENT/);
+  assert.match(text, /full-MSRP coverage/);
+  assert.match(text, /no funds are locked in this preview/);
+  assert.doesNotMatch(text, /YOUR COMMITMENT\$449\.99 reserved/);
+  assert.match(html, /href="\/pools\/pool-sony-xm6-august"/);
+  assert.match(html, /href="\/wallet"/);
   assert.doesNotMatch(html, /18 buyers|buyers joined|72% to merchant bidding/i);
 });
 
