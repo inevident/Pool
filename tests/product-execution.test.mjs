@@ -17,7 +17,7 @@ import {
   validateProductExecutionIntent,
   resolveMissedExecutionWindow,
   validateProductExecutionMembership,
-} from "../lib/product/index.ts";
+} from "../lib/product/server.ts";
 
 const catalog = createSeededProductWorkspace();
 const pool = catalog.pools["pool-sony-xm6-august"];

@@ -10,7 +10,7 @@ import {
   ProductExecutionError,
   resolveMissedExecutionWindow,
   validateProductExecutionMembership,
-} from "../../../../lib/product/index";
+} from "../../../../lib/product/server";
 import {
   assertRateLimit,
   noStoreHeaders,

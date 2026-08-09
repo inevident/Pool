@@ -7,8 +7,9 @@ import {
   type PreparedProductCommitment,
 } from "../monad/product-commitment.ts";
 import { minimumConsumerDeliveryDays } from "../market/consumer.ts";
+import { ProductExecutionError } from "./errors.ts";
+import { productExecutionSchedule } from "./schedule.ts";
 import {
-  PRODUCT_POOL_BID_WINDOW_MS,
   PRODUCT_SEED_VERSION,
   type PoolMembershipEnvelope,
   type ProductBuyingIntent,
@@ -31,29 +32,6 @@ export const poolMembershipEnvelopeSchema = z
     joinedAt: z.iso.datetime({ offset: true }),
   })
   .strict();
-
-export type ProductExecutionRejectionCode =
-  | "pool_not_found"
-  | "product_not_found"
-  | "membership_pool_mismatch"
-  | "membership_buyer_mismatch"
-  | "membership_not_active"
-  | "membership_reservation_mismatch"
-  | "membership_joined_after_cutoff"
-  | "intent_identity_mismatch"
-  | "intent_price_incompatible"
-  | "intent_deadline_incompatible"
-  | "pool_schedule_invalid";
-
-export class ProductExecutionError extends Error {
-  readonly code: ProductExecutionRejectionCode;
-
-  constructor(code: ProductExecutionRejectionCode, message: string) {
-    super(message);
-    this.name = "ProductExecutionError";
-    this.code = code;
-  }
-}
 
 export interface ValidatedProductExecution {
   readonly pool: ProductPool;
@@ -270,107 +248,6 @@ export function evaluateProductSettlementConstraints(input: {
     };
   }
   return { accepted: true, promisedDeliveryAt };
-}
-
-export type ProductExecutionWindow =
-  | {
-      readonly status: "waiting_for_cutoff";
-      readonly code: "waiting_for_cutoff";
-      readonly cutoffAt: string;
-      readonly bidClosesAt: string;
-      readonly serverTime: string;
-      readonly remainingMs: number;
-    }
-  | {
-      readonly status: "open";
-      readonly cutoffAt: string;
-      readonly bidClosesAt: string;
-      readonly serverTime: string;
-      readonly remainingMs: number;
-    }
-  | {
-      readonly status: "closed";
-      readonly code: "bid_window_closed";
-      readonly cutoffAt: string;
-      readonly bidClosesAt: string;
-      readonly serverTime: string;
-      readonly remainingMs: 0;
-    };
-
-export interface ProductExecutionSchedule {
-  readonly createdAt: string;
-  readonly cutoffAt: string;
-  readonly bidClosesAt: string;
-}
-
-/**
- * One canonical schedule derivation shared by browser affordances, API gates,
- * Monad commitments, and scoped-card expiry. Pool timestamps come only from
- * the server-owned catalog; callers may supply a clock to evaluate the window,
- * but they cannot alter any boundary.
- */
-export function productExecutionSchedule(
-  pool: ProductPool,
-): ProductExecutionSchedule {
-  const createdMs = Date.parse(pool.createdAt);
-  const cutoffMs = Date.parse(pool.cutoffAt);
-  if (
-    !Number.isFinite(createdMs) ||
-    !Number.isFinite(cutoffMs) ||
-    cutoffMs <= createdMs
-  ) {
-    throw new ProductExecutionError(
-      "pool_schedule_invalid",
-      "The pool execution schedule is invalid.",
-    );
-  }
-  return Object.freeze({
-    createdAt: new Date(createdMs).toISOString(),
-    cutoffAt: new Date(cutoffMs).toISOString(),
-    bidClosesAt: new Date(cutoffMs + PRODUCT_POOL_BID_WINDOW_MS).toISOString(),
-  });
-}
-
-/** Exact cutoff opens execution; exact bid close ends it. */
-export function evaluateProductExecutionWindow(
-  pool: ProductPool,
-  nowMs: number = Date.now(),
-): ProductExecutionWindow {
-  const schedule = productExecutionSchedule(pool);
-  const cutoffMs = Date.parse(schedule.cutoffAt);
-  const bidClosesMs = Date.parse(schedule.bidClosesAt);
-  if (!Number.isFinite(nowMs)) {
-    throw new ProductExecutionError(
-      "pool_schedule_invalid",
-      "The execution clock is invalid.",
-    );
-  }
-  const common = {
-    cutoffAt: schedule.cutoffAt,
-    bidClosesAt: schedule.bidClosesAt,
-    serverTime: new Date(nowMs).toISOString(),
-  };
-  if (nowMs < cutoffMs) {
-    return {
-      status: "waiting_for_cutoff",
-      code: "waiting_for_cutoff",
-      ...common,
-      remainingMs: cutoffMs - nowMs,
-    };
-  }
-  if (nowMs >= bidClosesMs) {
-    return {
-      status: "closed",
-      code: "bid_window_closed",
-      ...common,
-      remainingMs: 0,
-    };
-  }
-  return {
-    status: "open",
-    ...common,
-    remainingMs: bidClosesMs - nowMs,
-  };
 }
 
 export function buildDeterministicProductCommitment(

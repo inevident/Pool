@@ -18,7 +18,7 @@ import {
   type ValidatedProductIntentConstraints,
   validateProductExecutionIntent,
   validateProductExecutionMembership,
-} from "../../../../lib/product/index";
+} from "../../../../lib/product/server";
 import {
   assertRateLimit,
   noStoreHeaders,

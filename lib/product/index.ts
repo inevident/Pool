@@ -12,6 +12,6 @@ export {
   reduceProductWorkspace,
 } from "./reducer.ts";
 export type { ProductPoolFundingStatus } from "./reducer.ts";
-export * from "./execution.ts";
-export * from "./window-resolution.ts";
+export * from "./errors.ts";
+export * from "./schedule.ts";
 export * from "./types.ts";
