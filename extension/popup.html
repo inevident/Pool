@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>POOL</title>
+  </head>
+  <body>
+    <header class="pop-head">
+      <div class="pop-brand">
+        <span class="pop-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>POOL</span>
+      </div>
+      <button id="open-negotiate" class="pop-link" type="button">See a live negotiation →</button>
+    </header>
+
+    <section id="status" class="pop-status" aria-live="polite">
+      <div class="pop-status-loading">Checking this page against POOL…</div>
+    </section>
+
+    <section class="pop-request">
+      <h2>Want a product listed?</h2>
+      <p>Ask POOL to open a bulk-buying pool for anything you're shopping for.</p>
+      <form id="request-form">
+        <label for="product-name">Product</label>
+        <input id="product-name" type="text" maxlength="200" placeholder="e.g. MacBook Air 15-inch (M4)" required />
+        <label for="product-note">Note <span class="pop-optional">(optional)</span></label>
+        <input id="product-note" type="text" maxlength="300" placeholder="Colour, size, target price…" />
+        <button id="request-submit" type="submit">Request bulk buying</button>
+      </form>
+      <div id="request-result" class="pop-result" hidden></div>
+    </section>
+
+    <footer class="pop-foot">
+      <label for="base-url">POOL address</label>
+      <div class="pop-foot-row">
+        <input id="base-url" type="text" spellcheck="false" placeholder="http://localhost:3000" />
+        <button id="save-base" type="button">Save</button>
+      </div>
+      <small id="base-saved" class="pop-saved" hidden>Saved</small>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

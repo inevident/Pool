@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     "cache/**",
     "ignition/deployments/**",
     "next-env.d.ts",
+    // The browser extension is a standalone MV3 bundle with its own runtime
+    // (chrome.*, service worker, content scripts) — not part of the Next app.
+    "extension/**",
   ]),
 ]);
 
